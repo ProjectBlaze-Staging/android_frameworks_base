@@ -17,6 +17,12 @@ package com.android.systemui.statusbar.phone
 
 import android.app.StatusBarManager.WINDOW_STATUS_BAR
 import android.content.res.Resources
+import android.database.ContentObserver
+import android.hardware.display.DisplayManager
+import android.os.Handler
+import android.os.Looper
+import android.os.UserHandle
+import android.provider.Settings
 import android.util.Log
 import android.view.Display.DEFAULT_DISPLAY
 import android.view.GestureDetector
@@ -89,11 +95,30 @@ private constructor(
 ) : ViewController<PhoneStatusBarView>(view) {
 
     private lateinit var clock: Clock
+    val clockController by lazy { ClockController(context, mView) }
     private lateinit var startSideContainer: View
     private lateinit var endSideContainer: View
 
     private val shadeInvocationSplitRatio: Float =
         resources.getFloat(R.dimen.config_invocationGestureSplitRatio)
+
+    private var brightnessControlEnabled = false
+    private val brightnessControlObserver =
+        object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                updateBrightnessControlState()
+            }
+        }
+
+    private fun updateBrightnessControlState() {
+        brightnessControlEnabled =
+            Settings.System.getIntForUser(
+                mView.context.contentResolver,
+                "status_bar_brightness_control",
+                0,
+                UserHandle.USER_CURRENT,
+            ) == 1
+    }
 
     // Creates a [View.OnTouchListener] that only handles mouse click events.
     private fun createMouseClickListener(onClick: () -> Unit): View.OnTouchListener =
@@ -169,6 +194,7 @@ private constructor(
     private val configurationListener =
         object : ConfigurationController.ConfigurationListener {
             override fun onDensityOrFontScaleChanged() {
+                clockController.onDensityOrFontScaleChanged()
                 reloadDimens()
             }
         }
@@ -199,6 +225,13 @@ private constructor(
         }
         progressProvider?.setReadyToHandleTransition(true)
         configurationController.addCallback(configurationListener)
+        mView.context.contentResolver.registerContentObserver(
+            Settings.System.getUriFor("status_bar_brightness_control"),
+            false,
+            brightnessControlObserver,
+            UserHandle.USER_ALL,
+        )
+        updateBrightnessControlState()
     }
 
     private fun addCursorSupportToIconContainers() {
@@ -258,6 +291,7 @@ private constructor(
         endSideContainer.setOnHoverListener(null)
         progressProvider?.setReadyToHandleTransition(false)
         configurationController.removeCallback(configurationListener)
+        mView.context.contentResolver.unregisterContentObserver(brightnessControlObserver)
     }
 
     init {
@@ -331,11 +365,78 @@ private constructor(
         private var isIntercepting = false
         private val cachedEvents = mutableListOf<MotionEvent>()
 
+        private var isBrightnessGesture = false
+        private var isShadeDragging = false
+        private var initialBrightness = 0.5f
+        private var minBrightness = 0.0f
+        private var maxBrightness = 1.0f
+        private val displayManager by lazy {
+            mView.context.getSystemService(DisplayManager::class.java)
+        }
+
         override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
             StatusBarEventForwardingModernization.assertInLegacyMode()
 
             if (event.action == MotionEvent.ACTION_DOWN) {
                 dispatchEventToShadeDisplayPolicy(event)
+            }
+
+            if (brightnessControlEnabled && panelExpansionInteractor.isFullyCollapsed) {
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        isBrightnessGesture = false
+                        isShadeDragging = false
+                        initialTouchX = event.x
+                        initialTouchY = event.y
+                        try {
+                            val info = displayManager?.getDisplay(mView.context.displayId)?.brightnessInfo
+                            if (info != null) {
+                                initialBrightness = info.brightness
+                                minBrightness = info.brightnessMinimum
+                                maxBrightness = info.brightnessMaximum
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to get brightnessInfo", e)
+                        }
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = event.x - initialTouchX
+                        val dy = event.y - initialTouchY
+                        val absDx = Math.abs(dx)
+                        val absDy = Math.abs(dy)
+
+                        if (!isBrightnessGesture && !isShadeDragging) {
+                            if (absDx > touchSlop && absDx > absDy) {
+                                isBrightnessGesture = true
+                            } else if (absDy > touchSlop && absDy > absDx) {
+                                isShadeDragging = true
+                            }
+                        }
+
+                        if (isBrightnessGesture) {
+                            val width = mView.width.toFloat().coerceAtLeast(1f)
+                            val delta = dx / width
+                            val newBrightness = (initialBrightness + delta).coerceIn(minBrightness, maxBrightness)
+                            displayManager?.setTemporaryBrightness(mView.context.displayId, newBrightness)
+                            return true
+                        }
+                    }
+                    MotionEvent.ACTION_UP,
+                    MotionEvent.ACTION_CANCEL -> {
+                        if (isBrightnessGesture) {
+                            val dx = event.x - initialTouchX
+                            val width = mView.width.toFloat().coerceAtLeast(1f)
+                            val delta = dx / width
+                            val finalBrightness = (initialBrightness + delta).coerceIn(minBrightness, maxBrightness)
+                            displayManager?.setBrightness(mView.context.displayId, finalBrightness)
+                            isBrightnessGesture = false
+                            isShadeDragging = false
+                            return true
+                        }
+                        isBrightnessGesture = false
+                        isShadeDragging = false
+                    }
+                }
             }
 
             // Let ShadeViewController intercept touch events when flexiglass is disabled.
@@ -378,6 +479,31 @@ private constructor(
             StatusBarEventForwardingModernization.assertInLegacyMode()
 
             onTouch(event)
+
+            if (isBrightnessGesture) {
+                when (event.action) {
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = event.x - initialTouchX
+                        val width = mView.width.toFloat().coerceAtLeast(1f)
+                        val delta = dx / width
+                        val newBrightness = (initialBrightness + delta).coerceIn(minBrightness, maxBrightness)
+                        displayManager?.setTemporaryBrightness(mView.context.displayId, newBrightness)
+                        return true
+                    }
+                    MotionEvent.ACTION_UP,
+                    MotionEvent.ACTION_CANCEL -> {
+                        val dx = event.x - initialTouchX
+                        val width = mView.width.toFloat().coerceAtLeast(1f)
+                        val delta = dx / width
+                        val finalBrightness = (initialBrightness + delta).coerceIn(minBrightness, maxBrightness)
+                        displayManager?.setBrightness(mView.context.displayId, finalBrightness)
+                        isBrightnessGesture = false
+                        isShadeDragging = false
+                        return true
+                    }
+                }
+                return true
+            }
 
             // If panels aren't enabled, ignore the gesture and don't pass it down to the
             // panel view.

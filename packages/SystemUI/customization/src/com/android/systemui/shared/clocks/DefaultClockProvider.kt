@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2026 The BlazeAOSP Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file
  * except in compliance with the License. You may obtain a copy of the License at
@@ -40,8 +41,19 @@ import com.android.systemui.shared.clocks.controller.FlexClockController.Compani
 private val TAG = DefaultClockProvider::class.simpleName
 const val DEFAULT_CLOCK_ID = "DEFAULT"
 const val FLEX_CLOCK_ID = "DIGITAL_CLOCK_FLEX"
+const val METRO_CLOCK_ID = "DIGITAL_CLOCK_METRO"
+const val CALLIGRAPHY_CLOCK_ID = "DIGITAL_CLOCK_CALLIGRAPHY"
+const val BUBBLE_CLOCK_ID = "DIGITAL_CLOCK_CLOCK_BUBBLE"
+const val GOING_DIGITAL_CLOCK_ID = "ANALOG_CLOCK_GOING_DIGITAL"
+const val WEATHER_CLOCK_ID = "DIGITAL_CLOCK_NUMERIC_WEATHER"
+const val BOLD_CLOCK_ID = "DIGITAL_CLOCK_BOLD"
+const val HANDWRITTEN_CLOCK_ID = "DIGITAL_CLOCK_HANDWRITTEN"
+const val MINIMAL_CLOCK_ID = "DIGITAL_CLOCK_MINIMAL"
+const val STOPWATCH_CLOCK_ID = "ANALOG_CLOCK_STOPWATCH"
+const val VERSUS_CLOCK_ID = "ANALOG_CLOCK_VERSUS"
+const val TYPOGRAPHIC_CLOCK_ID = "DIGITAL_CLOCK_TYPOGRAPHIC"
 
-/** Provides the default system clock */
+/** Provides default and extended system clock designs for BlazeAOSP */
 class DefaultClockProvider
 @JvmOverloads
 constructor(
@@ -59,7 +71,18 @@ constructor(
     override fun getClocks(): List<ClockMetadata> {
         return listOf(
             ClockMetadata(DEFAULT_CLOCK_ID),
-            ClockMetadata(FLEX_CLOCK_ID, isDeprecated = true, replacementTarget = DEFAULT_CLOCK_ID),
+            ClockMetadata(METRO_CLOCK_ID),
+            ClockMetadata(CALLIGRAPHY_CLOCK_ID),
+            ClockMetadata(BUBBLE_CLOCK_ID),
+            ClockMetadata(GOING_DIGITAL_CLOCK_ID),
+            ClockMetadata(FLEX_CLOCK_ID),
+            ClockMetadata(WEATHER_CLOCK_ID),
+            ClockMetadata(BOLD_CLOCK_ID),
+            ClockMetadata(HANDWRITTEN_CLOCK_ID),
+            ClockMetadata(MINIMAL_CLOCK_ID),
+            ClockMetadata(STOPWATCH_CLOCK_ID),
+            ClockMetadata(VERSUS_CLOCK_ID),
+            ClockMetadata(TYPOGRAPHIC_CLOCK_ID),
         )
     }
 
@@ -71,9 +94,25 @@ constructor(
         val buffers = messageBuffers ?: ClockMessageBuffers(ClockLogger.DEFAULT_MESSAGE_BUFFER)
         val fontAxes = getDefaultAxes(settings).merge(settings.axes)
         val clockSettings = settings.copy(axes = ClockAxisStyle(fontAxes))
+
+        val targetTypeface = when (settings.clockId) {
+            METRO_CLOCK_ID -> Typeface.create("sans-serif-condensed", Typeface.BOLD)
+            CALLIGRAPHY_CLOCK_ID -> Typeface.create("serif", Typeface.ITALIC)
+            BUBBLE_CLOCK_ID -> Typeface.create("casual", Typeface.BOLD)
+            GOING_DIGITAL_CLOCK_ID -> Typeface.create("monospace", Typeface.BOLD)
+            WEATHER_CLOCK_ID -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            BOLD_CLOCK_ID -> Typeface.create("sans-serif-black", Typeface.BOLD)
+            HANDWRITTEN_CLOCK_ID -> Typeface.create("cursive", Typeface.NORMAL)
+            MINIMAL_CLOCK_ID -> Typeface.create("sans-serif-thin", Typeface.NORMAL)
+            STOPWATCH_CLOCK_ID -> Typeface.create("monospace", Typeface.NORMAL)
+            VERSUS_CLOCK_ID -> Typeface.create("sans-serif-condensed-light", Typeface.BOLD)
+            TYPOGRAPHIC_CLOCK_ID -> Typeface.create("serif", Typeface.BOLD)
+            else -> FLEX_TYPEFACE
+        }
+
         val typefaceCache =
             TypefaceCache<Unit>(buffers.infraMessageBuffer, NUM_CLOCK_FONT_ANIMATION_STEPS) {
-                FLEX_TYPEFACE
+                targetTypeface
             }
         return FlexClockController(
             FlexClockContext(
@@ -97,11 +136,30 @@ constructor(
             throw IllegalArgumentException("${settings.clockId} is unsupported by $TAG")
         }
 
+        val (name, description) = when (settings.clockId) {
+            METRO_CLOCK_ID -> Pair("Metro", "Metro digital clock style")
+            CALLIGRAPHY_CLOCK_ID -> Pair("Calligraphy", "Elegant calligraphy clock style")
+            BUBBLE_CLOCK_ID -> Pair("Bubble", "Bubble digital clock style")
+            GOING_DIGITAL_CLOCK_ID -> Pair("Going Digital", "Going digital clock style")
+            FLEX_CLOCK_ID -> Pair("Flex", "Flexible digital clock style")
+            WEATHER_CLOCK_ID -> Pair("Weather", "Weather numeric clock style")
+            BOLD_CLOCK_ID -> Pair("Bold", "Bold digital clock style")
+            HANDWRITTEN_CLOCK_ID -> Pair("Handwritten", "Handwritten clock style")
+            MINIMAL_CLOCK_ID -> Pair("Minimal", "Minimal clock style")
+            STOPWATCH_CLOCK_ID -> Pair("Stopwatch", "Stopwatch analog clock style")
+            VERSUS_CLOCK_ID -> Pair("Versus", "Versus analog clock style")
+            TYPOGRAPHIC_CLOCK_ID -> Pair("Typographic", "Typographic clock style")
+            else -> Pair(
+                resources.getString(R.string.clock_default_name),
+                resources.getString(R.string.clock_default_description)
+            )
+        }
+
         val fontAxes = getDefaultAxes(settings).merge(settings.axes)
         return ClockPickerConfig(
             settings.clockId ?: DEFAULT_CLOCK_ID,
-            resources.getString(R.string.clock_default_name),
-            resources.getString(R.string.clock_default_description),
+            name,
+            description,
             resources.getDrawable(R.drawable.clock_default_thumbnail, null),
             isReactiveToTone = true,
             axes = fontAxes,

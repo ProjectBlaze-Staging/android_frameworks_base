@@ -63,6 +63,8 @@ public class BatteryStatus {
     public final int maxChargingWattage;
     public final boolean present;
     public final Optional<Boolean> incompatibleCharger;
+    public final int voltage;
+    public final int temperature;
 
     public static BatteryStatus create(Context context, boolean incompatibleCharger) {
         final Intent batteryChangedIntent = BatteryUtils.getBatteryIntent(context);
@@ -72,6 +74,11 @@ public class BatteryStatus {
 
     public BatteryStatus(int status, int level, int plugged, int chargingStatus,
             int maxChargingWattage, boolean present) {
+        this(status, level, plugged, chargingStatus, maxChargingWattage, present, -1, -1);
+    }
+
+    public BatteryStatus(int status, int level, int plugged, int chargingStatus,
+            int maxChargingWattage, boolean present, int voltage, int temperature) {
         this.status = status;
         this.level = level;
         this.plugged = plugged;
@@ -80,6 +87,8 @@ public class BatteryStatus {
         this.present = present;
         this.incompatibleCharger = Optional.empty();
         this.health = BATTERY_HEALTH_UNKNOWN;
+        this.voltage = voltage;
+        this.temperature = temperature;
     }
 
 
@@ -102,6 +111,8 @@ public class BatteryStatus {
         this.incompatibleCharger = incompatibleCharger;
 
         maxChargingWattage = calculateMaxChargingMicroWatt(batteryChangedIntent);
+        voltage = batteryChangedIntent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1);
+        temperature = batteryChangedIntent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1);
     }
 
     /** Determine whether the device is plugged. */

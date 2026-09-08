@@ -127,6 +127,7 @@ interface IStatusBarService
      */
     void shutdown();
     void reboot(boolean safeMode);
+    void rebootReason(boolean safeMode, String reason);
 
     /** just restarts android without rebooting device. Used for some feature flags. */
     void restart();

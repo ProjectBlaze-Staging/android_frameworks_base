@@ -80,6 +80,8 @@ import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.DeviceConfig;
 import android.provider.DeviceConfig.Properties;
+import android.provider.Settings;
+import lineageos.hardware.LineageHardwareManager;
 import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.AtomicFile;
@@ -1042,6 +1044,22 @@ public final class GameManagerService extends IGameManagerService.Stub {
     }
 
     private boolean isPackageGame(String packageName, @UserIdInt int userId) {
+        if (packageName == null) {
+            return false;
+        }
+        final boolean gamespaceEnabled = Settings.System.getIntForUser(
+                mContext.getContentResolver(), "gamespace_enabled", 1, userId) == 1;
+        if (gamespaceEnabled) {
+            final String gameList = Settings.System.getStringForUser(
+                    mContext.getContentResolver(), "gamespace_game_list", userId);
+            if (!TextUtils.isEmpty(gameList)) {
+                for (String pkg : gameList.split(";")) {
+                    if (packageName.equals(pkg.trim())) {
+                        return true;
+                    }
+                }
+            }
+        }
         try {
             final ApplicationInfo applicationInfo = mPackageManager
                     .getApplicationInfoAsUser(packageName, PackageManager.MATCH_ALL, userId);
@@ -2290,6 +2308,39 @@ public final class GameManagerService extends IGameManagerService.Stub {
     private static native void nativeSetGameModeFrameRateOverride(int uid, float frameRate);
     private static native void nativeSetGameDefaultFrameRateOverride(int uid, float frameRate);
 
+    private void updateActiveGameSetting(String packageName) {
+        try {
+            Settings.System.putStringForUser(mContext.getContentResolver(),
+                    "gamespace_active_game", packageName != null ? packageName : "",
+                    ActivityManager.getCurrentUser());
+        } catch (Throwable t) {
+            Slog.w(TAG, "Failed to update gamespace_active_game setting", t);
+        }
+    }
+
+    private void updateTouchPolling(boolean enable) {
+        if (!enable) {
+            try {
+                LineageHardwareManager hardware = LineageHardwareManager.getInstance(mContext);
+                if (hardware.isSupported(LineageHardwareManager.FEATURE_HIGH_TOUCH_POLLING_RATE)) {
+                    hardware.set(LineageHardwareManager.FEATURE_HIGH_TOUCH_POLLING_RATE, false);
+                }
+            } catch (Throwable ignored) {}
+            return;
+        }
+        try {
+            final boolean highTouch = Settings.System.getIntForUser(
+                    mContext.getContentResolver(), "gamespace_high_touch_polling", 0,
+                    ActivityManager.getCurrentUser()) == 1;
+            if (highTouch) {
+                LineageHardwareManager hardware = LineageHardwareManager.getInstance(mContext);
+                if (hardware.isSupported(LineageHardwareManager.FEATURE_HIGH_TOUCH_POLLING_RATE)) {
+                    hardware.set(LineageHardwareManager.FEATURE_HIGH_TOUCH_POLLING_RATE, true);
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
     final class MyUidObserver extends UidObserver {
         @Override
         public void onUidGone(int uid, boolean disabled) {
@@ -2316,20 +2367,32 @@ public final class GameManagerService extends IGameManagerService.Stub {
             }
 
             final int userId = ActivityManager.getCurrentUser();
-            final boolean isNotGame = Arrays.stream(packages).noneMatch(
-                    p -> isPackageGame(p, userId));
+            String foundGamePackage = null;
+            for (String p : packages) {
+                if (isPackageGame(p, userId)) {
+                    foundGamePackage = p;
+                    break;
+                }
+            }
+            final boolean isNotGame = (foundGamePackage == null);
             synchronized (mUidObserverLock) {
                 if (isNotGame) {
                     if (!mGameForegroundUids.isEmpty() && mNonGameForegroundUids.isEmpty()) {
                         Slog.v(TAG, "Game power mode OFF (first non-game in foreground)");
                         mPowerManagerInternal.setPowerMode(Mode.GAME, false);
+                        SystemProperties.set("sys.gamespace.active", "");
+                        updateActiveGameSetting("");
+                        updateTouchPolling(false);
                     }
                     mNonGameForegroundUids.add(uid);
                     return;
                 }
                 if (mGameForegroundUids.isEmpty() && mNonGameForegroundUids.isEmpty()) {
-                    Slog.v(TAG, "Game power mode ON (first game in foreground)");
+                    Slog.v(TAG, "Game power mode ON (first game in foreground: " + foundGamePackage + ")");
                     mPowerManagerInternal.setPowerMode(Mode.GAME, true);
+                    SystemProperties.set("sys.gamespace.active", foundGamePackage);
+                    updateActiveGameSetting(foundGamePackage);
+                    updateTouchPolling(true);
                 }
                 final boolean isGameDefaultFrameRateDisabled =
                         mSysProps.getBoolean(
@@ -2347,12 +2410,16 @@ public final class GameManagerService extends IGameManagerService.Stub {
                     if (mGameForegroundUids.isEmpty() && mNonGameForegroundUids.isEmpty()) {
                         Slog.v(TAG, "Game power mode OFF (no games in foreground)");
                         mPowerManagerInternal.setPowerMode(Mode.GAME, false);
+                        SystemProperties.set("sys.gamespace.active", "");
+                        updateActiveGameSetting("");
+                        updateTouchPolling(false);
                     }
                 } else if (mNonGameForegroundUids.contains(uid)) {
                     mNonGameForegroundUids.remove(uid);
                     if (mNonGameForegroundUids.isEmpty() && !mGameForegroundUids.isEmpty()) {
                         Slog.v(TAG, "Game power mode ON (only games in foreground)");
                         mPowerManagerInternal.setPowerMode(Mode.GAME, true);
+                        updateTouchPolling(true);
                     }
                 }
             }

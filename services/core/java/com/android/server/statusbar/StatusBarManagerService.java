@@ -1672,13 +1672,18 @@ public class StatusBarManagerService extends IStatusBarService.Stub implements D
      */
     @Override
     public void reboot(boolean safeMode) {
+        rebootReason(safeMode, null);
+    }
+
+    @Override
+    public void rebootReason(boolean safeMode, String reason) {
         enforceStatusBarService();
         enforceValidCallingUser();
 
-        String reason = safeMode
+        final String rebootReason = (reason != null) ? reason : (safeMode
                 ? PowerManager.REBOOT_SAFE_MODE
-                : PowerManager.SHUTDOWN_USER_REQUESTED;
-        ShutdownCheckPoints.recordCheckPoint(Binder.getCallingPid(), reason);
+                : PowerManager.SHUTDOWN_USER_REQUESTED);
+        ShutdownCheckPoints.recordCheckPoint(Binder.getCallingPid(), rebootReason);
         final long identity = Binder.clearCallingIdentity();
         try {
             mNotificationDelegate.prepareForPossibleShutdown();
@@ -1687,7 +1692,7 @@ public class StatusBarManagerService extends IStatusBarService.Stub implements D
                 if (safeMode) {
                     ShutdownThread.rebootSafeMode(getUiContext(), true);
                 } else {
-                    ShutdownThread.reboot(getUiContext(), reason, false);
+                    ShutdownThread.reboot(getUiContext(), rebootReason, false);
                 }
             });
         } finally {

@@ -73,11 +73,15 @@ class HomeStatusBarViewBinderImpl @Inject constructor() : HomeStatusBarViewBinde
         // Set some top-level views to gone before we get started
         val systemInfoView = view.requireViewById<View>(R.id.status_bar_end_side_content)
         val clockView = view.requireViewById<View>(R.id.clock)
+        val centerClockView = view.findViewById<View>(R.id.clock_center)
+        val rightClockView = view.findViewById<View>(R.id.clock_right)
         val notificationIconsArea = view.requireViewById<View>(R.id.notificationIcons)
 
         // GONE because this shouldn't take space in the layout
         systemInfoView.hideInitially()
         clockView.hideInitially()
+        centerClockView?.hideInitially()
+        rightClockView?.hideInitially()
         notificationIconsArea.hideInitially()
 
         view.repeatWhenAttached {
@@ -141,7 +145,13 @@ class HomeStatusBarViewBinderImpl @Inject constructor() : HomeStatusBarViewBinde
                 }
 
                 if (!ClockModernization.isEnabled) {
-                    launch { viewModel.isClockVisible.collect { clockView.adjustVisibility(it) } }
+                    launch {
+                        viewModel.isClockVisible.collect {
+                            clockView.adjustVisibility(it)
+                            centerClockView?.adjustVisibility(it)
+                            rightClockView?.adjustVisibility(it)
+                        }
+                    }
                 }
 
                 launch {

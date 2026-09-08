@@ -28,6 +28,7 @@ import android.os.Binder;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.os.ServiceManager;
+import android.provider.Settings;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.view.ContentRecordingSession;
@@ -154,6 +155,9 @@ public class ScreenRecordingCallbackController {
             }
 
             boolean uidInRecording = uidHasRecordedActivity(callbackInfo.mUid);
+            if (isScreenRecordDetectionBlocked()) {
+                uidInRecording = false;
+            }
             mLastInvokedStateByUid.put(callbackInfo.mUid, uidInRecording);
             mCallbacks.put(binder, callbackInfo);
             return uidInRecording;
@@ -265,8 +269,12 @@ public class ScreenRecordingCallbackController {
             return;
         }
 
+        final boolean callbackState = isScreenRecordDetectionBlocked()
+                ? false
+                : visibleInScreenRecording;
+
         for (int i = 0; i < uids.size(); i++) {
-            mLastInvokedStateByUid.put(uids.valueAt(i), visibleInScreenRecording);
+            mLastInvokedStateByUid.put(uids.valueAt(i), callbackState);
         }
 
         ArrayList<IScreenRecordingCallback> callbacks = new ArrayList<>();
@@ -279,12 +287,17 @@ public class ScreenRecordingCallbackController {
         mWms.mH.post(() -> {
             for (int i = 0; i < callbacks.size(); i++) {
                 try {
-                    callbacks.get(i).onScreenRecordingStateChanged(visibleInScreenRecording);
+                    callbacks.get(i).onScreenRecordingStateChanged(callbackState);
                 } catch (RemoteException e) {
                     // Client has died. Cleanup is handled via DeathRecipient.
                 }
             }
         });
+    }
+
+    private boolean isScreenRecordDetectionBlocked() {
+        return Settings.Global.getInt(mWms.mContext.getContentResolver(),
+                Settings.Global.WINDOW_BLOCK_SCREENRECORD_DETECTION, 0) != 0;
     }
 
     void dump(PrintWriter pw) {

@@ -21239,4 +21239,29 @@ public class ActivityManagerService extends IActivityManager.Stub
         mAnrWarningController.notifyAnrWarning(
                 uid, anrId, errorId, anrType, consumedTimeMs, timeoutMs, description);
     }
+
+    @Override
+    public String getSpoofPifConfig() {
+        return android.provider.Settings.Secure.getString(mContext.getContentResolver(), "spoof_pif_config");
+    }
+
+    @Override
+    public String getSpoofGamePropsConfig() {
+        return android.provider.Settings.Secure.getString(mContext.getContentResolver(), "spoof_gameprops_config");
+    }
+
+    @Override
+    public String getSpoofTrickyStoreTarget() {
+        return android.provider.Settings.Secure.getString(mContext.getContentResolver(), "spoof_trickystore_target");
+    }
+
+    @Override
+    public String getSpoofTrickyStoreKeyBox() {
+        return android.provider.Settings.Secure.getString(mContext.getContentResolver(), "spoof_trickystore_keybox");
+    }
+
+    @Override
+    public String getSpoofTrickyStorePatch() {
+        return android.provider.Settings.Secure.getString(mContext.getContentResolver(), "spoof_trickystore_patch");
+    }
 }

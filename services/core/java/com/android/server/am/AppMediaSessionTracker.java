@@ -25,6 +25,7 @@ import static com.android.server.am.BaseAppStateTracker.STATE_TYPE_MEDIA_SESSION
 import android.annotation.NonNull;
 import android.content.Context;
 import android.media.session.MediaController;
+import android.media.session.MediaSessionManager;
 import android.media.session.MediaSessionManager.OnActiveSessionsChangedListener;
 import android.os.HandlerExecutor;
 import android.os.PowerExemptionManager.ReasonCode;
@@ -82,12 +83,20 @@ final class AppMediaSessionTracker
     }
 
     private void onBgMediaSessionMonitorEnabled(boolean enabled) {
-        if (enabled) {
-            mInjector.getMediaSessionManager().addOnActiveSessionsChangedListener(
-                    null, UserHandle.ALL, mHandlerExecutor, mSessionsChangedListener);
-        } else {
-            mInjector.getMediaSessionManager().removeOnActiveSessionsChangedListener(
-                    mSessionsChangedListener);
+        final MediaSessionManager msm = mInjector.getMediaSessionManager();
+        if (msm == null) {
+            return;
+        }
+        try {
+            if (enabled) {
+                msm.addOnActiveSessionsChangedListener(
+                        null, UserHandle.ALL, mHandlerExecutor, mSessionsChangedListener);
+            } else {
+                msm.removeOnActiveSessionsChangedListener(
+                        mSessionsChangedListener);
+            }
+        } catch (Exception e) {
+            android.util.Slog.w(TAG, "Failed to update active sessions listener", e);
         }
     }
 

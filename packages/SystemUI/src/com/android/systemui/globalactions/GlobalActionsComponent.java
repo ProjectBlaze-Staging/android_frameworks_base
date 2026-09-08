@@ -120,8 +120,13 @@ public class GlobalActionsComponent implements CoreStartable, Callbacks, GlobalA
 
     @Override
     public void reboot(boolean safeMode) {
+        reboot(safeMode, null);
+    }
+
+    @Override
+    public void reboot(boolean safeMode, String reason) {
         try {
-            mBarService.reboot(safeMode);
+            mBarService.rebootReason(safeMode, reason);
         } catch (RemoteException e) {
         }
     }

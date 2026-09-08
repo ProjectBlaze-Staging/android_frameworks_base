@@ -118,6 +118,7 @@ import com.android.systemui.log.core.LogLevel;
 import com.android.systemui.plugins.FalsingManager;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
 import com.android.systemui.res.R;
+import android.provider.Settings;
 import com.android.systemui.securelockdevice.domain.interactor.SecureLockDeviceInteractor;
 import com.android.systemui.settings.UserTracker;
 import com.android.systemui.statusbar.phone.KeyguardBypassController;
@@ -134,6 +135,7 @@ import dagger.Lazy;
 
 import java.io.PrintWriter;
 import java.text.NumberFormat;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -231,6 +233,8 @@ public class KeyguardIndicationController {
     private boolean mBatteryDead;
     private boolean mIncompatibleCharger;
     private int mChargingWattage;
+    private int mBatteryVoltage = -1;
+    private int mBatteryTemperature = -1;
     private int mBatteryLevel = -1;
     private boolean mBatteryPresent = true;
     protected long mChargingTimeRemaining;
@@ -1287,14 +1291,59 @@ public class KeyguardIndicationController {
                     : R.string.keyguard_plugged_in;
         }
 
+        String indication;
         if (hasChargingTime) {
             String chargingTimeFormatted = Formatter.formatShortElapsedTimeRoundingUpToMinutes(
                     mContext, mChargingTimeRemaining);
-            return mContext.getResources().getString(chargingId, chargingTimeFormatted,
+            indication = mContext.getResources().getString(chargingId, chargingTimeFormatted,
                     percentage);
         } else {
-            return mContext.getResources().getString(chargingId, percentage);
+            indication = mContext.getResources().getString(chargingId, percentage);
         }
+
+        boolean showBatteryInfo = Settings.System.getIntForUser(
+                mContext.getContentResolver(),
+                "lockscreen_battery_info", 1,
+                UserHandle.USER_CURRENT) == 1;
+
+        if (showBatteryInfo) {
+            StringBuilder infoBuilder = new StringBuilder();
+
+            int watts = 0;
+            if (mChargingWattage > 0) {
+                watts = (int) Math.round(mChargingWattage / 1000000.0);
+            }
+            if (watts <= 0 && mBatteryVoltage > 0) {
+                try {
+                    BatteryManager bm = (BatteryManager) mContext.getSystemService(Context.BATTERY_SERVICE);
+                    if (bm != null) {
+                        int currentNow = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
+                        int currentMa = Math.abs(currentNow) / 1000;
+                        if (currentMa > 0) {
+                            watts = (int) Math.round((currentMa * (mBatteryVoltage / 1000.0)) / 1000.0);
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (watts > 0) {
+                infoBuilder.append(" • ").append(watts).append("W");
+            }
+
+            if (mBatteryVoltage > 0) {
+                double volts = mBatteryVoltage / 1000.0;
+                infoBuilder.append(String.format(Locale.getDefault(), " • %.1fV", volts));
+            }
+
+            if (mBatteryTemperature > 0) {
+                double tempC = mBatteryTemperature / 10.0;
+                infoBuilder.append(String.format(Locale.getDefault(), " • %.1f°C", tempC));
+            }
+
+            indication += infoBuilder.toString();
+        }
+
+        return indication;
     }
 
     public void setStatusBarKeyguardViewManager(
@@ -1439,6 +1488,8 @@ public class KeyguardIndicationController {
             mPowerPluggedIn = isPowerPluggedIn(status, isChargingOrFull);
             mPowerCharged = status.isCharged();
             mChargingWattage = status.maxChargingWattage;
+            mBatteryVoltage = status.voltage;
+            mBatteryTemperature = status.temperature;
             mChargingSpeed = status.getChargingSpeed(mContext);
             mChargingStatus = status.chargingStatus;
             mBatteryLevel = status.level;

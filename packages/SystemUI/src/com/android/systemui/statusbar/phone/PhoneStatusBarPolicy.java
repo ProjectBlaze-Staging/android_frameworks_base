@@ -80,6 +80,10 @@ import com.android.systemui.util.RingerModeTracker;
 import com.android.systemui.util.kotlin.JavaAdapter;
 import com.android.systemui.util.time.DateFormatUtil;
 
+import android.provider.Settings;
+import com.android.systemui.Dependency;
+import com.android.systemui.tuner.TunerService;
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.List;
@@ -101,9 +105,13 @@ public class PhoneStatusBarPolicy
                 KeyguardStateController.Callback,
                 PrivacyItemController.Callback,
                 LocationController.LocationChangeCallback,
-                ScreenRecordUxController.StateChangeCallback {
+                ScreenRecordUxController.StateChangeCallback,
+                TunerService.Tunable {
     private static final String TAG = "PhoneStatusBarPolicy";
     private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
+
+    private static final String NETWORK_TRAFFIC_ENABLED =
+            "system:" + Settings.System.NETWORK_TRAFFIC_ENABLED;
 
     static final int LOCATION_STATUS_ICON_ID = PrivacyType.TYPE_LOCATION.getIconId();
 
@@ -124,6 +132,9 @@ public class PhoneStatusBarPolicy
     private final String mSlotSensorsOff;
     private final String mSlotScreenRecord;
     private final String mSlotConnectedDisplay;
+    private final String mSlotNetworkTraffic;
+    private boolean mShowNetworkTraffic;
+    private TunerService mTunerService;
     private final int mDisplayId;
     private final SharedPreferences mSharedPreferences;
     private final DateFormatUtil mDateFormatUtil;
@@ -241,6 +252,8 @@ public class PhoneStatusBarPolicy
         mSlotSensorsOff = resources.getString(com.android.internal.R.string.status_bar_sensors_off);
         mSlotScreenRecord = resources.getString(
                 com.android.internal.R.string.status_bar_screen_record);
+        mSlotNetworkTraffic = resources.getString(
+                com.android.internal.R.string.status_bar_network_traffic);
 
         mDisplayId = displayId;
         mSharedPreferences = sharedPreferences;
@@ -340,6 +353,11 @@ public class PhoneStatusBarPolicy
         // screen record
         mIconController.setIcon(mSlotScreenRecord, R.drawable.stat_sys_screen_record, null);
         mIconController.setIconVisibility(mSlotScreenRecord, false);
+
+        // network traffic
+        updateNetworkTraffic();
+        mTunerService = Dependency.get(TunerService.class);
+        mTunerService.addTunable(this, NETWORK_TRAFFIC_ENABLED);
 
         mRotationLockController.addCallback(this);
         mBluetooth.addCallback(this);
@@ -758,5 +776,36 @@ public class PhoneStatusBarPolicy
         }
 
         mIconController.setIconVisibility(mSlotConnectedDisplay, visible);
+    }
+
+    private final void updateNetworkTraffic() {
+        mIconController.setNetworkTraffic(mSlotNetworkTraffic, new NetworkTrafficState(mShowNetworkTraffic));
+        mIconController.setIconVisibility(mSlotNetworkTraffic, mShowNetworkTraffic);
+    }
+
+    @Override
+    public void onTuningChanged(String key, String newValue) {
+        switch (key) {
+            case NETWORK_TRAFFIC_ENABLED:
+                mShowNetworkTraffic =
+                        TunerService.parseIntegerSwitch(newValue, false);
+                updateNetworkTraffic();
+                break;
+            default:
+                break;
+        }
+    }
+
+    public static class NetworkTrafficState {
+        public boolean visible;
+
+        public NetworkTrafficState(boolean visible) {
+            this.visible = visible;
+        }
+
+        @Override
+        public String toString() {
+            return "NetworkTrafficState(visible=" + visible + ")";
+        }
     }
 }

@@ -55,6 +55,7 @@ import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.os.Trace;
 import android.provider.DeviceConfig;
+import android.provider.Settings;
 import android.util.ArraySet;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -1133,7 +1134,15 @@ public class EdgeBackGestureHandler {
                     && !mGestureBlockingActivityRunning.get()
                     && !QuickStepContract.isBackGestureDisabled(mSysUiFlags,
                             mIsTrackpadThreeFingerSwipe);
-            if (mIsTrackpadThreeFingerSwipe) {
+            boolean isGameSpaceGestureLocked = false;
+            try {
+                if (Settings.System.getInt(mContext.getContentResolver(), "gamespace_lock_gestures", 0) == 1) {
+                    isGameSpaceGestureLocked = !SystemProperties.get("sys.gamespace.active", "").isEmpty();
+                }
+            } catch (Throwable ignored) {}
+            if (isGameSpaceGestureLocked) {
+                mAllowGesture = false;
+            } else if (mIsTrackpadThreeFingerSwipe) {
                 // Trackpad back gestures don't have zones, so we don't need to check if the down
                 // event is within insets.
                 boolean trackpadGesturesEnabled =

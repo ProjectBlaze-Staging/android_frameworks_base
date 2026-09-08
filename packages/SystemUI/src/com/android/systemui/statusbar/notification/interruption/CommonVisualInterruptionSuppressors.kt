@@ -511,3 +511,29 @@ class AvalancheSuppressor(
         return isEnabled
     }
 }
+
+class PeekGameSpaceSuppressor(private val context: Context) :
+    VisualInterruptionFilter(types = setOf(PEEK), reason = "suppressed by GameSpace") {
+    override fun shouldSuppress(entry: NotificationEntry): Boolean {
+        val gamespaceEnabled =
+            Settings.System.getInt(context.contentResolver, "gamespace_enabled", 1) == 1
+        val suppressHun =
+            Settings.System.getInt(context.contentResolver, "gamespace_suppress_notifications", 0) == 1
+        if (!gamespaceEnabled || !suppressHun) {
+            return false
+        }
+        val activeGame = SystemProperties.get("sys.gamespace.active", "")
+        if (activeGame.isEmpty()) {
+            return false
+        }
+        val suppressCalls =
+            Settings.System.getInt(context.contentResolver, "gamespace_suppress_calls", 0) == 1
+        val isCall = entry.sbn.notification.isStyle(Notification.CallStyle::class.java) ||
+            Notification.CATEGORY_CALL == entry.sbn.notification.category
+        if (isCall && !suppressCalls) {
+            return false
+        }
+        return true
+    }
+}
+

@@ -100,6 +100,7 @@
                         android:paddingStart="@dimen/status_bar_left_clock_starting_padding"
                         android:paddingEnd="@dimen/status_bar_left_clock_end_padding"
                         android:gravity="center_vertical|start"
+                        systemui:isStatusBar="true"
                     />
 
                     <!-- To avoid chips causing notifs to re-layout, wrap them in a FrameLayout
@@ -164,5 +165,26 @@
             </com.android.keyguard.AlphaOptimizedLinearLayout>
         </FrameLayout>
     </LinearLayout>
+
+    <com.android.keyguard.AlphaOptimizedLinearLayout
+        android:id="@+id/centered_area"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingTop="@dimen/status_bar_padding_top"
+        >
+        <com.android.systemui.statusbar.policy.Clock
+            android:id="@+id/clock_center"
+            android:textAppearance="@style/TextAppearance.StatusBar.Default"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="@dimen/status_bar_icon_container_height"
+            android:singleLine="true"
+            android:gravity="center"
+            android:visibility="gone"
+            systemui:isStatusBar="true"
+        />
+    </com.android.keyguard.AlphaOptimizedLinearLayout>
 
 </com.android.systemui.statusbar.phone.PhoneStatusBarView>

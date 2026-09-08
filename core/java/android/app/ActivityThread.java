@@ -8168,6 +8168,16 @@ public final class ActivityThread extends ClientTransactionHandler
         final ContextImpl appContext = ContextImpl.createAppContext(this, data.info);
         mConfigurationController.updateLocaleListFromAppContext(appContext);
 
+        android.security.gameprops.GamePropsSpoofService.getInstance().spoofForPackage(data.appInfo.packageName);
+
+        android.security.pif.PlayIntegritySpoofService pifService = android.security.pif.PlayIntegritySpoofService.getInstance();
+        if (pifService.shouldSpoof(data.processName)) {
+            pifService.spoofBuildFields(data.processName);
+            if (pifService.isSpoofSignatureEnabled()) {
+                pifService.spoofSignature(data.processName);
+            }
+        }
+
         // Initialize the default http proxy in this process.
         Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "Setup proxies");
         try {

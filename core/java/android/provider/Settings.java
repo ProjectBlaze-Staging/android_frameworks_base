@@ -6052,6 +6052,25 @@ public final class Settings {
             "notification_cooldown_all";
 
         /**
+         * Which orientations are allowed for accelerometer rotation.
+         * @hide
+         */
+        @Readable
+        public static final String ACCELEROMETER_ROTATION_ANGLES =
+                "accelerometer_rotation_angles";
+
+        /**
+         * Volume key cursor control.
+         * 0 = disabled
+         * 1 = Volume up / down moves cursor left / right
+         * 2 = Volume up / down moves cursor right / left
+         * @hide
+         */
+        @Readable
+        public static final String VOLUME_KEY_CURSOR_CONTROL =
+                "volume_key_cursor_control";
+
+        /**
          * When enabled, notification attention effects will be restricted to vibration only
          * as long as the screen is unlocked.
          *
@@ -6778,6 +6797,116 @@ public final class Settings {
          */
         @Readable
         public static final String SHOW_BATTERY_PERCENT = "status_bar_show_battery_percent";
+
+        /**
+         * Whether to display clock seconds
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_CLOCK_SECONDS = "status_bar_clock_seconds";
+
+        /**
+         * Shows custom date before clock time
+         * 0 - No Date
+         * 1 - Small Date
+         * 2 - Normal Date
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_CLOCK_DATE_DISPLAY = "status_bar_clock_date_display";
+
+        /**
+         * Sets the date string style
+         * 0 - Regular style
+         * 1 - Lowercase
+         * 2 - Uppercase
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_CLOCK_DATE_STYLE = "status_bar_clock_date_style";
+
+        /**
+         * Position of date
+         * 0 - Left of clock
+         * 1 - Right of clock
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_CLOCK_DATE_POSITION = "status_bar_clock_date_position";
+
+        /**
+         * Stores the java DateFormat string for the date
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_CLOCK_DATE_FORMAT = "status_bar_clock_date_format";
+
+        /**
+         * Whether to auto hide clock
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_CLOCK_AUTO_HIDE = "status_bar_clock_auto_hide";
+
+        /** @hide */
+        @Readable
+        public static final String STATUS_BAR_CLOCK_AUTO_HIDE_HDURATION = "status_bar_clock_auto_hide_hduration";
+
+        /** @hide */
+        @Readable
+        public static final String STATUS_BAR_CLOCK_AUTO_HIDE_SDURATION = "status_bar_clock_auto_hide_sduration";
+
+        /**
+         * Whether or not to show network traffic monitor in status bar
+         * @hide
+         */
+        @Readable
+        public static final String NETWORK_TRAFFIC_ENABLED = "network_traffic_enabled";
+
+        /**
+         * Network traffic mode
+         * 0 - Dynamic (Upstream & Downstream)
+         * 1 - Upstream only
+         * 2 - Downstream only
+         * @hide
+         */
+        @Readable
+        public static final String NETWORK_TRAFFIC_MODE = "network_traffic_mode";
+
+        /**
+         * Auto hide network traffic when inactive
+         * @hide
+         */
+        @Readable
+        public static final String NETWORK_TRAFFIC_AUTOHIDE = "network_traffic_autohide";
+
+        /**
+         * Network traffic autohide threshold in KB/s
+         * @hide
+         */
+        @Readable
+        public static final String NETWORK_TRAFFIC_AUTOHIDE_THRESHOLD = "network_traffic_autohide_threshold";
+
+        /**
+         * Network traffic units
+         * @hide
+         */
+        @Readable
+        public static final String NETWORK_TRAFFIC_UNITS = "network_traffic_units";
+
+        /**
+         * Network traffic refresh interval in seconds
+         * @hide
+         */
+        @Readable
+        public static final String NETWORK_TRAFFIC_REFRESH_INTERVAL = "network_traffic_refresh_interval";
+
+        /**
+         * Hide arrows in network traffic monitor
+         * @hide
+         */
+        @Readable
+        public static final String NETWORK_TRAFFIC_HIDEARROW = "network_traffic_hidearrow";
 
         /**
          * Whether or not to enable multiple audio focus.
@@ -8018,6 +8147,14 @@ public final class Settings {
                 @CanBeCURRENT @UserIdInt int userId) {
             return putStringForUser(cr, name, Float.toString(value), userId);
         }
+
+        /**
+         * Whether tethering is allowed to use VPN upstreams.
+         * @hide
+         */
+        @Readable
+        public static final String TETHERING_ALLOW_VPN_UPSTREAMS =
+                "tethering_allow_vpn_upstreams";
 
         /**
          * Control whether to enable adaptive sleep mode.
@@ -14272,6 +14409,27 @@ public final class Settings {
         @FlaggedApi("com.android.server.notification.favorites_incoming_call_lights")
         public static final String LIGHT_ANIMATION_FAVORITE_CALLS_ENABLED =
                 "light_animation_favorite_calls_enabled";
+
+        /**
+         * Whether to spoof Google Photos to Pixel XL for unlimited storage.
+         * @hide
+         */
+        @Readable
+        public static final String PI_PHOTOS_SPOOF = "pi_photos_spoof";
+
+        /**
+         * Whether to spoof Snapchat.
+         * @hide
+         */
+        @Readable
+        public static final String PI_SNAPCHAT_SPOOF = "pi_snapchat_spoof";
+
+        /**
+         * Whether to enable PixelProps spoofing.
+         * @hide
+         */
+        @Readable
+        public static final String PI_PP_SPOOF = "pi_pp_spoof";
     }
 
     /**
@@ -14299,6 +14457,14 @@ public final class Settings {
         @TestApi
         @Readable
         public static final String NOTIFICATION_BUBBLES = "notification_bubbles";
+
+        /**
+         * Uids allowed on restricted networks.
+         * @hide
+         */
+        @Readable
+        public static final String UIDS_ALLOWED_ON_RESTRICTED_NETWORKS =
+                "uids_allowed_on_restricted_networks";
 
         /**
          * Whether users are allowed to add more users or guest from lockscreen.
@@ -19587,6 +19753,48 @@ public final class Settings {
          */
         public static final String[] LEGACY_RESTORE_SETTINGS = {
         };
+
+        /**
+         * Whether to ignore window FLAG_SECURE to allow screenshots in protected apps.
+         * @hide
+         */
+        @Readable
+        public static final String WINDOW_IGNORE_SECURE = "window_ignore_secure";
+
+        /**
+         * Whether to block screenshot detection callbacks to apps.
+         * @hide
+         */
+        @Readable
+        public static final String WINDOW_BLOCK_SCREENSHOT_DETECTION = "window_block_screenshot_detection";
+
+        /**
+         * Whether to block screen recording detection callbacks to apps.
+         * @hide
+         */
+        @Readable
+        public static final String WINDOW_BLOCK_SCREENRECORD_DETECTION = "window_block_screenrecord_detection";
+
+        /**
+         * Whether to bypass the minimum target SDK install limitation for apps.
+         * @hide
+         */
+        @Readable
+        public static final String BYPASS_LOW_TARGET_SDK_BLOCK = "bypass_low_target_sdk_block";
+
+        /**
+         * Whether to enable unlimited FPS spoofing for games.
+         * @hide
+         */
+        @Readable
+        public static final String GAME_PROPS_UNLIMITED_FPS = "game_props_unlimited_fps";
+
+        /**
+         * Whether to enable Pixel spoofing (Photos unlimited storage, etc.).
+         * @hide
+         */
+        @Readable
+        public static final String PIXEL_PROPS_SPOOF = "pixel_props_spoof";
 
         @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
         private static final ContentProviderHolder sProviderHolder =

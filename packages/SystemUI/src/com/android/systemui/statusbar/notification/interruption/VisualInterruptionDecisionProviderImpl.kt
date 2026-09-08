@@ -193,6 +193,7 @@ constructor(
                 deviceProvisioningInteractor,
             )
         )
+        addFilter(PeekGameSpaceSuppressor(context))
         avalancheProvider.register()
         started = true
     }

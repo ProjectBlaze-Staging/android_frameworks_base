@@ -68,6 +68,7 @@ import android.os.Trace;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.Settings;
+import lineageos.providers.LineageSettings;
 import android.sysprop.TelephonyProperties;
 import android.telecom.TelecomManager;
 import android.telephony.ServiceState;
@@ -302,6 +303,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
     private MyAdapter mAdapter;
     private MyOverflowAdapter mOverflowAdapter;
     private MyPowerOptionsAdapter mPowerAdapter;
+    protected final ArrayList<Action> mRestartItems = new ArrayList<>();
+    private MyRestartOptionsAdapter mRestartAdapter;
+    private Dialog mRestartDialog;
 
     private boolean mKeyguardShowing = false;
     private boolean mDeviceProvisioned = false;
@@ -681,6 +685,13 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         mItems.clear();
         mOverflowItems.clear();
         mPowerItems.clear();
+        mRestartItems.clear();
+
+        addIfShouldShowAction(mRestartItems, new RestartSystemAction());
+        addIfShouldShowAction(mRestartItems, new RestartRecoveryAction());
+        addIfShouldShowAction(mRestartItems, new RestartBootloaderAction());
+        addIfShouldShowAction(mRestartItems, new RestartFastbootAction());
+        addIfShouldShowAction(mRestartItems, new RestartSystemUIAction());
 
         List<GlobalActionType> actionTypes = mInteractor.getPossibleGlobalActions();
 
@@ -806,6 +817,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         mAdapter = new MyAdapter();
         mOverflowAdapter = new MyOverflowAdapter();
         mPowerAdapter = new MyPowerOptionsAdapter();
+        mRestartAdapter = new MyRestartOptionsAdapter();
     }
 
 
@@ -1118,7 +1130,181 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 return;
             }
             mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_PRESS);
-            mWindowManagerFuncs.reboot(false);
+            if (shouldShowRestartSubmenu()) {
+                showRestartOptionsMenu();
+            } else {
+                rebootAction(false);
+            }
+        }
+    }
+
+    private boolean shouldShowRestartSubmenu() {
+        if (mKeyguardShowing) {
+            return false;
+        }
+        return LineageSettings.Secure.getInt(mContext.getContentResolver(),
+                LineageSettings.Secure.ADVANCED_REBOOT, 0) == 1;
+    }
+
+    public void showRestartOptionsMenu() {
+        if (mRestartDialog != null && mRestartDialog.isShowing()) {
+            return;
+        }
+        if (mRestartAdapter == null) {
+            mRestartAdapter = new MyRestartOptionsAdapter();
+        }
+        mRestartDialog = GlobalActionsPowerDialog.create(mContext, mRestartAdapter);
+        mRestartDialog.show();
+    }
+
+    private boolean rebootAction(boolean safeMode) {
+        return rebootAction(safeMode, null);
+    }
+
+    private boolean rebootAction(boolean safeMode, String reason) {
+        if (mRestartDialog != null && mRestartDialog.isShowing()) {
+            mRestartDialog.dismiss();
+            mRestartDialog = null;
+        }
+        if (mDelegate != null) {
+            mDelegate.dismissWithoutAnimation();
+        }
+        if (mKeyguardStateController.isMethodSecure() && mKeyguardStateController.isShowing()) {
+            mActivityStarter.postQSRunnableDismissingKeyguard(() -> {
+                mWindowManagerFuncs.reboot(safeMode, reason);
+            });
+            return true;
+        } else {
+            mWindowManagerFuncs.reboot(safeMode, reason);
+            return true;
+        }
+    }
+
+    private final class RestartSystemAction extends SinglePressAction implements LongPressAction {
+        RestartSystemAction() {
+            super(com.android.systemui.res.R.drawable.ic_global_actions_restart,
+                    com.android.systemui.res.R.string.global_action_restart_system);
+        }
+
+        @Override
+        public boolean onLongPress() {
+            if (!mUserManager.hasUserRestrictionForUser(UserManager.DISALLOW_SAFE_BOOT,
+                    mUserTracker.getUserHandle())) {
+                rebootAction(true);
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public boolean showDuringKeyguard() {
+            return true;
+        }
+
+        @Override
+        public boolean showBeforeProvisioning() {
+            return true;
+        }
+
+        @Override
+        public void onPress() {
+            rebootAction(false);
+        }
+    }
+
+    private final class RestartRecoveryAction extends SinglePressAction {
+        RestartRecoveryAction() {
+            super(com.android.systemui.res.R.drawable.ic_lock_restart_recovery,
+                    com.android.systemui.res.R.string.global_action_restart_recovery);
+        }
+
+        @Override
+        public boolean showDuringKeyguard() {
+            return true;
+        }
+
+        @Override
+        public boolean showBeforeProvisioning() {
+            return true;
+        }
+
+        @Override
+        public void onPress() {
+            rebootAction(false, PowerManager.REBOOT_RECOVERY);
+        }
+    }
+
+    private final class RestartBootloaderAction extends SinglePressAction {
+        RestartBootloaderAction() {
+            super(com.android.systemui.res.R.drawable.ic_lock_restart_bootloader,
+                    com.android.systemui.res.R.string.global_action_restart_bootloader);
+        }
+
+        @Override
+        public boolean showDuringKeyguard() {
+            return true;
+        }
+
+        @Override
+        public boolean showBeforeProvisioning() {
+            return true;
+        }
+
+        @Override
+        public void onPress() {
+            rebootAction(false, "bootloader");
+        }
+    }
+
+    private final class RestartFastbootAction extends SinglePressAction {
+        RestartFastbootAction() {
+            super(com.android.systemui.res.R.drawable.ic_lock_restart_fastboot,
+                    com.android.systemui.res.R.string.global_action_restart_fastboot);
+        }
+
+        @Override
+        public boolean showDuringKeyguard() {
+            return true;
+        }
+
+        @Override
+        public boolean showBeforeProvisioning() {
+            return true;
+        }
+
+        @Override
+        public void onPress() {
+            rebootAction(false, "fastboot");
+        }
+    }
+
+    private final class RestartSystemUIAction extends SinglePressAction {
+        RestartSystemUIAction() {
+            super(com.android.systemui.res.R.drawable.ic_restart_systemui,
+                    com.android.systemui.res.R.string.global_action_restart_systemui);
+        }
+
+        @Override
+        public boolean showDuringKeyguard() {
+            return true;
+        }
+
+        @Override
+        public boolean showBeforeProvisioning() {
+            return true;
+        }
+
+        @Override
+        public void onPress() {
+            if (mRestartDialog != null && mRestartDialog.isShowing()) {
+                mRestartDialog.dismiss();
+                mRestartDialog = null;
+            }
+            if (mDelegate != null) {
+                mDelegate.dismissWithoutAnimation();
+            }
+            mWindowManagerFuncs.onGlobalActionsHidden();
+            android.os.Process.killProcess(android.os.Process.myPid());
         }
     }
 
@@ -1584,6 +1770,10 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
      */
     @Override
     public void onDismiss(DialogInterface dialog) {
+        if (mRestartDialog != null && mRestartDialog.isShowing()) {
+            mRestartDialog.dismiss();
+            mRestartDialog = null;
+        }
         if (mDelegate != null && mDelegate.mCurrentDialog == dialog) {
             mDelegate = null;
         }
@@ -1839,6 +2029,81 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 }
                 item.onPress();
             }
+        }
+    }
+
+    public class MyRestartOptionsAdapter extends BaseAdapter {
+        @Override
+        public int getCount() {
+            return mRestartItems.size();
+        }
+
+        @Override
+        public Action getItem(int position) {
+            return mRestartItems.get(position);
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return position;
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            Action action = getItem(position);
+            if (action == null) {
+                Log.w(TAG, "No restart action found at position: " + position);
+                return null;
+            }
+            int viewLayoutResource = com.android.systemui.res.R.layout.global_actions_power_item;
+            View view = convertView != null ? convertView
+                    : LayoutInflater.from(mContext).inflate(viewLayoutResource, parent, false);
+            view.setOnClickListener(v -> onClickItem(position));
+            if (action instanceof LongPressAction) {
+                view.setOnLongClickListener(v -> onLongClickItem(position));
+            }
+            ImageView icon = view.findViewById(R.id.icon);
+            TextView messageView = view.findViewById(R.id.message);
+            messageView.setSelected(true);
+            messageView.setTypeface(
+                    Typeface.create(FontStyles.GSF_LABEL_LARGE_EMPHASIZED, Typeface.NORMAL));
+
+            icon.setImageDrawable(action.getIcon(mContext));
+            icon.setScaleType(ImageView.ScaleType.CENTER_CROP);
+
+            if (action.getMessage() != null) {
+                messageView.setText(action.getMessage());
+            } else {
+                messageView.setText(action.getMessageResId());
+            }
+            return view;
+        }
+
+        private boolean onLongClickItem(int position) {
+            final Action action = getItem(position);
+            if (action instanceof LongPressAction) {
+                if (mRestartDialog != null && mRestartDialog.isShowing()) {
+                    mRestartDialog.dismiss();
+                    mRestartDialog = null;
+                }
+                if (mDelegate != null) {
+                    mDelegate.dismissWithoutAnimation();
+                }
+                return ((LongPressAction) action).onLongPress();
+            }
+            return false;
+        }
+
+        private void onClickItem(int position) {
+            Action item = getItem(position);
+            if (mRestartDialog != null && mRestartDialog.isShowing()) {
+                mRestartDialog.dismiss();
+                mRestartDialog = null;
+            }
+            if (mDelegate != null) {
+                mDelegate.dismissWithoutAnimation();
+            }
+            item.onPress();
         }
     }
 

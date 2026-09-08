@@ -37,8 +37,10 @@ import android.media.VolumeProvider;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerExecutor;
+import android.os.IBinder;
 import android.os.RemoteException;
 import android.os.ResultReceiver;
+import android.os.ServiceManager;
 import android.os.UserHandle;
 import android.service.media.MediaBrowserService;
 import android.service.notification.NotificationListenerService;
@@ -52,6 +54,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.media.mediasession.flags.Flags;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +89,28 @@ public final class MediaSessionManager {
     @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
     public static final int RESULT_MEDIA_KEY_HANDLED = 1;
 
-    private final ISessionManager mService;
+    private ISessionManager mService;
+
+    @Nullable
+    private ISessionManager getService() {
+        if (mService == null) {
+            IBinder b = null;
+            if (MediaFrameworkPlatformInitializer.getMediaServiceManager() != null) {
+                b = MediaFrameworkPlatformInitializer
+                        .getMediaServiceManager()
+                        .getMediaSessionServiceRegisterer()
+                        .get();
+            }
+            if (b == null) {
+                b = ServiceManager.getService(Context.MEDIA_SESSION_SERVICE);
+            }
+            if (b != null) {
+                mService = ISessionManager.Stub.asInterface(b);
+            }
+        }
+        return mService;
+    }
+
     private final MediaCommunicationManager mCommunicationManager;
     private final OnMediaKeyEventDispatchedListenerStub mOnMediaKeyEventDispatchedListenerStub =
             new OnMediaKeyEventDispatchedListenerStub();
@@ -128,10 +152,7 @@ public final class MediaSessionManager {
         // Consider rewriting like DisplayManagerGlobal
         // Decide if we need context
         mContext = context;
-        mService = ISessionManager.Stub.asInterface(MediaFrameworkPlatformInitializer
-                .getMediaServiceManager()
-                .getMediaSessionServiceRegisterer()
-                .get());
+        getService();
         mCommunicationManager = (MediaCommunicationManager) context
                 .getSystemService(Context.MEDIA_COMMUNICATION_SERVICE);
     }
@@ -161,8 +182,12 @@ public final class MediaSessionManager {
             @Nullable String overridePackageName) {
         Objects.requireNonNull(cbStub, "cbStub shouldn't be null");
         Objects.requireNonNull(tag, "tag shouldn't be null");
+        final ISessionManager service = getService();
+        if (service == null) {
+            return null;
+        }
         try {
-            return mService.createSession(
+            return service.createSession(
                     mContext.getPackageName(),
                     overridePackageName,
                     cbStub,
@@ -288,7 +313,8 @@ public final class MediaSessionManager {
     @Nullable
     public MediaSession.Token getMediaKeyEventSession() {
         try {
-            return mService.getMediaKeyEventSession(mContext.getPackageName());
+            final ISessionManager service = getService();
+            return service != null ? service.getMediaKeyEventSession(mContext.getPackageName()) : null;
         } catch (RemoteException ex) {
             Log.e(TAG, "Failed to get media key event session", ex);
         }
@@ -311,8 +337,9 @@ public final class MediaSessionManager {
     @NonNull
     public String getMediaKeyEventSessionPackageName() {
         try {
-            String packageName = mService.getMediaKeyEventSessionPackageName(
-                    mContext.getPackageName());
+            final ISessionManager service = getService();
+            String packageName = service != null ? service.getMediaKeyEventSessionPackageName(
+                    mContext.getPackageName()) : null;
             return (packageName != null) ? packageName : "";
         } catch (RemoteException ex) {
             Log.e(TAG, "Failed to get media key event session package name", ex);
@@ -349,7 +376,11 @@ public final class MediaSessionManager {
     private List<MediaSession.Token> getActiveSessionsForUser(
             ComponentName notificationListener, int userId, String packageNameFilter)
             throws RemoteException {
-        return mService.getSessions(notificationListener, userId, packageNameFilter);
+        final ISessionManager service = getService();
+        if (service == null) {
+            return Collections.emptyList();
+        }
+        return service.getSessions(notificationListener, userId, packageNameFilter);
     }
 
     @RequiresPermission(value = Manifest.permission.MEDIA_CONTENT_CONTROL, conditional = true)
@@ -584,11 +615,16 @@ public final class MediaSessionManager {
                 Log.w(TAG, "Attempted to add session listener twice, ignoring.");
                 return;
             }
+            final ISessionManager service = getService();
+            if (service == null) {
+                Log.w(TAG, "MediaSessionService is not available, skipping addSessionsListener.");
+                return;
+            }
             SessionsChangedWrapper wrapper = new SessionsChangedWrapper(mContext, sessionListener,
                     executor);
-            mService.addSessionsListener(
+            service.addSessionsListener(
                     wrapper.mStub, notificationListener, userId, packageNameFilter);
-                mListeners.put(sessionListener, wrapper);
+            mListeners.put(sessionListener, wrapper);
         }
     }
 
@@ -632,10 +668,13 @@ public final class MediaSessionManager {
             SessionsChangedWrapper wrapper = mListeners.remove(sessionListener);
             if (wrapper != null) {
                 try {
-                    if (isListenerForPackageFilter) {
-                        mService.removeSessionsListenerForPackage(wrapper.mStub);
-                    } else {
-                        mService.removeSessionsListener(wrapper.mStub);
+                    final ISessionManager service = getService();
+                    if (service != null) {
+                        if (isListenerForPackageFilter) {
+                            service.removeSessionsListenerForPackage(wrapper.mStub);
+                        } else {
+                            service.removeSessionsListener(wrapper.mStub);
+                        }
                     }
                 } finally {
                     wrapper.release();

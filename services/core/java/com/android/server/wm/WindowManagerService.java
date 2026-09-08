@@ -11167,6 +11167,10 @@ public class WindowManagerService extends IWindowManager.Stub
                 "notifyScreenshotListeners()")) {
             throw new SecurityException("Requires STATUS_BAR_SERVICE permission");
         }
+        if (Settings.Global.getInt(mContext.getContentResolver(),
+                Settings.Global.WINDOW_BLOCK_SCREENSHOT_DETECTION, 0) == 1) {
+            return new ArrayList<>();
+        }
         synchronized (mGlobalLock) {
             final DisplayContent displayContent = mRoot.getDisplayContent(displayId);
             if (displayContent == null) {
@@ -11477,7 +11481,8 @@ public class WindowManagerService extends IWindowManager.Stub
     }
 
     boolean getDisableSecureWindows() {
-        return mDisableSecureWindows;
+        return Settings.Global.getInt(mContext.getContentResolver(),
+                Settings.Global.WINDOW_IGNORE_SECURE, 0) == 1 || mDisableSecureWindows;
     }
 
     /**

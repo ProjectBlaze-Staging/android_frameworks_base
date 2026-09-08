@@ -148,7 +148,13 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.ContentObserver;
 import android.graphics.Rect;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.hardware.SensorPrivacyManager;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
 import android.hardware.display.BrightnessInfo;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.DisplayManagerInternal;
@@ -258,6 +264,9 @@ import com.android.server.wm.DisplayPolicy;
 import com.android.server.wm.DisplayRotation;
 import com.android.server.wm.WindowManagerInternal;
 import com.android.server.wm.WindowManagerInternal.AppTransitionListener;
+
+import lineageos.providers.LineageSettings;
+import org.lineageos.internal.buttons.LineageButtons;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -663,6 +672,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     // non-interactive. If false, the power button long press behavior will be skipped if the
     // default display is non-interactive.
     private boolean mSupportLongPressPowerWhenNonInteractive;
+    private LineageButtons mLineageButtons;
+    private boolean mTorchEnabled = false;
+    private CameraManager.TorchCallback mTorchCallback;
 
     // If true, the power button short press behavior will be always invoked as long as the default
     // display is on, even if the display is not interactive. If false, the power button short press
@@ -2298,6 +2310,18 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         mLockPatternUtils = injector.getLockPatternUtils();
         mLogger = new MetricsLogger();
 
+        mLineageButtons = new LineageButtons(mContext);
+        CameraManager cameraManager = mContext.getSystemService(CameraManager.class);
+        if (cameraManager != null) {
+            mTorchCallback = new CameraManager.TorchCallback() {
+                @Override
+                public void onTorchModeChanged(String cameraId, boolean enabled) {
+                    mTorchEnabled = enabled;
+                }
+            };
+            cameraManager.registerTorchCallback(mTorchCallback, mHandler);
+        }
+
         Resources res = mContext.getResources();
         mWakeOnDpadKeyPress =
                 res.getBoolean(com.android.internal.R.bool.config_wakeOnDpadKeyPress);
@@ -2523,7 +2547,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
         @Override
         public boolean supportLongPress() {
-            return hasLongPressOnPowerBehavior();
+            return hasLongPressOnPowerBehavior() || isTorchLongPressPowerEnabled();
         }
 
         @Override
@@ -2583,10 +2607,17 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
 
         private void onLongPress(@NonNull SingleKeyGestureEvent event) {
-            if (mSingleKeyGestureDetector.beganFromNonInteractive()
-                    && !mSupportLongPressPowerWhenNonInteractive) {
-                Slog.v(TAG, "Not support long press power when device is not interactive.");
-                return;
+            if (mSingleKeyGestureDetector.beganFromNonInteractive()) {
+                if (isTorchLongPressPowerEnabled()) {
+                    if (event.getAction() == ACTION_COMPLETE) {
+                        toggleTorch();
+                    }
+                    return;
+                }
+                if (!mSupportLongPressPowerWhenNonInteractive) {
+                    Slog.v(TAG, "Not support long press power when device is not interactive.");
+                    return;
+                }
             }
             // If Assistant mapped to long press, we send start, complete and cancel gesture
             // This is done to allow Assistant launch animation in SysUI. Will extend
@@ -2616,6 +2647,92 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             if (mShouldEarlyShortPressOnPower && count == 1) {
                 powerPress(event.getDownTime(), 1 /*pressCount*/, event.getDisplayId());
             }
+        }
+    }
+
+    private boolean isTorchLongPressPowerEnabled() {
+        return LineageSettings.System.getIntForUser(mContext.getContentResolver(),
+                LineageSettings.System.TORCH_LONG_PRESS_POWER_GESTURE, 0,
+                UserHandle.USER_CURRENT) == 1;
+    }
+
+    private void toggleTorch() {
+        try {
+            CameraManager cameraManager = mContext.getSystemService(CameraManager.class);
+            if (cameraManager != null) {
+                String[] cameraIdList = cameraManager.getCameraIdList();
+                for (String id : cameraIdList) {
+                    CameraCharacteristics c = cameraManager.getCameraCharacteristics(id);
+                    Boolean flashAvailable = c.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                    Integer lensFacing = c.get(CameraCharacteristics.LENS_FACING);
+                    if (flashAvailable != null && flashAvailable
+                            && lensFacing != null && lensFacing == CameraCharacteristics.LENS_FACING_BACK) {
+                        mTorchEnabled = !mTorchEnabled;
+                        cameraManager.setTorchMode(id, mTorchEnabled);
+                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS_POWER_BUTTON,
+                                "Power - Long Press - Toggle Torch");
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Slog.e(TAG, "Failed to toggle torch", e);
+        }
+    }
+
+    private void checkProximityAndHandlePocketMode(int wakeReason) {
+        try {
+            boolean pocketModeEnabled = LineageSettings.System.getIntForUser(
+                    mContext.getContentResolver(),
+                    LineageSettings.System.PROXIMITY_ON_WAKE, 0,
+                    UserHandle.USER_CURRENT) == 1;
+            if (!pocketModeEnabled) {
+                return;
+            }
+
+            SensorManager sensorManager = (SensorManager) mContext.getSystemService(Context.SENSOR_SERVICE);
+            if (sensorManager == null) {
+                return;
+            }
+
+            Sensor proxSensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
+            if (proxSensor == null) {
+                return;
+            }
+
+            final SensorEventListener listener = new SensorEventListener() {
+                @Override
+                public void onSensorChanged(SensorEvent event) {
+                    try {
+                        sensorManager.unregisterListener(this);
+                        if (event.values != null && event.values.length > 0) {
+                            float distance = event.values[0];
+                            boolean isNear = distance < proxSensor.getMaximumRange() && distance < 5.0f;
+                            if (isNear) {
+                                Slog.i(TAG, "PocketMode: Proximity sensor reports near (" + distance
+                                        + " cm), putting device back to sleep.");
+                                mPowerManager.goToSleep(SystemClock.uptimeMillis(),
+                                        PowerManager.GO_TO_SLEEP_REASON_TIMEOUT, 0);
+                            }
+                        }
+                    } catch (Exception e) {
+                        Slog.e(TAG, "Error in PocketMode onSensorChanged", e);
+                    }
+                }
+
+                @Override
+                public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+            };
+
+            mHandler.postDelayed(() -> {
+                try {
+                    sensorManager.unregisterListener(listener);
+                } catch (Exception ignored) {}
+            }, 400);
+
+            sensorManager.registerListener(listener, proxSensor, SensorManager.SENSOR_DELAY_FASTEST, mHandler);
+        } catch (Exception e) {
+            Slog.e(TAG, "Error checking pocket mode", e);
         }
     }
 
@@ -4557,6 +4674,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             case KeyEvent.KEYCODE_VOLUME_DOWN:
             case KeyEvent.KEYCODE_VOLUME_UP:
             case KeyEvent.KEYCODE_VOLUME_MUTE: {
+                if (mLineageButtons != null && mLineageButtons.handleVolumeKey(event, interactive)) {
+                    result &= ~ACTION_PASS_TO_USER;
+                    break;
+                }
                 int gestureType = keyCode == KEYCODE_VOLUME_DOWN
                         ? KeyGestureEvent.KEY_GESTURE_TYPE_VOLUME_DOWN
                         : keyCode == KEYCODE_VOLUME_UP
@@ -5452,6 +5573,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             applyKeyguardOcclusionChange();
         }
         mKeyguardDelegate.onStartedWakingUp(pmWakeReason, mPowerButtonLaunchGestureTriggered);
+
+        if (!anyDefaultOrAdjacentGroupInteractive) {
+            checkProximityAndHandlePocketMode(pmWakeReason);
+        }
 
         mPowerButtonLaunchGestureTriggered = false;
     }
