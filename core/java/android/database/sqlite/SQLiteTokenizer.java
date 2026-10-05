@@ -69,7 +69,13 @@ public class SQLiteTokenizer {
      */
     public static final int OPTION_TOKEN_ONLY = 1 << 0;
 
-    /**
+    	/**
+	 * Checks brackets; an unbalanced expression or one that attempts to close an
+	 * earlier bracket will result in an exception.
+	 */
+    public static final int OPTION_CHECK_BRACKETS = 1 << 1;
+
+  /**
      * Tokenize the given SQL, returning the list of each encountered token.
      *
      * @throws IllegalArgumentException if invalid SQL is encountered.
@@ -92,6 +98,7 @@ public class SQLiteTokenizer {
         }
         int pos = 0;
         final int len = sql.length();
+        int level = 0;
         while (pos < len) {
             final char ch = peek(sql, pos);
 
@@ -167,6 +174,20 @@ public class SQLiteTokenizer {
                 checker.accept(token);
                 continue;
             }
+            if (ch == '(') {
+                pos++;
+                level++;
+                continue;
+            }
+
+            if (ch == ')') {
+                pos++;
+                level--;
+                if (level < 0 && (options & OPTION_CHECK_BRACKETS) != 0) {
+                    throw genException("Unbalanced brackets", sql);
+                }
+                continue;
+            }
             if ((options &= OPTION_TOKEN_ONLY) != 0) {
                 throw genException("Non-token detected", sql);
             }
@@ -203,6 +224,10 @@ public class SQLiteTokenizer {
             // (Note it doesn't handle the X'' literal properly and reports this X as a token,
             // but that should be fine...)
             pos++;
+        }
+
+        if (level != 0 && (options & OPTION_CHECK_BRACKETS) != 0) {
+            throw genException("Unbalanced brackets", sql);
         }
     }
 
