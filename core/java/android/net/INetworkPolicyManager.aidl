@@ -95,8 +95,5 @@ interface INetworkPolicyManager {
     @EnforcePermission("OBSERVE_NETWORK_POLICY")
     boolean isUidRestrictedOnMeteredNetworks(int uid);
 
-    byte[] getBackupPayload(int user);
-    void applyRestore(in byte[] payload, int user);
-
     void notifyDenylistChanged(in int[] uidsAdded, in int[] uidsRemoved);
 }
