@@ -66,6 +66,33 @@ public final class PixelPropsUtils {
     private static final String PACKAGE_PHOTOS = "com.google.android.apps.photos";
     private static final String PACKAGE_SI = "com.google.android.settings.intelligence";
     private static final String PACKAGE_SNAPCHAT = "com.snapchat.android";
+    private static final String PACKAGE_NETFLIX = "com.netflix.mediaclient";
+
+    private static volatile boolean sGamePropsEnabled = true;
+    private static volatile boolean sNetflixSpoofEnabled = false;
+
+    private static final Set<String> sGamePackages = Set.of(
+            "com.tencent.ig",
+            "com.pubg.krmobile",
+            "com.pubg.imobile",
+            "com.vng.pubgmobile",
+            "com.rechild.bnt.mobile",
+            "com.activision.callofduty.shooter",
+            "com.garena.game.codm",
+            "com.mobile.legends",
+            "com.miHoYo.GenshinImpact",
+            "com.cognosphere.genshinimpact",
+            "com.ea.gp.fifamobile",
+            "com.riotgames.league.wildrift",
+            "com.riotgames.league.wildrifttw",
+            "com.dts.freefireth",
+            "com.dts.freefiremax",
+            "com.epicgames.fortnite",
+            "com.gameloft.android.ANMP.GloftA9HM",
+            "com.carxtech.sr",
+            "com.levelinfinite.hotta.gp",
+            "com.supercell.brawlstars"
+    );
 
     private static final String PI_PP_TARGETS_KEY = "pi_pp_targets";
     private static final String PI_PP_MODEL_KEY   = "pi_pp_model";
@@ -85,6 +112,22 @@ public final class PixelPropsUtils {
             "ID", "QP1A.191005.007.A3",
             "MODEL", "Pixel XL",
             "FINGERPRINT", "google/marlin/marlin:10/QP1A.191005.007.A3/5972272:user/release-keys"
+    );
+
+    private static final Map<String, Object> sNetflixProps = Map.of(
+            "BRAND", "google",
+            "MANUFACTURER", "Google",
+            "DEVICE", "husky",
+            "PRODUCT", "husky",
+            "MODEL", "Pixel 8 Pro"
+    );
+
+    private static final Map<String, Object> sGameProps = Map.of(
+            "BRAND", "asus",
+            "MANUFACTURER", "asus",
+            "DEVICE", "ASUS_AI2201",
+            "PRODUCT", "ASUS_AI2201",
+            "MODEL", "ASUS_AI2201"
     );
 
     private static final Map<String, Object> propsToChangeGeneric;
@@ -172,6 +215,10 @@ public final class PixelPropsUtils {
                         cr, Settings.Secure.PI_SNAPCHAT_SPOOF, 0) == 1;
                 sPixelPropsSpoofEnabled = Settings.Secure.getInt(
                         cr, Settings.Secure.PI_PP_SPOOF, 1) == 1;
+                sGamePropsEnabled = Settings.Global.getInt(
+                        cr, Settings.Global.GAME_PROPS_UNLIMITED_FPS, 1) == 1;
+                sNetflixSpoofEnabled = Settings.Global.getInt(
+                        cr, Settings.Global.NETFLIX_SPOOF, 0) == 1;
                 final String rawTargets = Settings.Secure.getString(cr, PI_PP_TARGETS_KEY);
                 sPpTargets = (rawTargets == null || rawTargets.isEmpty())
                         ? new ArraySet<>(PixelDeviceRepository.DEFAULT_PP_TARGETS)
@@ -193,6 +240,10 @@ public final class PixelPropsUtils {
                     Settings.Secure.getUriFor(Settings.Secure.PI_SNAPCHAT_SPOOF), false, observer);
             cr.registerContentObserver(
                     Settings.Secure.getUriFor(Settings.Secure.PI_PP_SPOOF), false, observer);
+            cr.registerContentObserver(
+                    Settings.Global.getUriFor(Settings.Global.GAME_PROPS_UNLIMITED_FPS), false, observer);
+            cr.registerContentObserver(
+                    Settings.Global.getUriFor(Settings.Global.NETFLIX_SPOOF), false, observer);
             cr.registerContentObserver(
                     Settings.Secure.getUriFor(PI_PP_TARGETS_KEY), false, observer);
             cr.registerContentObserver(
@@ -220,6 +271,21 @@ public final class PixelPropsUtils {
             if (sSnapchatSpoofEnabled) {
                 sPixelXLProps.forEach(PixelPropsUtils::setPropValue);
             }
+            return;
+        }
+
+        if (packageName.equals(PACKAGE_NETFLIX)) {
+            if (sNetflixSpoofEnabled) {
+                sNetflixProps.forEach(PixelPropsUtils::setPropValue);
+            }
+            return;
+        }
+
+        if (sGamePackages.contains(packageName)) {
+            if (sGamePropsEnabled) {
+                sGameProps.forEach(PixelPropsUtils::setPropValue);
+            }
+            return;
         }
     }
 

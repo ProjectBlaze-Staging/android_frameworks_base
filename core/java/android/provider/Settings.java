@@ -19790,6 +19790,13 @@ public final class Settings {
         public static final String GAME_PROPS_UNLIMITED_FPS = "game_props_unlimited_fps";
 
         /**
+         * Whether to enable Netflix spoofing (HDR/4K playback).
+         * @hide
+         */
+        @Readable
+        public static final String NETFLIX_SPOOF = "netflix_spoof";
+
+        /**
          * Whether to enable Pixel spoofing (Photos unlimited storage, etc.).
          * @hide
          */
