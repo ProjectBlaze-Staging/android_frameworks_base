@@ -123,7 +123,7 @@ public class NetworkTraffic extends TextView implements TunerService.Tunable,
     private boolean mAttached;
     private boolean mHideArrows;
 
-    private boolean mVisible = true;
+    private boolean mVisible = false;
 
     private ConnectivityManager mConnectivityManager;
     private final Handler mTrafficHandler;
@@ -157,6 +157,7 @@ public class NetworkTraffic extends TextView implements TunerService.Tunable,
 
     public NetworkTraffic(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
+        setVisibility(View.GONE);
         mContext = context;
         mConnectivityManager =
                 (ConnectivityManager) mContext.getSystemService(Context.CONNECTIVITY_SERVICE);

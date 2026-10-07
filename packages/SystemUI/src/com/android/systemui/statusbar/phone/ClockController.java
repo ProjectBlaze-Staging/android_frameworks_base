@@ -34,9 +34,9 @@ public class ClockController implements TunerService.Tunable {
     private static final String STATUS_BAR_CLOCK =
             "lineagesystem:" + LineageSettings.System.STATUS_BAR_CLOCK;
 
-    private static final int CLOCK_POSITION_RIGHT = 0;
+    private static final int CLOCK_POSITION_LEFT = 0;
     private static final int CLOCK_POSITION_CENTER = 1;
-    private static final int CLOCK_POSITION_LEFT = 2;
+    private static final int CLOCK_POSITION_RIGHT = 2;
     private static final int CLOCK_POSITION_HIDE = 3;
 
     private Context mContext;

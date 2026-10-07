@@ -45,8 +45,8 @@ open class StatusBarIconHolder private constructor() {
                 // this is effectively an unused return value.
                 TYPE_BINDABLE,
                 TYPE_MOBILE_NEW,
-                TYPE_WIFI_NEW,
-                TYPE_NETWORK_TRAFFIC -> true
+                TYPE_WIFI_NEW -> true
+                TYPE_NETWORK_TRAFFIC -> networkTrafficState?.visible == true
                 else -> true
             }
         set(visible) {
@@ -55,10 +55,12 @@ open class StatusBarIconHolder private constructor() {
             }
             when (type) {
                 TYPE_ICON -> icon!!.visible = visible
+                TYPE_NETWORK_TRAFFIC -> {
+                    networkTrafficState?.visible = visible
+                }
                 TYPE_BINDABLE,
                 TYPE_MOBILE_NEW,
-                TYPE_WIFI_NEW,
-                TYPE_NETWORK_TRAFFIC -> {}
+                TYPE_WIFI_NEW -> {}
             }
         }
 
