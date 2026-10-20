@@ -19797,6 +19797,22 @@ public final class Settings {
         public static final String NETFLIX_SPOOF = "netflix_spoof";
 
         /**
+         * Liquid Glass UI style toggle: 0 = Stock Material 3, 1 = Liquid Glass
+         * Controls frosted glass backgrounds, specular borders, and blur shaders across SystemUI and apps.
+         * @hide
+         */
+        @Readable
+        public static final String BLAZE_GLASS_STYLE = "blaze_glass_style";
+
+        /**
+         * iOS-style floating bottom navigation capsule toggle.
+         * Detaches BottomNavigationView from the screen edge into a floating rounded glass pill.
+         * @hide
+         */
+        @Readable
+        public static final String BLAZE_FLOATING_BOTTOM_NAV = "blaze_floating_bottom_nav";
+
+        /**
          * Whether to enable Pixel spoofing (Photos unlimited storage, etc.).
          * @hide
          */

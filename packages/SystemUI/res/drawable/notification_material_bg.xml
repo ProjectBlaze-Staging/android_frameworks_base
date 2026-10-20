@@ -18,18 +18,23 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android"
         xmlns:androidprv="http://schemas.android.com/apk/prv/res/android"
         android:color="?android:attr/colorControlHighlight">
+    <!-- Liquid Glass Card Base: Translucent glass layer with corner radius -->
     <item>
         <shape>
-            <solid android:color="@color/materialColorSurfaceContainerHigh" />
+            <corners android:radius="@dimen/notification_corner_radius" />
+            <solid android:color="#B31E2024" />
         </shape>
     </item>
+    <!-- Liquid Specular Edge: Light-catching 1dp frosted border -->
     <item>
         <shape>
-            <solid android:color="@color/notification_state_color_default" />
+            <corners android:radius="@dimen/notification_corner_radius" />
+            <stroke android:width="1dp" android:color="#24FFFFFF" />
         </shape>
     </item>
     <item android:id="@+id/notification_focus_overlay">
         <shape>
+            <corners android:radius="@dimen/notification_corner_radius" />
             <stroke android:width="@dimen/notification_focus_stroke_width"
                 android:color="@color/notification_focus_overlay_color"/>
         </shape>
