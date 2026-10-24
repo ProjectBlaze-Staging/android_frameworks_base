@@ -227,7 +227,7 @@ public class PlatLogoActivity extends Activity {
         mRandom = new Random();
         mDp = getResources().getDisplayMetrics().density;
         mStarfield = new Starfield(mRandom, mDp * 2f);
-        mStarfield.setWarp(0.1f); // very slow to start
+        mStarfield.setWarp(MIN_WARP);
         mLayout.setBackground(mStarfield);
 
         final DisplayMetrics dm = getResources().getDisplayMetrics();
@@ -240,21 +240,8 @@ public class PlatLogoActivity extends Activity {
         mLogo = new ImageView(this);
         mLogo.setImageResource(R.drawable.platlogo);
         mLogo.setOnTouchListener(mTouchListener);
-        mLogo.setVisibility(View.GONE);
+        mLogo.setVisibility(View.VISIBLE);
 
-        mHeptaDecaView = new View(this);
-        final Heptadecagram heptadecagram = new Heptadecagram(dp);
-        mHeptaDecaView.setBackground(heptadecagram);
-        mHeptaDecaView.setOnTouchListener((v, event) -> {
-            if (heptadecagram.onTouch(event)) {
-                mHeptaDecaView.performHapticFeedback(HapticFeedbackConstants.CONFIRM);
-            }
-            if (heptadecagram.getPathLength() > Heptadecagram.MAX_DOTS) {
-                swapToPlatlogo();
-            }
-            return true;
-        });
-        mLayout.addView(mHeptaDecaView, lp);
         mLayout.addView(mLogo, lp);
 
         setContentView(mLayout);
