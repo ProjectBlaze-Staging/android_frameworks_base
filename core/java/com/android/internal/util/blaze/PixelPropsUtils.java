@@ -76,21 +76,26 @@ public final class PixelPropsUtils {
             "com.pubg.krmobile",
             "com.pubg.imobile",
             "com.vng.pubgmobile",
+            "com.pubg.newstate",
             "com.rechild.bnt.mobile",
             "com.activision.callofduty.shooter",
+            "com.activision.callofduty.warzone",
             "com.garena.game.codm",
             "com.mobile.legends",
             "com.miHoYo.GenshinImpact",
             "com.cognosphere.genshinimpact",
             "com.ea.gp.fifamobile",
+            "com.ea.gp.apexlegendsmobilefps",
             "com.riotgames.league.wildrift",
             "com.riotgames.league.wildrifttw",
+            "com.riotgames.league.wildriftvn",
             "com.dts.freefireth",
             "com.dts.freefiremax",
             "com.epicgames.fortnite",
             "com.gameloft.android.ANMP.GloftA9HM",
             "com.carxtech.sr",
             "com.levelinfinite.hotta.gp",
+            "com.levelinfinite.sgameGlobal",
             "com.supercell.brawlstars"
     );
 
@@ -119,7 +124,8 @@ public final class PixelPropsUtils {
             "MANUFACTURER", "Google",
             "DEVICE", "husky",
             "PRODUCT", "husky",
-            "MODEL", "Pixel 8 Pro"
+            "MODEL", "Pixel 8 Pro",
+            "FINGERPRINT", "google/husky/husky:14/AP2A.240805.005/12025142:user/release-keys"
     );
 
     private static final Map<String, Object> sGameProps = Map.of(
@@ -127,7 +133,8 @@ public final class PixelPropsUtils {
             "MANUFACTURER", "asus",
             "DEVICE", "ASUS_AI2201",
             "PRODUCT", "ASUS_AI2201",
-            "MODEL", "ASUS_AI2201"
+            "MODEL", "ASUS_AI2201",
+            "FINGERPRINT", "asus/WW_AI2201/ASUS_AI2201:13/TKQ1.220807.001/33.0804.2060.100-0:user/release-keys"
     );
 
     private static final Map<String, Object> propsToChangeGeneric;

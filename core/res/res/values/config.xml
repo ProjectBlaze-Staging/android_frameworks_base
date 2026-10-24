@@ -5060,7 +5060,7 @@
     <bool name="config_allow3rdPartyAppOnInternal">true</bool>
 
     <!-- Specifies the path that is used by AdaptiveIconDrawable class to crop launcher icons. -->
-    <string name="config_icon_mask" translatable="false">"M 50 0 L 92 0 A 8 8 0 0 1 100 8 L 100 92 A 8 8 0 0 1 92 100 L 8 100 A 8 8 0 0 1 0 92 L 0 8 A 8 8 0 0 1 8 0 L 50 0 Z"</string>
+    <string name="config_icon_mask" translatable="false">"M50,0 C10,0 0,10 0,50 C0,90 10,100 50,100 C90,100 100,90 100,50 C100,10 90,0 50,0 Z"</string>
     <!-- Specifies the path that is used by AdaptiveIconDrawable class to crop launcher banners. -->
     <string name="config_banner_mask" translatable="false">@string/config_icon_mask</string>
 
