@@ -151,7 +151,7 @@ public class SQLiteTokenizer {
                     }
                     checker.accept(token);
                 } else {
-                    if ((options &= OPTION_TOKEN_ONLY) != 0) {
+                    if ((options & OPTION_TOKEN_ONLY) != 0) {
                         throw genException("Non-token detected", sql);
                     }
                 }
