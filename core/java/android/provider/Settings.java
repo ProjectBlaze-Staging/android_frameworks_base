@@ -6918,6 +6918,164 @@ public final class Settings {
         public static final String MULTI_AUDIO_FOCUS_ENABLED = "multi_audio_focus_enabled";
 
         /**
+         * @hide
+         */
+        @Readable
+        public static final String STATUSBAR_BATTERY_BAR = "statusbar_battery_bar";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String STATUSBAR_BATTERY_BAR_COLOR = "statusbar_battery_bar_color";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String STATUSBAR_BATTERY_BAR_THICKNESS =
+                "statusbar_battery_bar_thickness";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String STATUSBAR_BATTERY_BAR_STYLE = "statusbar_battery_bar_style";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String STATUSBAR_BATTERY_BAR_ANIMATE = "statusbar_battery_bar_animate";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String STATUSBAR_BATTERY_BAR_CHARGING_COLOR =
+                "statusbar_battery_bar_charging_color";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String STATUSBAR_BATTERY_BAR_BATTERY_LOW_COLOR =
+                "statusbar_battery_bar_battery_low_color";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String STATUSBAR_BATTERY_BAR_ENABLE_CHARGING_COLOR =
+                "statusbar_battery_bar_enable_charging_color";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String STATUSBAR_BATTERY_BAR_BLEND_COLOR = "statusbar_battery_bar_blend_color";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String STATUSBAR_BATTERY_BAR_BLEND_COLOR_REVERSE =
+                "statusbar_battery_bar_blend_color_reverse";
+
+        /**
+         * Statusbar logo
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_LOGO = "status_bar_logo";
+
+        /**
+         * Position of Status bar logo
+         * 0 - Left (default)
+         * 1 - Right
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_LOGO_POSITION = "status_bar_logo_position";
+
+        /**
+         * Statusbar logo custom style
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_LOGO_STYLE = "status_bar_logo_style";
+
+        /**
+         * Statusbar logo custom color
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_LOGO_COLOR = "status_bar_logo_color";
+
+        /**
+         * Statusbar logo custom color picker
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_LOGO_COLOR_PICKER = "status_bar_logo_color_picker";
+
+        /**
+         * Statusbar logo custom img
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_LOGO_CUSTOM_IMAGE_URI = "status_bar_logo_custom_image_uri";
+
+        /**
+         * Quick settings tile label hide
+         * @hide
+         */
+        @Readable
+        public static final String QS_TILE_LABEL_HIDE = "qs_tile_label_hide";
+
+        /**
+         * Media waveform seekbar
+         * @hide
+         */
+        @Readable
+        public static final String MEDIA_WAVEFORM_SEEKBAR = "media_waveform_seekbar";
+
+        /**
+         * Lockscreen widgets enabled
+         * @hide
+         */
+        @Readable
+        public static final String LOCKSCREEN_WIDGETS_ENABLED = "lockscreen_widgets_enabled";
+
+        /**
+         * Lockscreen widgets
+         * @hide
+         */
+        @Readable
+        public static final String LOCKSCREEN_WIDGETS = "lockscreen_widgets";
+
+        /**
+         * Lockscreen widgets extras
+         * @hide
+         */
+        @Readable
+        public static final String LOCKSCREEN_WIDGETS_EXTRAS = "lockscreen_widgets_extras";
+
+        /**
+         * Lockscreen widgets style
+         * @hide
+         */
+        @Readable
+        public static final String LOCKSCREEN_WIDGETS_STYLE = "lockscreen_widgets_style";
+
+        /**
+         * Lockscreen widgets transparency
+         * @hide
+         */
+        @Readable
+        public static final String LOCKSCREEN_WIDGETS_TRANSPARENCY = "lockscreen_widgets_transparency";
+
+        /**
          * The information of locale preference. This records user's preference to avoid
          * unsynchronized and existing locale preference in
          * {@link Locale#getDefault(Locale.Category)}.
@@ -8147,6 +8305,124 @@ public final class Settings {
                 @CanBeCURRENT @UserIdInt int userId) {
             return putStringForUser(cr, name, Float.toString(value), userId);
         }
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_STYLE = "lock_screen_custom_clock_style";
+
+        /**
+         * Lockscreen clock source: 0 = System default flex clock, 1 = BlazeHouse custom clock
+         * @hide
+         */
+        @Readable
+        public static final String LOCKSCREEN_CLOCK_SOURCE = "lockscreen_clock_source";
+
+        /**
+         * Remembers the last selected custom clock style when toggled back to system clock
+         * @hide
+         */
+        @Readable
+        public static final String LAST_CHOSEN_CUSTOM_CLOCK_STYLE = "last_chosen_custom_clock_style";
+
+        /**
+         * Whether to use default, system accent or custom color for lock screen clock text
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_COLOR_MODE = "lock_screen_custom_clock_color_mode";
+
+        /**
+         * Custom color for lock screen clock text
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_CUSTOM_COLOR = "lock_screen_custom_clock_custom_color";
+
+        /**
+         * Lock screen clock text opacity (0-100)
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_OPACITY = "lock_screen_custom_clock_opacity";
+
+        /**
+         * Adjust top margin for custom clock
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_MARGIN_TOP = "lock_screen_custom_clock_margin_top";
+
+        /**
+         * Custom clock size
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_SIZE = "lock_screen_custom_clock_size_scale";
+
+        /**
+         * Custom clock animation
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_AOD_ANIM = "lock_screen_custom_clock_aod_anim";
+
+        /**
+         * Custom clock album art color
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_ALBUM_ART_COLOR = "lock_screen_custom_clock_album_art_color";
+
+        /**
+         * Custom clock wobble on charge
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_WOBBLE_ON_CHARGE = "lock_screen_custom_clock_wobble_on_charge";
+
+        /**
+         * Custom start margin
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_MARGIN_START = "lock_screen_custom_clock_margin_start";
+
+        /**
+         * Custom gradient
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_GRADIENT_ENABLED = "lock_screen_custom_clock_gradient_enabled";
+
+        /**
+         * Custom gradient start
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_GRADIENT_COLOR_START = "lock_screen_custom_clock_gradient_color_start";
+
+        /**
+         * Custom gradient end
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_GRADIENT_COLOR_END = "lock_screen_custom_clock_gradient_color_end";
+
+        /**
+         * Custom gradient anchor
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_GRADIENT_ANCHOR_Y = "lock_screen_custom_clock_gradient_anchor_y";
+
+        /**
+         * Custom gradient radius
+         * @hide
+         */
+        @Readable
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_GRADIENT_RADIUS = "lock_screen_custom_clock_gradient_radius";
 
         /**
          * Whether tethering is allowed to use VPN upstreams.

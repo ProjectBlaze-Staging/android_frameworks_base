@@ -37,6 +37,12 @@ import com.android.systemui.plugins.keyguard.ui.clocks.ClockController
 import com.android.systemui.plugins.keyguard.ui.clocks.ClockPreviewConfig
 import com.android.systemui.res.R as SysuiR
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.os.UserHandle
+import android.provider.Settings
+import com.android.systemui.clocks.KeyguardClockSourceManager
 import com.android.systemui.shade.ShadeDisplayAware
 import com.android.systemui.shade.domain.interactor.ShadeModeInteractor
 import com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconContainerAlwaysOnDisplayViewModel
@@ -44,10 +50,13 @@ import com.android.systemui.statusbar.policy.domain.interactor.ZenModeInteractor
 import com.android.systemui.statusbar.ui.SystemBarUtilsProxy
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
@@ -70,6 +79,40 @@ constructor(
     @KeyguardLargeClockLog private val largeClockLogBuffer: LogBuffer,
 ) {
     var burnInLayer: Layer? = null
+
+    val isCustomClockEnabledFlow: StateFlow<Boolean> =
+        callbackFlow {
+            val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    trySend(KeyguardClockSourceManager.isCustomClockActive(context.contentResolver))
+                }
+            }
+            context.contentResolver.registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.LOCKSCREEN_CLOCK_SOURCE),
+                false,
+                observer,
+                UserHandle.USER_ALL
+            )
+            context.contentResolver.registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.LOCK_SCREEN_CUSTOM_CLOCK_STYLE),
+                false,
+                observer,
+                UserHandle.USER_ALL
+            )
+            trySend(KeyguardClockSourceManager.isCustomClockActive(context.contentResolver))
+            awaitClose {
+                context.contentResolver.unregisterContentObserver(observer)
+            }
+        }
+        .distinctUntilChanged()
+        .stateIn(
+            scope = applicationScope,
+            started = SharingStarted.Eagerly,
+            initialValue = KeyguardClockSourceManager.isCustomClockActive(context.contentResolver),
+        )
+
+    val isCustomClockEnabled: Boolean
+        get() = isCustomClockEnabledFlow.value
 
     val clockSize: StateFlow<ClockSize> = keyguardClockInteractor.clockSize
 

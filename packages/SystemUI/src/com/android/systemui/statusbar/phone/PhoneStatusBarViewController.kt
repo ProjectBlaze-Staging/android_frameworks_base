@@ -206,6 +206,8 @@ private constructor(
 
     override fun onViewAttached() {
         clock = mView.requireViewById(R.id.clock)
+        // Ensure status bar ClockController is initialized and active
+        clockController.let { }
 
         addDarkReceivers()
 
@@ -292,6 +294,7 @@ private constructor(
         progressProvider?.setReadyToHandleTransition(false)
         configurationController.removeCallback(configurationListener)
         mView.context.contentResolver.unregisterContentObserver(brightnessControlObserver)
+        clockController.removeTunable()
     }
 
     init {

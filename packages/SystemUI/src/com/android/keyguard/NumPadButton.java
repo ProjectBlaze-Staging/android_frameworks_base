@@ -117,6 +117,8 @@ public class NumPadButton extends AlphaOptimizedImageButton
         }
         switch(event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
+                performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP,
+                        android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
                 if (mAnimator != null) mAnimator.expand();
                 break;
             case MotionEvent.ACTION_UP:

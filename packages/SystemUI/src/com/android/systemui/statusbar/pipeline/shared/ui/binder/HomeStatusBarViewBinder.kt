@@ -75,14 +75,16 @@ class HomeStatusBarViewBinderImpl @Inject constructor() : HomeStatusBarViewBinde
         val clockView = view.requireViewById<View>(R.id.clock)
         val centerClockView = view.findViewById<View>(R.id.clock_center)
         val rightClockView = view.findViewById<View>(R.id.clock_right)
+        val rightClockLayout = view.findViewById<View>(R.id.right_clock_layout)
         val notificationIconsArea = view.requireViewById<View>(R.id.notificationIcons)
 
         // GONE because this shouldn't take space in the layout
-        systemInfoView.hideInitially()
-        clockView.hideInitially()
-        centerClockView?.hideInitially()
-        rightClockView?.hideInitially()
-        notificationIconsArea.hideInitially()
+        systemInfoView.hideInitially(View.GONE)
+        clockView.hideInitially(View.GONE)
+        centerClockView?.hideInitially(View.GONE)
+        rightClockView?.hideInitially(View.GONE)
+        rightClockLayout?.hideInitially(View.GONE)
+        notificationIconsArea.hideInitially(View.GONE)
 
         view.repeatWhenAttached {
             repeatOnLifecycle(Lifecycle.State.CREATED) {
@@ -147,9 +149,13 @@ class HomeStatusBarViewBinderImpl @Inject constructor() : HomeStatusBarViewBinde
                 if (!ClockModernization.isEnabled) {
                     launch {
                         viewModel.isClockVisible.collect {
-                            clockView.adjustVisibility(it)
-                            centerClockView?.adjustVisibility(it)
-                            rightClockView?.adjustVisibility(it)
+                            clockView.adjustClockVisibility(it)
+                            centerClockView?.adjustClockVisibility(it)
+                            rightClockView?.adjustClockVisibility(it)
+                            val logoRight = view.findViewById<View>(R.id.statusbar_logo_right)
+                            val isRightActive = (rightClockView?.visibility == View.VISIBLE) ||
+                                (logoRight != null && logoRight.visibility == View.VISIBLE)
+                            rightClockLayout?.visibility = if (isRightActive) View.VISIBLE else View.GONE
                         }
                     }
                 }
@@ -229,6 +235,18 @@ class HomeStatusBarViewBinderImpl @Inject constructor() : HomeStatusBarViewBinde
             .start()
     }
 
+    private fun View.adjustClockVisibility(model: VisibilityModel) {
+        val clock = this as? com.android.systemui.statusbar.policy.Clock
+        val shouldBeVisible = clock?.shouldBeVisible() ?: (visibility == View.VISIBLE)
+        if (!shouldBeVisible) {
+            animate().cancel()
+            visibility = View.GONE
+            alpha = 0f
+            return
+        }
+        adjustVisibility(model)
+    }
+
     private fun View.adjustVisibility(model: VisibilityModel) {
         if (model.visibility == View.VISIBLE) {
             this.show(model.shouldAnimateChange)
@@ -238,11 +256,10 @@ class HomeStatusBarViewBinderImpl @Inject constructor() : HomeStatusBarViewBinde
     }
 
     /**
-     * Hide the view for initialization, but skip if it's already hidden and does not cancel
-     * animations.
+     * Hide the view for initialization.
      */
-    private fun View.hideInitially(state: Int = View.INVISIBLE) {
-        if (visibility == View.INVISIBLE || visibility == View.GONE) {
+    private fun View.hideInitially(state: Int = View.GONE) {
+        if (visibility == state && alpha == 0f) {
             return
         }
         alpha = 0f

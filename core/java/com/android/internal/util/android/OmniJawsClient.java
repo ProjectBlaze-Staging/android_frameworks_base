@@ -1,0 +1,489 @@
+/*
+ * Copyright (C) 2021 The OmniROM project
+ * Copyright (C) 2022-2025 crDroid Android project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.android.internal.util.android;
+
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.res.Resources;
+import android.database.Cursor;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
+import android.text.TextUtils;
+import android.util.Log;
+
+import java.lang.ref.WeakReference;
+import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+public class OmniJawsClient {
+
+    private static final String TAG = "OmniJawsClient";
+    private static final boolean DEBUG = false;
+
+    public static final String SERVICE_PACKAGE = "org.omnirom.omnijaws";
+    public static final Uri WEATHER_URI = Uri.parse("content://org.omnirom.omnijaws.provider/weather");
+    public static final Uri SETTINGS_URI = Uri.parse("content://org.omnirom.omnijaws.provider/settings");
+    public static final Uri HOURLY_URI = Uri.parse("content://org.omnirom.omnijaws.provider/hourly");
+    public static final String WEATHER_UPDATE = SERVICE_PACKAGE + ".WEATHER_UPDATE";
+    public static final String WEATHER_ERROR = SERVICE_PACKAGE + ".WEATHER_ERROR";
+
+    private static final String ICON_PACKAGE_DEFAULT = "org.omnirom.omnijaws";
+    private static final String ICON_PREFIX_DEFAULT = "google_new";
+    private static final String EXTRA_ERROR = "error";
+    public static final int EXTRA_ERROR_NETWORK = 0;
+    public static final int EXTRA_ERROR_LOCATION = 1;
+    public static final int EXTRA_ERROR_DISABLED = 2;
+
+    public static final String[] WEATHER_PROJECTION = {
+            "city", "wind_speed", "wind_direction", "condition_code", "temperature",
+            "humidity", "condition", "forecast_low", "forecast_high", "forecast_condition",
+            "forecast_condition_code", "time_stamp", "forecast_date", "pin_wheel",
+            "feels_like", "pressure", "uvi", "visibility", "dew_point", "sunrise", "sunset"
+    };
+
+    public static final String[] SETTINGS_PROJECTION = {
+            "enabled", "units", "provider", "setup", "icon_pack"
+    };
+
+    public static final String[] HOURLY_PROJECTION = {
+            "hourly_temperature", "hourly_condition_code", "hourly_condition",
+            "hourly_timestamp", "hourly_humidity", "hourly_wind_speed"
+    };
+
+    private static final DecimalFormat sNoDigitsFormat = new DecimalFormat("0");
+
+    private static OmniJawsClient sInstance;
+
+    private volatile WeatherInfo mCachedInfo;
+    private Resources mRes;
+    private String mPackageName;
+    private String mIconPrefix;
+    private String mSettingIconPackage;
+    private boolean mMetric;
+
+    private final List<WeakReference<OmniJawsObserver>> mObservers = new CopyOnWriteArrayList<>();
+    private WeatherUpdateReceiver mReceiver;
+    private boolean mWeatherReceiverRegistered = false;
+
+    public static OmniJawsClient get() {
+        if (sInstance == null) {
+            synchronized (OmniJawsClient.class) {
+                if (sInstance == null) {
+                    sInstance = new OmniJawsClient();
+                }
+            }
+        }
+        return sInstance;
+    }
+
+    public interface OmniJawsObserver {
+        void weatherUpdated();
+        void weatherError(int errorReason);
+        default void updateSettings() {}
+    }
+
+    private class WeatherUpdateReceiver extends BroadcastReceiver {
+        @Override public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            pruneDeadObservers();
+            for (WeakReference<OmniJawsObserver> ref : mObservers) {
+                OmniJawsObserver obs = ref.get();
+                if (obs == null) continue;
+                if (WEATHER_UPDATE.equals(action)) {
+                    obs.weatherUpdated();
+                } else if (WEATHER_ERROR.equals(action)) {
+                    obs.weatherError(intent.getIntExtra(EXTRA_ERROR, 0));
+                }
+            }
+        }
+    }
+
+    public Intent getSettingsIntent() {
+        return new Intent(Intent.ACTION_MAIN)
+                .setClassName(SERVICE_PACKAGE, SERVICE_PACKAGE + ".SettingsActivity");
+    }
+
+    public Intent getWeatherActivityIntent(Context context) {
+        if (isOmniJawsEnabled(context)) {
+            return new Intent(Intent.ACTION_MAIN)
+                    .setClassName(SERVICE_PACKAGE, SERVICE_PACKAGE + ".WeatherActivity");
+        }
+        return getSettingsIntent();
+    }
+
+    public WeatherInfo getWeatherInfo() {
+        return mCachedInfo;
+    }
+
+    public void queryWeather(Context context) {
+        if (!isOmniJawsEnabled(context)) {
+            Log.w(TAG, "queryWeather while disabled");
+            mCachedInfo = null;
+            return;
+        }
+
+        WeatherInfo info = null;
+
+        try (Cursor weatherCursor = context.getContentResolver().query(
+                WEATHER_URI, WEATHER_PROJECTION, null, null, null)) {
+
+            if (weatherCursor != null && weatherCursor.getCount() > 0) {
+                info = new WeatherInfo();
+                List<DayForecast> forecasts = new ArrayList<>();
+
+                for (int i = 0; i < weatherCursor.getCount(); i++) {
+                    weatherCursor.moveToPosition(i);
+                    if (i == 0) {
+                        info.city = weatherCursor.getString(0);
+                        info.windSpeed = getFormattedValue(weatherCursor.getFloat(1));
+                        info.windDirection = weatherCursor.getInt(2) + "\u00b0";
+                        info.conditionCode = weatherCursor.getInt(3);
+                        info.temp = getFormattedValue(weatherCursor.getFloat(4));
+                        info.humidity = weatherCursor.getString(5);
+                        info.condition = weatherCursor.getString(6);
+                        info.timeStamp = Long.parseLong(weatherCursor.getString(11));
+                        info.pinWheel = weatherCursor.getString(13);
+
+                        int colFeelsLike = weatherCursor.getColumnIndex("feels_like");
+                        if (colFeelsLike != -1) info.feelsLike = weatherCursor.getFloat(colFeelsLike);
+                        int colPressure = weatherCursor.getColumnIndex("pressure");
+                        if (colPressure != -1) info.pressure = weatherCursor.getFloat(colPressure);
+                        int colUvi = weatherCursor.getColumnIndex("uvi");
+                        if (colUvi != -1) info.uvi = weatherCursor.getFloat(colUvi);
+                        int colVisibility = weatherCursor.getColumnIndex("visibility");
+                        if (colVisibility != -1) info.visibility = weatherCursor.getFloat(colVisibility);
+                        int colDewPoint = weatherCursor.getColumnIndex("dew_point");
+                        if (colDewPoint != -1) info.dewPoint = weatherCursor.getFloat(colDewPoint);
+                        int colSunrise = weatherCursor.getColumnIndex("sunrise");
+                        if (colSunrise != -1) info.sunrise = weatherCursor.getLong(colSunrise);
+                        int colSunset = weatherCursor.getColumnIndex("sunset");
+                        if (colSunset != -1) info.sunset = weatherCursor.getLong(colSunset);
+                    } else {
+                        DayForecast day = new DayForecast();
+                        day.low = getFormattedValue(weatherCursor.getFloat(7));
+                        day.high = getFormattedValue(weatherCursor.getFloat(8));
+                        day.condition = weatherCursor.getString(9);
+                        day.conditionCode = weatherCursor.getInt(10);
+                        day.date = weatherCursor.getString(12);
+                        forecasts.add(day);
+                    }
+                }
+                info.forecasts = forecasts;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "queryWeather: weather", e);
+            info = null;
+        }
+
+        try (Cursor settingsCursor = context.getContentResolver().query(
+                SETTINGS_URI, SETTINGS_PROJECTION, null, null, null)) {
+
+            if (settingsCursor != null && settingsCursor.moveToFirst()) {
+                mMetric = settingsCursor.getInt(1) == 0;
+                if (info != null) {
+                    info.tempUnits = getTemperatureUnit();
+                    info.windUnits = getWindUnit();
+                    info.provider = settingsCursor.getString(2);
+                    info.iconPack = settingsCursor.getString(4);
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "queryWeather: settings", e);
+        }
+
+        if (info != null) {
+            try (Cursor hourlyCursor = context.getContentResolver().query(
+                    HOURLY_URI, HOURLY_PROJECTION, null, null, null)) {
+                if (hourlyCursor != null && hourlyCursor.getCount() > 0) {
+                    final int colTemp = hourlyCursor.getColumnIndex("hourly_temperature");
+                    final int colCode = hourlyCursor.getColumnIndex("hourly_condition_code");
+                    final int colCondition = hourlyCursor.getColumnIndex("hourly_condition");
+                    final int colTimestamp = hourlyCursor.getColumnIndex("hourly_timestamp");
+                    final int colHumidity = hourlyCursor.getColumnIndex("hourly_humidity");
+                    final int colWindSpeed = hourlyCursor.getColumnIndex("hourly_wind_speed");
+
+                    if (colTemp == -1 || colCode == -1 || colCondition == -1
+                            || colTimestamp == -1 || colHumidity == -1 || colWindSpeed == -1) {
+                        Log.w(TAG, "queryWeather: hourly columns missing, skipping hourly forecasts");
+                    } else {
+                        List<HourlyForecast> hourly = new ArrayList<>();
+                        while (hourlyCursor.moveToNext()) {
+                            HourlyForecast h = new HourlyForecast();
+                            h.temperature = hourlyCursor.getFloat(colTemp);
+                            h.conditionCode = hourlyCursor.getInt(colCode);
+                            h.condition = hourlyCursor.getString(colCondition);
+                            h.timestamp = hourlyCursor.getLong(colTimestamp);
+                            h.humidity = hourlyCursor.getFloat(colHumidity);
+                            h.windSpeed = hourlyCursor.getFloat(colWindSpeed);
+                            hourly.add(h);
+                        }
+                        info.hourlyForecasts = hourly;
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "queryWeather: hourly", e);
+            }
+        }
+
+        mCachedInfo = info;
+
+        updateSettings(context);
+    }
+
+    private void updateSettings(Context context) {
+        WeatherInfo info = mCachedInfo;
+        String iconPack = (info != null) ? info.iconPack : null;
+        if (iconPack == null || TextUtils.isEmpty(iconPack)) {
+            loadDefaultIconsPackage(context);
+        } else if (!iconPack.equals(mSettingIconPackage)) {
+            mSettingIconPackage = iconPack;
+            loadCustomIconPackage(context);
+        }
+    }
+
+    private void loadDefaultIconsPackage(Context context) {
+        mPackageName = ICON_PACKAGE_DEFAULT;
+        mIconPrefix = ICON_PREFIX_DEFAULT;
+        mSettingIconPackage = mPackageName + "." + mIconPrefix;
+        try {
+            mRes = context.getPackageManager().getResourcesForApplication(mPackageName);
+        } catch (Exception e) {
+            Log.w(TAG, "No default icon package found");
+            mRes = null;
+        }
+    }
+
+    private void loadCustomIconPackage(Context context) {
+        int idx = mSettingIconPackage.lastIndexOf(".");
+        if (idx == -1) {
+            loadDefaultIconsPackage(context);
+            return;
+        }
+        mPackageName = mSettingIconPackage.substring(0, idx);
+        mIconPrefix = mSettingIconPackage.substring(idx + 1);
+        try {
+            mRes = context.getPackageManager().getResourcesForApplication(mPackageName);
+        } catch (Exception e) {
+            Log.w(TAG, "Icon pack loading failed, fallback to default");
+            loadDefaultIconsPackage(context);
+        }
+    }
+
+    private static String getFormattedValue(float value) {
+        if (Float.isNaN(value)) return "-";
+        String result = sNoDigitsFormat.format(value);
+        return result.equals("-0") ? "0" : result;
+    }
+
+    public boolean isOmniJawsServiceInstalled(Context context) {
+        return isAvailableApp(context, SERVICE_PACKAGE);
+    }
+
+    public boolean isOmniJawsEnabled(Context context) {
+        if (!isOmniJawsServiceInstalled(context)) return false;
+
+        try (Cursor c = context.getContentResolver().query(
+                SETTINGS_URI, SETTINGS_PROJECTION, null, null, null)) {
+            return c != null && c.moveToFirst() && c.getInt(0) == 1;
+        } catch (Exception e) {
+            Log.e(TAG, "isOmniJawsEnabled", e);
+            return false;
+        }
+    }
+
+    private boolean isAvailableApp(Context context, String pkg) {
+        try {
+            PackageManager pm = context.getPackageManager();
+            pm.getPackageInfo(pkg, PackageManager.GET_ACTIVITIES);
+            int state = pm.getApplicationEnabledSetting(pkg);
+            return state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                    && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER;
+        } catch (NameNotFoundException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    public void addObserver(Context context, OmniJawsObserver observer) {
+        if (observer == null) return;
+        removeObserver(context, observer);
+        mObservers.add(new WeakReference<>(observer));
+        registerReceiverIfNeeded(context);
+    }
+
+    public void removeObserver(Context context, OmniJawsObserver observer) {
+        if (observer == null) return;
+        mObservers.removeIf(ref -> {
+            OmniJawsObserver o = ref.get();
+            return o == null || o == observer;
+        });
+        if (mObservers.isEmpty()) {
+            unregisterReceiver(context);
+        }
+    }
+
+    private void pruneDeadObservers() {
+        try {
+            mObservers.removeIf(ref -> ref.get() == null);
+        } catch (Exception e) {
+            Log.w(TAG, "Exception occured while pruning, ignoring");
+        }
+    }
+
+    private void registerReceiverIfNeeded(Context context) {
+        if (!mWeatherReceiverRegistered && !mObservers.isEmpty()) {
+            if (mReceiver != null) {
+                try {
+                    context.unregisterReceiver(mReceiver);
+                } catch (Exception ignored) {}
+            }
+            mReceiver = new WeatherUpdateReceiver();
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(WEATHER_UPDATE);
+            filter.addAction(WEATHER_ERROR);
+            context.registerReceiver(mReceiver, filter, Context.RECEIVER_EXPORTED);
+            mWeatherReceiverRegistered = true;
+        }
+    }
+
+    private void unregisterReceiver(Context context) {
+        if (mWeatherReceiverRegistered && mReceiver != null) {
+            try {
+                context.unregisterReceiver(mReceiver);
+            } catch (Exception ignored) {}
+            mWeatherReceiverRegistered = false;
+        }
+    }
+
+    private String getTemperatureUnit() {
+        return mMetric ? "\u00b0C" : "\u00b0F";
+    }
+
+    private String getWindUnit() {
+        return mMetric ? "km/h" : "mph";
+    }
+
+    public Drawable getWeatherConditionImage(Context context, int conditionCode) {
+        if (mRes == null) {
+            loadDefaultIconsPackage(context);
+        }
+        try {
+            int resId = mRes.getIdentifier(mIconPrefix + "_" + conditionCode, "drawable", mPackageName);
+            Drawable d = mRes.getDrawable(resId, null);
+            return d != null ? d : getDefaultConditionImage(context);
+        } catch (Exception e) {
+            Log.e(TAG, "getWeatherConditionImage", e);
+            return getDefaultConditionImage(context);
+        }
+    }
+
+    private Drawable getDefaultConditionImage(Context context) {
+        try {
+            Resources res = context.getPackageManager().getResourcesForApplication(ICON_PACKAGE_DEFAULT);
+            int resId = res.getIdentifier(ICON_PREFIX_DEFAULT + "_na", "drawable", ICON_PACKAGE_DEFAULT);
+            Drawable d = res.getDrawable(resId, null);
+            return d != null ? d : new ColorDrawable(Color.RED);
+        } catch (Exception e) {
+            return new ColorDrawable(Color.RED);
+        }
+    }
+
+    public Drawable getResOmni(Context context, String iconOmni) {
+        if (mRes == null) loadDefaultIconsPackage(context);
+        try {
+            int resId = mRes.getIdentifier(iconOmni, "drawable", mPackageName);
+            Drawable d = mRes.getDrawable(resId, null);
+            return d != null ? d : new ColorDrawable(Color.RED);
+        } catch (Exception e) {
+            Log.e(TAG, "getResOmni", e);
+            return new ColorDrawable(Color.RED);
+        }
+    }
+
+    public static class WeatherInfo {
+        public String city;
+        public String windSpeed;
+        public String windDirection;
+        public int conditionCode;
+        public String temp;
+        public String humidity;
+        public String condition;
+        public Long timeStamp;
+        public List<DayForecast> forecasts;
+        public String tempUnits;
+        public String windUnits;
+        public String provider;
+        public String pinWheel;
+        public String iconPack;
+
+        public float feelsLike = Float.NaN;
+        public float pressure = Float.NaN;
+        public float uvi = Float.NaN;
+        public float visibility = Float.NaN;
+        public float dewPoint = Float.NaN;
+        public long sunrise;
+        public long sunset;
+        public List<HourlyForecast> hourlyForecasts;
+
+        public String getLastUpdateTime() {
+            return new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date(timeStamp));
+        }
+
+        @Override
+        public String toString() {
+            return city + " @ " + new Date(timeStamp) + " | " + condition + " | " + temp;
+        }
+    }
+
+    public static class DayForecast {
+        public String low;
+        public String high;
+        public int conditionCode;
+        public String condition;
+        public String date;
+
+        @Override
+        public String toString() {
+            return "[" + date + " - " + low + "/" + high + " - " + condition + "]";
+        }
+    }
+
+    public static class HourlyForecast {
+        public float temperature;
+        public int conditionCode;
+        public String condition;
+        public long timestamp;
+        public float humidity;
+        public float windSpeed;
+
+        @Override
+        public String toString() {
+            return "[" + new Date(timestamp) + " - " + temperature + " - " + condition + "]";
+        }
+    }
+}

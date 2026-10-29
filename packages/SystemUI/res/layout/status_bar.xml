@@ -89,6 +89,17 @@
                         android:layout_height="match_parent"
                         android:layout="@layout/operator_name" />
 
+                    <com.android.systemui.android.logo.LogoImageView
+                        android:id="@+id/statusbar_logo"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="center"
+                        android:paddingStart="@dimen/status_bar_left_clock_starting_padding"
+                        android:paddingEnd="@dimen/status_bar_left_clock_end_padding"
+                        android:gravity="center_vertical|start"
+                        android:scaleType="center"
+                        android:visibility="gone" />
+
                     <com.android.systemui.statusbar.policy.Clock
                         android:id="@+id/clock"
                         android:layout_width="wrap_content"
@@ -186,5 +197,10 @@
             systemui:isStatusBar="true"
         />
     </com.android.keyguard.AlphaOptimizedLinearLayout>
+
+    <com.android.systemui.android.batterybar.BatteryBarController
+        android:id="@+id/battery_bar"
+        android:layout_width="match_parent"
+        android:layout_height="1dp" />
 
 </com.android.systemui.statusbar.phone.PhoneStatusBarView>

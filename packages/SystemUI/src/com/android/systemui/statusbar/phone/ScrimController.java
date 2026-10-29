@@ -779,6 +779,10 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
         return mNotificationsScrim.getScaleY();
     }
 
+    public float getScrimBehindAlpha() {
+        return mBehindAlpha;
+    }
+
     public void onTrackingStarted() {
         mDarkenWhileDragging = !mKeyguardStateController.canDismissLockScreen();
         if (!mKeyguardUnlockAnimationController.isPlayingCannedUnlockAnimation()) {

@@ -310,4 +310,18 @@
 
     <!-- Identifier for the phishing animated smart action. -->
     <item type="id" name="is_phishing_animated_action" />
+
+    <!-- Blaze Custom Keyguard, Clocks, Weather & Widget IDs -->
+    <item type="id" name="clock_ls" />
+    <item type="id" name="aod_ls" />
+    <item type="id" name="keyguard_widgets" />
+    <item type="id" name="keyguard_info_widgets" />
+    <item type="id" name="keyguard_weather" />
+    <item type="id" name="default_weather_image" />
+    <item type="id" name="default_weather_text" />
+    <item type="id" name="weather_icon" />
+    <item type="id" name="weather_temp" />
+    <item type="id" name="original_typeface" />
+    <item type="id" name="original_text_color" />
+    <item type="id" name="original_alpha" />
 </resources>

@@ -2303,6 +2303,8 @@ class DatabaseHelper extends SQLiteOpenHelper {
             loadBooleanSetting(stmt, Settings.Global.AUTO_TIME_ZONE,
                     R.bool.def_auto_time_zone); // Sync timezone to NITZ
 
+            loadSetting(stmt, Settings.Global.RESTRICTED_NETWORKING_MODE, 0);
+
             if (Flags.useNewStayOnWhilePluggedInDefault()) {
                 loadSetting(
                         stmt,

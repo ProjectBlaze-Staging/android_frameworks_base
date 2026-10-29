@@ -79,11 +79,7 @@ object KeyguardBouncerConstants {
 }
 
 private fun <T> c(old: T, new: T): T {
-    return if (Flags.bouncerUiRevamp2()) {
-        new
-    } else {
-        old
-    }
+    return new
 }
 
 object PatternBouncerConstants {

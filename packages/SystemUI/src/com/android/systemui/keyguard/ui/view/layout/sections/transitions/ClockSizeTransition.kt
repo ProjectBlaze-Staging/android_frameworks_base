@@ -56,7 +56,7 @@ class ClockSizeTransition(
 
     init {
         ordering = ORDERING_TOGETHER
-        if (config.type != Type.SmartspaceVisibility) {
+        if (config.type != Type.SmartspaceVisibility && !clockViewModel.isCustomClockEnabled) {
             addTransition(ClockFaceOutTransition(config, clockViewModel, logBuffer))
             addTransition(ClockFaceInTransition(config, clockViewModel, logBuffer))
         }
@@ -208,11 +208,11 @@ class ClockSizeTransition(
                         str2 = "${to.view}"
                         int1 = (fract * 100).toInt()
                         double1 = alpha.toDouble()
-                        int2 = vis ?: View.VISIBLE
+                        int2 = vis ?: if (to.isVisible) View.VISIBLE else to.visibility
                         str3 = "$bounds"
                     }
                 }
-                to.view.setVisibility(vis ?: View.VISIBLE)
+                to.view.setVisibility(vis ?: if (to.isVisible) View.VISIBLE else to.visibility)
                 to.view.setAlpha(alpha)
                 to.view.setRect(bounds)
             }
@@ -305,7 +305,30 @@ class ClockSizeTransition(
         override val captureSmartspace
             get() = !isLargeClock
 
+        override fun captureStartValues(transition: TransitionValues) {
+            if (viewModel.isCustomClockEnabled) return
+            super.captureStartValues(transition)
+        }
+
+        override fun captureEndValues(transition: TransitionValues) {
+            if (viewModel.isCustomClockEnabled) return
+            super.captureEndValues(transition)
+        }
+
+        override fun createAnimator(
+            sceneRoot: ViewGroup,
+            startValues: TransitionValues?,
+            endValues: TransitionValues?,
+        ): Animator? {
+            if (viewModel.isCustomClockEnabled) return null
+            return super.createAnimator(sceneRoot, startValues, endValues)
+        }
+
         protected fun addTargets() {
+            if (viewModel.isCustomClockEnabled) {
+                logger.i("Custom clock enabled; skipping stock clock face targets")
+                return
+            }
             if (isLargeClock) {
                 viewModel.currentClock.value?.let {
                     logger.i({ "Adding large clock views: $str1" }) {
@@ -328,6 +351,14 @@ class ClockSizeTransition(
                 if (!viewModel.shouldDateWeatherBeBelowSmallClock.value) {
                     addTarget(sharedR.id.date_smartspace_view)
                 }
+            }
+        }
+
+        override fun mutateTargets(from: Target, to: Target) {
+            if (viewModel.isCustomClockEnabled) {
+                to.isVisible = false
+                to.visibility = View.GONE
+                to.alpha = 0f
             }
         }
 
@@ -407,10 +438,14 @@ class ClockSizeTransition(
                 if (isLargeClock) STATUS_AREA_MOVE_UP_MILLIS else STATUS_AREA_MOVE_DOWN_MILLIS
             interpolator = Interpolators.EMPHASIZED
             if (
+                viewModel.isCustomClockEnabled ||
                 viewModel.shouldDateWeatherBeBelowSmallClock.value ||
-                    !viewModel.shouldDateWeatherBeBelowLargeClock.value
+                !viewModel.shouldDateWeatherBeBelowLargeClock.value
             ) {
                 addTarget(sharedR.id.date_smartspace_view)
+            }
+            if (viewModel.isCustomClockEnabled) {
+                addTarget(sharedR.id.date_smartspace_view_large)
             }
             addTarget(sharedR.id.bc_smartspace_view)
 
@@ -432,7 +467,13 @@ class ClockSizeTransition(
         }
 
         override fun mutateTargets(from: Target, to: Target) {
-            if (to.view.id == sharedR.id.date_smartspace_view) {
+            if (to.view.id == sharedR.id.date_smartspace_view || to.view.id == sharedR.id.date_smartspace_view_large) {
+                if (viewModel.isCustomClockEnabled) {
+                    to.isVisible = false
+                    to.visibility = View.GONE
+                    to.alpha = 0f
+                    return
+                }
                 to.isVisible = !viewModel.hasCustomWeatherDataDisplay.value || !isLargeClock
                 to.visibility = if (to.isVisible) View.VISIBLE else View.GONE
                 to.alpha = if (to.isVisible) 1f else 0f

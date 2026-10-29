@@ -94,6 +94,40 @@ constructor(
     }
 
     override fun applyConstraints(constraintSet: ConstraintSet) {
+        val isCustomClockEnabled = keyguardClockViewModel.isCustomClockEnabled
+        if (isCustomClockEnabled) {
+            keyguardClockViewModel.currentClock.value?.let { clock ->
+                constraintSet.setVisibility(getTargetClockFace(clock).views, GONE)
+                constraintSet.setVisibility(getNonTargetClockFace(clock).views, GONE)
+                constraintSet.setAlpha(getTargetClockFace(clock).views, 0f)
+                constraintSet.setAlpha(getNonTargetClockFace(clock).views, 0f)
+                clock.largeClock.layout.views.forEach { v ->
+                    v.visibility = View.GONE
+                    v.alpha = 0f
+                    if (v.id != View.NO_ID && constraintSet.getConstraint(v.id) != null) {
+                        constraintSet.setVisibility(v.id, GONE)
+                        constraintSet.setAlpha(v.id, 0f)
+                    }
+                }
+                clock.smallClock.layout.views.forEach { v ->
+                    v.visibility = View.GONE
+                    v.alpha = 0f
+                    if (v.id != View.NO_ID && constraintSet.getConstraint(v.id) != null) {
+                        constraintSet.setVisibility(v.id, GONE)
+                        constraintSet.setAlpha(v.id, 0f)
+                    }
+                }
+            }
+            if (constraintSet.getConstraint(ClockViewIds.LOCKSCREEN_CLOCK_VIEW_LARGE) != null) {
+                constraintSet.setVisibility(ClockViewIds.LOCKSCREEN_CLOCK_VIEW_LARGE, GONE)
+                constraintSet.setAlpha(ClockViewIds.LOCKSCREEN_CLOCK_VIEW_LARGE, 0f)
+            }
+            if (constraintSet.getConstraint(ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL) != null) {
+                constraintSet.setVisibility(ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL, GONE)
+                constraintSet.setAlpha(ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL, 0f)
+            }
+            return
+        }
         keyguardClockViewModel.currentClock.value?.let { clock ->
             constraintSet.applyDeltaFrom(buildConstraints(clock, constraintSet))
         }

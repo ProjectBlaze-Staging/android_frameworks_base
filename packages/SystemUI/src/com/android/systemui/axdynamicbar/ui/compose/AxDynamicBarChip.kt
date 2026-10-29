@@ -1,0 +1,494 @@
+package com.android.systemui.axdynamicbar.ui.compose
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.keyframes
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.res.dimensionResource
+import com.android.compose.animation.Expandable
+import com.android.compose.animation.rememberExpandableController
+import com.android.systemui.animation.Expandable as SystemUiExpandable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import android.graphics.drawable.Drawable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.res.stringResource
+import com.android.systemui.axdynamicbar.model.IslandEvent
+import com.android.systemui.axdynamicbar.shared.AlphaIconBg
+import com.android.systemui.axdynamicbar.shared.AlphaSecondary
+import com.android.systemui.axdynamicbar.shared.AlphaTertiary
+import com.android.systemui.axdynamicbar.shared.PillPrimary
+import com.android.systemui.axdynamicbar.shared.ShapeXl
+import com.android.systemui.axdynamicbar.shared.ShapeXs
+import com.android.systemui.axdynamicbar.shared.SizeBadge
+import com.android.systemui.axdynamicbar.shared.SpaceMd
+import com.android.systemui.axdynamicbar.shared.SpaceSm
+import com.android.systemui.axdynamicbar.shared.SpaceXs
+import com.android.systemui.axdynamicbar.shared.TsBadge
+import com.android.systemui.axdynamicbar.shared.chipAccentColorFor
+import com.android.systemui.axdynamicbar.shared.chipContentColorOn
+import com.android.systemui.axdynamicbar.shared.chipProgressFor
+import com.android.systemui.axdynamicbar.shared.textKeyFor
+import com.android.systemui.axdynamicbar.shared.toScaledBitmap
+import com.android.systemui.axdynamicbar.ui.AxDynamicBarChipViewModel
+import com.android.systemui.res.R
+import kotlin.math.abs
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
+
+private val ChipShape = ShapeXl
+private val ChipHeight = 24.dp
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun AxDynamicBarChip(
+    viewModel: AxDynamicBarChipViewModel,
+    modifier: Modifier = Modifier,
+    ignoreKeyguard: Boolean = false,
+) {
+    val state by viewModel.chipState.collectAsStateWithLifecycle()
+    val isOnKeyguard by viewModel.isOnKeyguard.collectAsStateWithLifecycle()
+    val keyguardCarrier by viewModel.keyguardCarrierText.collectAsStateWithLifecycle()
+    val chipStyle by viewModel.chipStyle.collectAsStateWithLifecycle()
+
+    var toggleCount by remember { mutableIntStateOf(0) }
+    
+    val carrierName = if (isOnKeyguard && ignoreKeyguard) keyguardCarrier.takeIf { it.isNotBlank() } else null
+    val chipTextMaxWidth = dimensionResource(R.dimen.ongoing_activity_chip_max_text_width)
+    val screenWidthPx = with(LocalDensity.current) {
+        LocalConfiguration.current.screenWidthDp.dp.toPx()
+    }
+
+    val touchSlop = LocalViewConfiguration.current.touchSlop
+    val expandableController = rememberExpandableController(color = Color.Transparent, shape = ChipShape)
+    var currentExpandable by remember { mutableStateOf<SystemUiExpandable?>(null) }
+
+    val motionScheme = MaterialTheme.motionScheme
+
+    AnimatedVisibility(
+        visible = state != null && (ignoreKeyguard || !isOnKeyguard),
+        enter = fadeIn(motionScheme.defaultEffectsSpec()) + scaleIn(initialScale = 0.8f, animationSpec = motionScheme.defaultSpatialSpec()),
+        exit = fadeOut(motionScheme.fastEffectsSpec()) + scaleOut(targetScale = 0.8f, animationSpec = motionScheme.fastSpatialSpec()),
+        modifier = modifier
+            .padding(start = 4.dp, end = 2.dp)
+            .widthIn(min = 25.dp, max = 90.dp)
+            .pointerInput(viewModel) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                    
+                    val startX = down.position.x
+                    val startY = down.position.y
+                    var dragging = false
+                    var totalDx = 0f
+                    var decided = false 
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull() ?: break
+                        if (!change.pressed) {
+                            
+                            if (dragging) {
+                                change.consume()
+                                if (totalDx > 0) viewModel.cyclePrev()
+                                else viewModel.cycleNext()
+                            } else if (!decided) {
+
+                                change.consume()
+                                val wasExpanded = viewModel.statusBarExpansion.isExpanded.value
+                                val current = state?.event
+                                if (current is IslandEvent.AospChip) {
+                                    val expandable = currentExpandable
+                                    if (expandable == null ||
+                                        !viewModel.handleAospChipTap(current, expandable)) {
+                                        viewModel.statusBarExpansion.toggle()
+                                        if (!wasExpanded) toggleCount++
+                                    }
+                                } else {
+                                    viewModel.statusBarExpansion.toggle()
+                                    if (!wasExpanded) toggleCount++
+                                }
+                            }
+                            
+                            break
+                        }
+                        val dx = change.position.x - startX
+                        val dy = change.position.y - startY
+                        if (!decided && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
+                            if (abs(dx) >= abs(dy)) {
+                                
+                                decided = true
+                                dragging = true
+                                totalDx = dx
+                                change.consume()
+                            } else {
+                                
+                                decided = true
+                                break
+                            }
+                        } else if (dragging) {
+                            totalDx = dx
+                            change.consume()
+                        }
+                    }
+                }
+            }
+            .onGloballyPositioned { coords ->
+                val bounds = coords.boundsInWindow()
+                val centerX = (bounds.left + bounds.right) / 2f
+                if (screenWidthPx > 0f) {
+                    viewModel.updateChipCenterX(centerX / screenWidthPx)
+                }
+            },
+    ) {
+        state?.let { chipState ->
+            val displayEvent = chipState.event
+            val isAlert = false
+
+            Expandable(
+                controller = expandableController,
+                onClick = null,
+                defaultMinSize = false,
+            ) { expandable ->
+                currentExpandable = expandable
+                AnimatedContent(
+                    targetState = chipDisplayKey(displayEvent, isAlert),
+                    transitionSpec = {
+                        ((
+                            fadeIn(motionScheme.defaultEffectsSpec()) +
+                                scaleIn(
+                                    initialScale = 0.92f,
+                                    animationSpec = motionScheme.defaultSpatialSpec(),
+                                )
+                            ) togetherWith (
+                            fadeOut(motionScheme.fastEffectsSpec()) +
+                                scaleOut(
+                                    targetScale = 0.92f,
+                                    animationSpec = motionScheme.fastSpatialSpec(),
+                                )
+                            ))
+                            .using(sizeTransform = null)
+                    },
+                    label = "chip_event",
+                ) {
+                    val event = displayEvent
+                    val rawAccent = chipAccentColorFor(event)
+                    val accent by animateColorAsState(rawAccent, MaterialTheme.motionScheme.fastEffectsSpec(), label = "accent")
+                    val contentColor by animateColorAsState(
+                        chipContentColorOn(rawAccent), MaterialTheme.motionScheme.fastEffectsSpec(), label = "content",
+                    )
+                val useCircleStyle = chipStyle == 1 &&
+                        !isAlert &&
+                        event !is IslandEvent.AudioRecording &&
+                        event !is IslandEvent.Timer &&
+                        event !is IslandEvent.Stopwatch &&
+                        !(event is IslandEvent.Sports && event.team2Name.isNotEmpty())
+
+                val progress = chipProgressFor(event, includeMediaProgress = useCircleStyle)
+
+                if (useCircleStyle) {
+                    Box(
+                        modifier = Modifier.fillMaxHeight(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircleChip(
+                            event = event,
+                            accent = accent,
+                            contentColor = contentColor,
+                            progress = progress,
+                            modifier = Modifier.squishAnimation(toggleCount),
+                        )
+                    }
+                } else {
+                Box(
+                    modifier = Modifier.fillMaxHeight(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        modifier =
+                            Modifier.height(ChipHeight)
+                                .widthIn(max = 100.dp)
+                                .clip(ChipShape)
+                                .squishAnimation(toggleCount)
+                                .background(accent)
+                                .then(
+                                    if (progress != null) {
+                                        val trackColor = lerp(accent, contentColor, 0.2f)
+                                        val fillColor = lerp(accent, contentColor, 0.6f)
+                                        Modifier.drawWithContent {
+                                            drawContent()
+                                            val barH = 2.dp.toPx()
+                                            val y = size.height - barH
+                                            drawRect(
+                                                trackColor,
+                                                topLeft = Offset(0f, y),
+                                                size = Size(size.width, barH),
+                                            )
+                                            drawRect(
+                                                fillColor,
+                                                topLeft = Offset(0f, y),
+                                                size = Size(size.width * progress, barH),
+                                            )
+                                        }
+                                    } else Modifier
+                                )
+                                .padding(start = SpaceSm, end = SpaceMd),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (carrierName != null) {
+                            Text(
+                                text = carrierName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = contentColor.copy(alpha = AlphaSecondary),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 56.dp),
+                            )
+                            Text(
+                                text = " · ",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = contentColor.copy(alpha = AlphaTertiary),
+                            )
+                        }
+                        if (isAlert && event is IslandEvent.Notification) {
+                            val notif = event
+                            AnimatedContent(
+                                targetState = notif.sbn.key,
+                                transitionSpec = {
+                                    (fadeIn(motionScheme.defaultEffectsSpec()) togetherWith fadeOut(motionScheme.fastEffectsSpec()))
+                                        .using(sizeTransform = null)
+                                },
+                                label = "alert_content",
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    notif.appIcon?.let { icon ->
+                                        Image(
+                                            bitmap = icon.toScaledBitmap(16.dp),
+                                            contentDescription = null,
+                                            modifier =
+                                                Modifier.size(16.dp)
+                                                    .clip(ShapeXs),
+                                            contentScale = ContentScale.Crop,
+                                        )
+                                        Spacer(Modifier.width(SpaceXs))
+                                    }
+                                    Text(
+                                        text = notif.appName ?: "",
+                                        style = PillPrimary,
+                                        color = contentColor,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.widthIn(max = chipTextMaxWidth).basicMarquee(iterations = 1),
+                                    )
+                                }
+                            }
+                        } else if (event is IslandEvent.Sports && event.team2Name.isNotEmpty()) {
+                            val sport = event
+                            StatusBarSportsTeamBadge(sport.team1Name, sport.team1Icon, contentColor)
+                            Spacer(Modifier.width(SpaceXs))
+                            Text(
+                                if (sport.score1.isNotEmpty()) "${sport.score1} - ${sport.score2}"
+                                    else stringResource(R.string.ax_dynamic_bar_sports_vs),
+                                style = PillPrimary,
+                                color = contentColor,
+                                maxLines = 1,
+                            )
+                            Spacer(Modifier.width(SpaceXs))
+                            StatusBarSportsTeamBadge(sport.team2Name, sport.team2Icon, contentColor)
+                        } else {
+                            AnimatedContent(
+                                targetState = chipIconKey(event),
+                                transitionSpec = {
+                                    (fadeIn(motionScheme.defaultEffectsSpec()) togetherWith
+                                        fadeOut(motionScheme.fastEffectsSpec()))
+                                        .using(sizeTransform = null)
+                                },
+                                label = "chip_icon",
+                            ) {
+                                PillEventIcon(event, tint = contentColor, animated = false)
+                            }
+                            Spacer(Modifier.width(SpaceXs))
+                            AnimatedContent(
+                                targetState = textKeyFor(event),
+                                transitionSpec = {
+                                    (fadeIn(motionScheme.defaultEffectsSpec()) togetherWith
+                                        fadeOut(motionScheme.fastEffectsSpec()))
+                                        .using(sizeTransform = null)
+                                },
+                                label = "chip_text",
+                                modifier = Modifier.weight(1f, fill = false).widthIn(max = chipTextMaxWidth),
+                            ) {
+                                PillEventText(
+                                    event,
+                                    Modifier.widthIn(max = chipTextMaxWidth),
+                                    overrideColor = contentColor,
+                                )
+                            }
+                            if (chipState.eventCount > 1) {
+                                Spacer(Modifier.width(SpaceXs))
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .height(SizeBadge)
+                                        .widthIn(min = SizeBadge)
+                                        .background(
+                                            lerp(accent, contentColor, 0.3f),
+                                            RoundedCornerShape(SizeBadge / 2),
+                                        )
+                                        .padding(horizontal = 3.dp),
+                                ) {
+                                    Text(
+                                        text = "${chipState.eventCount}",
+                                        style = TsBadge,
+                                        color = contentColor,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                }
+            }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusBarSportsTeamBadge(name: String, icon: Drawable?, contentColor: Color) {
+    val badgeSize = 16.dp
+    if (icon != null) {
+        Image(
+            bitmap = icon.toScaledBitmap(badgeSize),
+            contentDescription = name,
+            modifier = Modifier.size(badgeSize).clip(CircleShape),
+            contentScale = ContentScale.Crop,
+        )
+    } else {
+        Box(
+            modifier = Modifier.size(badgeSize).clip(CircleShape)
+                .background(contentColor.copy(alpha = AlphaIconBg)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                name.take(2).uppercase(),
+                style = TsBadge,
+                color = contentColor,
+            )
+        }
+    }
+}
+
+
+private fun chipDisplayKey(event: IslandEvent, isAlert: Boolean): String =
+    if (isAlert) "alert:${event.id}" else event.id
+
+private fun chipIconKey(event: IslandEvent): Any =
+    when (event) {
+        is IslandEvent.AppSwitch -> {
+            val app = event.previousApp ?: event.recentApps.firstOrNull()
+            app?.taskId ?: app?.packageName ?: event.id
+        }
+        is IslandEvent.Media -> event.albumArt ?: event.packageName
+        is IslandEvent.Notification -> event.sbn.key
+        else -> event.id
+    }
+
+@Composable
+private fun Modifier.squishAnimation(toggleCount: Int): Modifier {
+    val scaleX = remember { Animatable(1f, visibilityThreshold = 0.01f) }
+    val scaleY = remember { Animatable(1f, visibilityThreshold = 0.01f) }
+    val currentToggleCount by rememberUpdatedState(toggleCount)
+
+    LaunchedEffect(Unit) {
+        snapshotFlow { currentToggleCount }
+            .drop(1)
+            .collectLatest {
+                scaleX.snapTo(1f)
+                scaleY.snapTo(1f)
+                coroutineScope {
+                    launch {
+                        scaleX.animateTo(
+                            targetValue = 1f,
+                            animationSpec = keyframes {
+                                durationMillis = 400
+                                1.06f at 120 using FastOutSlowInEasing
+                                0.97f at 260
+                                1f at 400
+                            },
+                        )
+                    }
+                    launch {
+                        scaleY.animateTo(
+                            targetValue = 1f,
+                            animationSpec = keyframes {
+                                durationMillis = 400
+                                0.95f at 120 using FastOutSlowInEasing
+                                1.03f at 260
+                                1f at 400
+                            },
+                        )
+                    }
+                }
+            }
+    }
+
+    return this.graphicsLayer {
+        this.scaleX = scaleX.value
+        this.scaleY = scaleY.value
+    }
+}

@@ -25,6 +25,7 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
 import com.android.keyguard.KeyguardSliceView
 import com.android.keyguard.KeyguardSliceViewController
+import com.android.systemui.clocks.KeyguardClockSourceManager
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.dump.DumpManager
@@ -96,6 +97,32 @@ constructor(
 
     override fun applyConstraints(constraintSet: ConstraintSet) {
         if (smartspaceController.isEnabled) return
+        val isCustomClockEnabled = KeyguardClockSourceManager.isCustomClockActive(context.contentResolver)
+
+        if (isCustomClockEnabled) {
+            constraintSet.apply {
+                clear(R.id.keyguard_slice_view, ConstraintSet.TOP)
+                clear(R.id.keyguard_slice_view, ConstraintSet.BOTTOM)
+                clear(R.id.keyguard_slice_view, ConstraintSet.START)
+                clear(R.id.keyguard_slice_view, ConstraintSet.END)
+                setVisibility(R.id.keyguard_slice_view, ConstraintSet.GONE)
+                setAlpha(R.id.keyguard_slice_view, 0f)
+                createBarrier(
+                    R.id.smart_space_barrier_bottom,
+                    Barrier.BOTTOM,
+                    0,
+                    *intArrayOf(R.id.clock_ls),
+                )
+                createBarrier(
+                    R.id.smart_space_barrier_top,
+                    Barrier.TOP,
+                    0,
+                    *intArrayOf(R.id.clock_ls),
+                )
+            }
+            return
+        }
+
         val dateWeatherPaddingStart = KeyguardSmartspaceViewModel.getDateWeatherStartMargin(context)
         constraintSet.apply {
             connect(

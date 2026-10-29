@@ -425,6 +425,9 @@ public class Clock extends TextView implements
             // Do nothing
         }
         setVisibility(visibility);
+        if (getId() == R.id.clock_right && getParent() instanceof View) {
+            ((View) getParent()).setVisibility(visibility);
+        }
         if (!mQsHeader && mClockAutoHide && visible && mScreenOn) {
             autoHideHandler.postDelayed(()->autoHideClock(), mShowDuration * 1000);
         }

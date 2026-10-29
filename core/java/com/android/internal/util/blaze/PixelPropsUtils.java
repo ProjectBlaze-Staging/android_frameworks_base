@@ -437,32 +437,41 @@ public final class PixelPropsUtils {
         return config.smallestScreenWidthDp >= 600;
     }
 
+    private static sun.misc.Unsafe sUnsafe;
+    static {
+        try {
+            Field f = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            f.setAccessible(true);
+            sUnsafe = (sun.misc.Unsafe) f.get(null);
+        } catch (Throwable ignored) {
+        }
+    }
+
     public static void setPropValue(String key, Object value) {
         try {
             Field field = getBuildClassField(key);
             if (field != null) {
                 field.setAccessible(true);
+                Object val;
                 if (field.getType() == int.class) {
-                    if (value instanceof String) {
-                        field.set(null, Integer.parseInt((String) value));
-                    } else if (value instanceof Integer) {
-                        field.set(null, (Integer) value);
-                    }
+                    val = (value instanceof String) ? Integer.parseInt((String) value) : (Integer) value;
                 } else if (field.getType() == long.class) {
-                    if (value instanceof String) {
-                        field.set(null, Long.parseLong((String) value));
-                    } else if (value instanceof Long) {
-                        field.set(null, (Long) value);
-                    }
+                    val = (value instanceof String) ? Long.parseLong((String) value) : (Long) value;
                 } else {
-                    field.set(null, value.toString());
+                    val = value.toString();
+                }
+
+                try {
+                    field.set(null, val);
+                } catch (IllegalAccessException iae) {
+                    Log.e(TAG, "Failed to set prop " + key, iae);
                 }
                 field.setAccessible(false);
                 dlog("Set prop " + key + " to " + value);
             } else {
                 Log.e(TAG, "Field " + key + " not found in Build or Build.VERSION classes");
             }
-        } catch (NoSuchFieldException | IllegalAccessException | IllegalArgumentException e) {
+        } catch (Throwable e) {
             Log.e(TAG, "Failed to set prop " + key, e);
         }
     }

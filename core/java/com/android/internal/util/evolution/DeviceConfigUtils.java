@@ -1,0 +1,104 @@
+/*
+ * Copyright (C) 2023 The Pixel Experience Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.android.internal.util.evolution;
+
+import android.content.res.Resources;
+import android.os.SystemProperties;
+import android.provider.Settings;
+import android.util.Log;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
+import com.android.internal.util.ArrayUtils;
+
+/**
+ * @hide
+ */
+public final class DeviceConfigUtils {
+
+    private static final String TAG = DeviceConfigUtils.class.getSimpleName();
+    private static final boolean DEBUG = false;
+
+    private static Boolean sEnableDeviceConfigUtils =
+            SystemProperties.getBoolean("persist.sys.dchooks.enable", true);
+
+    private static String[] getDeviceConfigsOverride() {
+        try {
+            int globalId = Resources.getSystem().getIdentifier("global_device_configs_override", "array", "android");
+            int devId = Resources.getSystem().getIdentifier("device_configs_override", "array", "android");
+            String[] globalDeviceConfigs = globalId != 0 ? Resources.getSystem().getStringArray(globalId) : new String[0];
+            String[] deviceConfigs = devId != 0 ? Resources.getSystem().getStringArray(devId) : new String[0];
+            String[] allDeviceConfigs = Arrays.copyOf(globalDeviceConfigs, globalDeviceConfigs.length + deviceConfigs.length);
+            System.arraycopy(deviceConfigs, 0, allDeviceConfigs, globalDeviceConfigs.length, deviceConfigs.length);
+            return allDeviceConfigs;
+        } catch (Exception e) {
+            return new String[0];
+        }
+    }
+
+    public static boolean shouldDenyDeviceConfigControl(String namespace, String property) {
+        if (!sEnableDeviceConfigUtils) return false;
+
+        if (DEBUG) Log.d(TAG, "shouldAllowDeviceConfigControl, namespace=" + namespace + ", property=" + property);
+        for (String p : getDeviceConfigsOverride()) {
+            String[] kv = p.split("=");
+            String fullKey = kv[0];
+            String[] nsKey = fullKey.split("/");
+            if (nsKey[0] == namespace && nsKey[1] == property){
+                logd("shouldAllowDeviceConfigControl, deny, namespace=" + namespace + ", property=" + property);
+                return true;
+            }
+        }
+        logd("shouldAllowDeviceConfigControl, allow, namespace=" + namespace + ", property=" + property);
+        return false;
+    }
+
+    public static void setDefaultProperties(String filterNamespace, String filterProperty) {
+        if (!sEnableDeviceConfigUtils) return;
+
+        logd("setDefaultProperties");
+        for (String p : getDeviceConfigsOverride()) {
+            String[] kv = p.split("=");
+            String fullKey = kv[0];
+            String[] nsKey = fullKey.split("/");
+
+            String namespace = nsKey[0];
+            String key = nsKey[1];
+
+            if (filterNamespace != null && filterNamespace == namespace){
+                continue;
+            }
+
+            if (filterProperty != null && filterProperty == key){
+                continue;
+            }
+
+            String value = "";
+            if (kv.length > 1) {
+                value = kv[1];
+            }
+            Settings.Config.putString(namespace, key, value, false);
+        }
+    }
+
+    private static void logd(String msg) {
+        if (DEBUG) Log.d(TAG, msg);
+    }
+}

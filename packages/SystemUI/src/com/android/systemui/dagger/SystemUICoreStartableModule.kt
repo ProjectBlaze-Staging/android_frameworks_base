@@ -329,4 +329,11 @@ abstract class SystemUICoreStartableModule {
     abstract fun bindSysUIKeyGestureEventInitializer(
         keyGestureEventInitializer: SysUIKeyGestureEventInitializer
     ): CoreStartable
+
+    @Binds
+    @IntoMap
+    @ClassKey(com.android.systemui.axdynamicbar.ui.AxDynamicBarManager::class)
+    abstract fun bindAxDynamicBarManager(
+        impl: com.android.systemui.axdynamicbar.ui.AxDynamicBarManager
+    ): CoreStartable
 }

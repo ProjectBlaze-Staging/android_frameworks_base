@@ -256,6 +256,9 @@ public class NumPadKey extends ViewGroup implements NumPadAnimationListener, Num
     public void doHapticKeyClick() {
         if (mBouncerHapticPlayer != null) {
             mBouncerHapticPlayer.playNumpadKeyFeedback();
+        } else {
+            performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP,
+                    android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
         }
     }
 
