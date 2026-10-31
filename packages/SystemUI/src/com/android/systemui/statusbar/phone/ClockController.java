@@ -33,10 +33,12 @@ public class ClockController implements TunerService.Tunable {
 
     private static final String STATUS_BAR_CLOCK =
             "lineagesystem:" + LineageSettings.System.STATUS_BAR_CLOCK;
+    private static final String SYSTEM_STATUS_BAR_CLOCK =
+            "system:" + LineageSettings.System.STATUS_BAR_CLOCK;
 
-    private static final int CLOCK_POSITION_LEFT = 0;
+    private static final int CLOCK_POSITION_RIGHT = 0;
     private static final int CLOCK_POSITION_CENTER = 1;
-    private static final int CLOCK_POSITION_RIGHT = 2;
+    private static final int CLOCK_POSITION_LEFT = 2;
     private static final int CLOCK_POSITION_HIDE = 3;
 
     private Context mContext;
@@ -62,7 +64,7 @@ public class ClockController implements TunerService.Tunable {
         mTunerService = Dependency.get(TunerService.class);
 
         mTunerService.addTunable(this,
-                STATUS_BAR_CLOCK);
+                STATUS_BAR_CLOCK, SYSTEM_STATUS_BAR_CLOCK);
     }
 
     public Clock getClock() {
@@ -103,7 +105,10 @@ public class ClockController implements TunerService.Tunable {
     public void onTuningChanged(String key, String newValue) {
         switch (key) {
             case STATUS_BAR_CLOCK:
-                mClockPosition = TunerService.parseInteger(newValue, CLOCK_POSITION_LEFT);
+            case SYSTEM_STATUS_BAR_CLOCK:
+                if (newValue != null) {
+                    mClockPosition = TunerService.parseInteger(newValue, CLOCK_POSITION_LEFT);
+                }
                 mContext.getMainExecutor().execute(() -> {
                     updateActiveClock();
                 });

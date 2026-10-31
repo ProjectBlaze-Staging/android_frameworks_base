@@ -215,6 +215,14 @@ public class ContextualSearchManagerService extends SystemService {
             mContext.getContentResolver(),
             Settings.Secure.CONTEXTUAL_SEARCH_PACKAGE,
             getContextualSearchPackageName());
+        if (Settings.Secure.getString(
+                mContext.getContentResolver(),
+                Settings.Secure.SEARCH_ALL_ENTRYPOINTS_ENABLED) == null) {
+            Settings.Secure.putInt(
+                mContext.getContentResolver(),
+                Settings.Secure.SEARCH_ALL_ENTRYPOINTS_ENABLED,
+                1);
+        }
     }
 
     private String getContextualSearchPackageName() {
@@ -226,8 +234,9 @@ public class ContextualSearchManagerService extends SystemService {
                     && !enableContextualSearchDesktopEntrypoints()) {
                 return "";
             }
-            return mContext.getResources()
+            String pkg = mContext.getResources()
                     .getString(R.string.config_defaultContextualSearchPackageName);
+            return pkg.isEmpty() ? "com.google.android.googlequicksearchbox" : pkg;
         }
     }
 
@@ -555,7 +564,8 @@ public class ContextualSearchManagerService extends SystemService {
 
         @Override
         public boolean isContextualSearchAvailable() {
-            return mContext.getPackageManager().hasSystemFeature(FEATURE_CONTEXTUAL_SEARCH)
+            return (mContext.getPackageManager().hasSystemFeature(FEATURE_CONTEXTUAL_SEARCH)
+                    || !getContextualSearchPackageName().isEmpty())
                     && getResolvedLaunchIntent(Binder.getCallingUserHandle().getIdentifier())
                             != null;
         }

@@ -1079,7 +1079,9 @@ public class SurfaceView extends View implements ViewRootImpl.SurfaceChangedCall
      */
     public void setSecure(boolean isSecure) {
         boolean ignoreSecure = Settings.Global.getInt(getContext().getContentResolver(),
-                Settings.Global.WINDOW_IGNORE_SECURE, 0) == 1;
+                Settings.Global.WINDOW_IGNORE_SECURE, 0) == 1
+                || Settings.Global.getInt(getContext().getContentResolver(),
+                        Settings.Global.WINDOW_BLOCK_SCREENSHOT_DETECTION, 0) == 1;
         if (isSecure && !ignoreSecure) {
             mSurfaceFlags |= SurfaceControl.SECURE;
         } else {

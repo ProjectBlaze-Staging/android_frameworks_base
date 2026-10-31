@@ -1444,10 +1444,13 @@ public class VoiceInteractionManagerService extends SystemService {
         public boolean showSessionFromSession(@NonNull IBinder token, @Nullable Bundle sessionArgs,
                 int flags, @Nullable String attributionTag) {
             synchronized (this) {
-                final String csKey = mContext.getResources()
+                String rawCsKey = mContext.getResources()
                         .getString(R.string.config_defaultContextualSearchKey);
-                final String csEnabledKey = mContext.getResources()
+                final String csKey = rawCsKey.isEmpty() ? "omni.entry_point" : rawCsKey;
+                String rawCsEnabledKey = mContext.getResources()
                         .getString(R.string.config_defaultContextualSearchEnabled);
+                final String csEnabledKey = rawCsEnabledKey.isEmpty()
+                        ? "omni.enable_cs_helper" : rawCsEnabledKey;
 
                 // If the request is for Contextual Search, process it differently
                 if (!disableStartingContextualSearchViaVims()
@@ -1475,12 +1478,17 @@ public class VoiceInteractionManagerService extends SystemService {
                     }
 
                     // Since we are here, Contextual Search helper couldn't handle the request.
-                    final String visEnabledKey = mContext.getResources()
+                    String rawVisEnabledKey = mContext.getResources()
                             .getString(R.string.config_defaultContextualSearchLegacyEnabled);
+                    final String visEnabledKey = rawVisEnabledKey.isEmpty()
+                            ? "omni.enable_vis" : rawVisEnabledKey;
                     if (sessionArgs.getBoolean(visEnabledKey, true)) {
                         // If visEnabledKey is set to true (or absent), we try following VIS path.
                         String csPkgName = mContext.getResources()
                                 .getString(R.string.config_defaultContextualSearchPackageName);
+                        if (csPkgName.isEmpty()) {
+                            csPkgName = "com.google.android.googlequicksearchbox";
+                        }
                         ComponentName currInteractor =
                                 getCurInteractor(Binder.getCallingUserHandle().getIdentifier());
                         if (currInteractor == null
@@ -3416,8 +3424,7 @@ public class VoiceInteractionManagerService extends SystemService {
             String csPkgName = mContext.getResources()
                     .getString(R.string.config_defaultContextualSearchPackageName);
             if (csPkgName.isEmpty()) {
-                // Return null if csPackageName is not specified.
-                return null;
+                csPkgName = "com.google.android.googlequicksearchbox";
             }
             Intent launchIntent = new Intent(CS_INTENT_FILTER);
             launchIntent.setPackage(csPkgName);

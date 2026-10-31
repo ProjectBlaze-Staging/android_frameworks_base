@@ -352,10 +352,22 @@ private constructor(
 
     private fun addDarkReceivers() {
         darkIconDispatcher.addDarkReceiver(clock)
+        mView.findViewById<Clock>(R.id.clock_center)?.let {
+            darkIconDispatcher.addDarkReceiver(it)
+        }
+        mView.findViewById<Clock>(R.id.clock_right)?.let {
+            darkIconDispatcher.addDarkReceiver(it)
+        }
     }
 
     private fun removeDarkReceivers() {
         darkIconDispatcher.removeDarkReceiver(clock)
+        mView.findViewById<Clock>(R.id.clock_center)?.let {
+            darkIconDispatcher.removeDarkReceiver(it)
+        }
+        mView.findViewById<Clock>(R.id.clock_right)?.let {
+            darkIconDispatcher.removeDarkReceiver(it)
+        }
     }
 
     @Deprecated(

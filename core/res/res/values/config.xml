@@ -1606,7 +1606,7 @@
 
     <!-- Note: This setting is deprecated, please use
     config_screenBrightnessSettingDefaultFloat instead -->
-    <integer name="config_screenBrightnessSettingDefault">102</integer>
+    <integer name="config_screenBrightnessSettingDefault">140</integer>
 
     <!-- Maximum screen brightness setting when screen brightness capped in Wear Bedtime mode.
     The value must be in the range [0, 255]. -->
@@ -3053,7 +3053,7 @@
 
     <!-- Control whether the always on display mode is enabled by default. This value will be used
          during initialization when the setting is still null. -->
-    <bool name="config_dozeAlwaysOnEnabled">true</bool>
+    <bool name="config_dozeAlwaysOnEnabled">false</bool>
 
     <!-- If AOD can show an ambient version of the wallpaper -->
     <bool name="config_dozeSupportsAodWallpaper">false</bool>
@@ -7737,16 +7737,16 @@
     <bool name="config_watchlistUseFileHashesCache">false</bool>
 
     <!-- Name of the package responsible to handle Contextual Search. -->
-    <string name="config_defaultContextualSearchPackageName" translatable="false" />
+    <string name="config_defaultContextualSearchPackageName" translatable="false">com.google.android.googlequicksearchbox</string>
 
     <!-- The key containing the entrypoint for Contextual Search. -->
-    <string name="config_defaultContextualSearchKey" translatable="false" />
+    <string name="config_defaultContextualSearchKey" translatable="false">omni.entry_point</string>
 
     <!-- The key containing the branching boolean for Contextual Search. -->
-    <string name="config_defaultContextualSearchEnabled" translatable="false" />
+    <string name="config_defaultContextualSearchEnabled" translatable="false">omni.enable_cs_helper</string>
 
     <!-- The key containing the branching boolean for legacy Search. -->
-    <string name="config_defaultContextualSearchLegacyEnabled" translatable="false" />
+    <string name="config_defaultContextualSearchLegacyEnabled" translatable="false">omni.enable_vis</string>
 
     <!-- Whether WM DisplayContent supports high performance transitions
          (lower-end devices may want to disable) -->

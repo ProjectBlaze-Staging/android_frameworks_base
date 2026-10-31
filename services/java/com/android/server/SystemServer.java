@@ -2181,14 +2181,9 @@ public final class SystemServer implements Dumpable {
             }
 
             // Contextual search manager service
-            if (deviceHasConfigString(context,
-                    R.string.config_defaultContextualSearchPackageName)) {
-                t.traceBegin("StartContextualSearchService");
-                mSystemServiceManager.startService(ContextualSearchManagerService.class);
-                t.traceEnd();
-            } else {
-                Slog.d(TAG, "ContextualSearchManagerService not defined or disabled by flag");
-            }
+            t.traceBegin("StartContextualSearchService");
+            mSystemServiceManager.startService(ContextualSearchManagerService.class);
+            t.traceEnd();
 
             t.traceBegin("InitConnectivityModuleConnector");
             try {
