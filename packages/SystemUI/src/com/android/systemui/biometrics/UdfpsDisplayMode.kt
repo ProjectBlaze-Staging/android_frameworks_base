@@ -18,14 +18,17 @@ package com.android.systemui.biometrics
 
 import android.content.Context
 import android.os.RemoteException
+import android.os.SystemProperties
 import android.os.Trace
+import android.provider.Settings
 import com.android.systemui.util.concurrency.Execution
+import java.io.File
 
 private const val TAG = "UdfpsDisplayMode"
 
 /**
  * UdfpsDisplayMode configures the display for optimal UDFPS operation. For example, sets the
- * display refresh rate that's optimal for UDFPS.
+ * display refresh rate that's optimal for UDFPS and triggers multi-vendor Optical FOD HBM nodes.
  */
 class UdfpsDisplayMode
 constructor(
@@ -38,6 +41,45 @@ constructor(
     // The request is reset to null after it's processed.
     private var currentRequest: Request? = null
 
+    private fun writeSysfsSafe(path: String, value: String) {
+        try {
+            val file = File(path)
+            if (file.exists() && file.canWrite()) {
+                file.writeText(value)
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun applyVendorUdfpsHbm(enabled: Boolean) {
+        val vendorMode = Settings.Global.getInt(
+            context.contentResolver,
+            "blaze_treble_udfps_mode",
+            0
+        )
+        if (vendorMode <= 0) return
+
+        try {
+            SystemProperties.set("sys.blaze.udfps_hbm", if (enabled) vendorMode.toString() else "0")
+        } catch (_: Throwable) {}
+
+        when (vendorMode) {
+            1 -> {
+                // Xiaomi / Redmi / POCO (Goodix & FPC Optical FOD Local HBM)
+                writeSysfsSafe("/sys/class/drm/card0-DSI-1/disp_param", if (enabled) "0x20000" else "0xE0000")
+            }
+            2 -> {
+                // OnePlus / Oppo / Realme (ColorOS Oplus Display FOD HBM)
+                val v = if (enabled) "1" else "0"
+                writeSysfsSafe("/sys/kernel/oplus_display/dimlayer_hbm", v)
+                writeSysfsSafe("/sys/kernel/oplus_display/notify_fppress", v)
+            }
+            3 -> {
+                // Samsung (Exynos / Snapdragon Optical & Ultrasonic FOD)
+                writeSysfsSafe("/sys/class/sec/tsp/cmd", if (enabled) "fod_enable,1,1,0" else "fod_enable,0,0,0")
+            }
+        }
+    }
+
     override fun enable(onEnabled: Runnable?) {
         execution.isMainThread()
         logger.v(TAG, "enable")
@@ -46,8 +88,10 @@ constructor(
             logger.e(TAG, "enable | already requested")
             return
         }
+        applyVendorUdfpsHbm(true)
         if (authController.udfpsRefreshRateCallback == null) {
             logger.e(TAG, "enable | mDisplayManagerCallback is null")
+            onEnabled?.run()
             return
         }
 
@@ -73,6 +117,7 @@ constructor(
     override fun disable(onDisabled: Runnable?) {
         execution.isMainThread()
         logger.v(TAG, "disable")
+        applyVendorUdfpsHbm(false)
 
         val request = currentRequest
         if (request == null) {

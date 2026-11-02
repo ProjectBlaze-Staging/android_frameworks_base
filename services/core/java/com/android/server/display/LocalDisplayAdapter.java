@@ -1073,7 +1073,23 @@ final class LocalDisplayAdapter extends DisplayAdapter {
                         if (brightness == PowerManager.BRIGHTNESS_OFF_FLOAT) {
                             return PowerManager.BRIGHTNESS_OFF_FLOAT;
                         } else {
-                            return getDisplayDeviceConfig().getBacklightFromBrightness(brightness);
+                            float mapped = getDisplayDeviceConfig().getBacklightFromBrightness(brightness);
+                            if (!Float.isNaN(mapped) && mapped > 0.0f && mapped <= 1.0f) {
+                                final int scaleMode = android.provider.Settings.Global.getInt(
+                                        getContext().getContentResolver(),
+                                        "blaze_treble_backlight_scale", 0);
+                                if (scaleMode == 1) {
+                                    // Xiaomi / Redmi / POCO 12-bit PWM (0-4095) Gamma Boost
+                                    mapped = (float) Math.pow(mapped, 0.58);
+                                } else if (scaleMode == 2) {
+                                    // Samsung Exynos / OneUI AMOLED Exponential Curve
+                                    mapped = (float) Math.pow(mapped, 1.45);
+                                } else if (scaleMode == 3) {
+                                    // Direct 1:1 Linear Backlight Scale (Bypass vendor spline)
+                                    mapped = Math.max(0.01f, Math.min(1.0f, brightness));
+                                }
+                            }
+                            return mapped;
                         }
                     }
 
@@ -1899,9 +1915,10 @@ final class LocalDisplayAdapter extends DisplayAdapter {
             mUseSurfaceControlBrightness = mSurfaceControlProxy
                     .getDisplayBrightnessSupport(mDisplayToken);
 
-            if (!mUseSurfaceControlBrightness && isFirstDisplay) {
+            if (isFirstDisplay) {
                 LightsManager lights = LocalServices.getService(LightsManager.class);
-                mBacklight = lights.getLight(LightsManager.LIGHT_ID_BACKLIGHT);
+                mBacklight = (lights != null)
+                        ? lights.getLight(LightsManager.LIGHT_ID_BACKLIGHT) : null;
             } else {
                 mBacklight = null;
             }
@@ -1909,7 +1926,9 @@ final class LocalDisplayAdapter extends DisplayAdapter {
 
         // Set backlight within min and max backlight values
         void setBacklight(float sdrBacklight, float sdrNits, float backlight, float nits) {
-            if (mUseSurfaceControlBrightness || mForceSurfaceControl) {
+            final boolean forceLightsHal = android.os.SystemProperties.getBoolean(
+                    "persist.sys.blaze.force_lights_hal", false);
+            if (!forceLightsHal && (mUseSurfaceControlBrightness || mForceSurfaceControl)) {
                 if (BrightnessSynchronizer.floatEquals(
                         sdrBacklight, PowerManager.BRIGHTNESS_INVALID_FLOAT)) {
                     mSurfaceControlProxy.setDisplayBrightness(mDisplayToken, backlight);
