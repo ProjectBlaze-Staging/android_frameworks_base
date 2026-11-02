@@ -157,9 +157,12 @@ import com.android.systemui.statusbar.pipeline.dagger.StatusBarPipelineModule;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
 import com.android.systemui.statusbar.policy.PolicyModule;
 import com.android.systemui.statusbar.policy.SensitiveNotificationProtectionController;
+import com.android.systemui.penguin.StatusBarIsland;
 import com.android.systemui.statusbar.policy.ZenModeController;
 import com.android.systemui.statusbar.policy.dagger.StatusBarPolicyModule;
 import com.android.systemui.statusbar.quickactions.dagger.StatusBarFeaturePodsModule;
+import com.android.systemui.statusbar.quickactions.dynamicisland.media.MediaControlChipModule;
+import com.android.systemui.statusbar.quickactions.popups.ui.binder.DynamicIsland;
 import com.android.systemui.statusbar.systemstatusicons.SystemStatusIconsModule;
 import com.android.systemui.statusbar.ui.binder.StatusBarViewBinderModule;
 import com.android.systemui.statusbar.window.StatusBarWindowModule;
@@ -214,6 +217,7 @@ import javax.inject.Named;
  */
 @Module(includes = {
         ActivityModule.class,
+        MediaControlChipModule.class,
         AmbientModule.class,
         AppOpsModule.class,
         AssistModule.class,
@@ -487,6 +491,9 @@ public abstract class SystemUIModule {
 
     @Binds
     abstract SceneDataSource bindSceneDataSource(SceneDataSourceDelegator delegator);
+
+    @Binds
+    abstract StatusBarIsland bindStatusBarIsland(DynamicIsland impl);
 
     @Provides
     static SettingsProxy.CurrentUserIdProvider provideCurrentUserId(UserTracker userTracker) {

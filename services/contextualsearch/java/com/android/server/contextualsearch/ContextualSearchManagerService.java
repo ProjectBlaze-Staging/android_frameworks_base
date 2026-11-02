@@ -211,17 +211,24 @@ public class ContextualSearchManagerService extends SystemService {
     private void updateSecureSetting() {
         // Write default package to secure setting every time there is a change. If OEM didn't
         // supply a new value in their config, then we would write empty string.
+        final android.content.ContentResolver cr = mContext.getContentResolver();
         Settings.Secure.putString(
-            mContext.getContentResolver(),
+            cr,
             Settings.Secure.CONTEXTUAL_SEARCH_PACKAGE,
             getContextualSearchPackageName());
-        if (Settings.Secure.getString(
-                mContext.getContentResolver(),
-                Settings.Secure.SEARCH_ALL_ENTRYPOINTS_ENABLED) == null) {
-            Settings.Secure.putInt(
-                mContext.getContentResolver(),
-                Settings.Secure.SEARCH_ALL_ENTRYPOINTS_ENABLED,
-                1);
+        final String[] defaultEnabledKeys = new String[] {
+            Settings.Secure.SEARCH_ALL_ENTRYPOINTS_ENABLED,
+            "search_press_hold_nav_handle_enabled",
+            "search_long_press_home_enabled",
+            "assist_screenshot_enabled",
+            "assist_structure_enabled",
+            "contextual_search_enabled",
+            "touch_and_hold_to_search"
+        };
+        for (String key : defaultEnabledKeys) {
+            if (Settings.Secure.getString(cr, key) == null) {
+                Settings.Secure.putInt(cr, key, 1);
+            }
         }
     }
 
@@ -469,6 +476,7 @@ public class ContextualSearchManagerService extends SystemService {
     private void enforcePermission(@NonNull final String func) {
         final Context ctx = getContext();
         if (!(ctx.checkCallingPermission(ACCESS_CONTEXTUAL_SEARCH) == PERMISSION_GRANTED
+                || ctx.checkCallingPermission(START_TASKS_FROM_RECENTS) == PERMISSION_GRANTED
                 || isCallerTemporary())) {
             final String msg = "Permission Denial: Cannot call " + func + " from pid="
                     + Binder.getCallingPid() + ", uid=" + Binder.getCallingUid();

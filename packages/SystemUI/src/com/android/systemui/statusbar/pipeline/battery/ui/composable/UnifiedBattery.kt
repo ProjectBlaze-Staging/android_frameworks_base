@@ -16,15 +16,34 @@
 
 package com.android.systemui.statusbar.pipeline.battery.ui.composable
 
+import android.content.Context
+import android.database.ContentObserver
 import android.graphics.Rect
+import android.net.Uri
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.UserHandle
+import android.provider.Settings
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
@@ -33,7 +52,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.drawscope.scale
@@ -46,9 +68,14 @@ import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.layout.onLayoutRectChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastFirst
 import androidx.compose.ui.util.fastFirstOrNull
 import com.android.systemui.common.ui.compose.load
@@ -59,8 +86,23 @@ import com.android.systemui.statusbar.pipeline.battery.shared.ui.BatteryFrame
 import com.android.systemui.statusbar.pipeline.battery.shared.ui.BatteryGlyph
 import com.android.systemui.statusbar.pipeline.battery.shared.ui.PathSpec
 import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.BatteryViewModel
+import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.BatteryViewModel.Companion.glyphRepresentation
 import kotlin.math.ceil
 import kotlin.math.roundToInt
+
+private fun readCustomBatteryInt(context: Context, key: String, defaultVal: Int): Int {
+    val cr = context.contentResolver
+    try {
+        val v = Settings.System.getIntForUser(cr, key, -999, UserHandle.USER_CURRENT)
+        if (v != -999) return v
+    } catch (_: Throwable) {}
+    try {
+        val res: Bundle? = cr.call(Uri.parse("content://lineageos.platform/system"), "GET_system", key, Bundle())
+        val s = res?.getString("value")
+        if (!s.isNullOrEmpty()) return s.toInt()
+    } catch (_: Throwable) {}
+    return defaultVal
+}
 
 /**
  * Draws a battery directly on to a [Canvas]. The canvas is scaled to fill its container, and the
@@ -167,7 +209,55 @@ fun UnifiedBattery(
     isDarkProvider: () -> IsAreaDark,
     modifier: Modifier,
 ) {
+    val context = LocalContext.current
     var bounds by remember { mutableStateOf(Rect()) }
+    var batteryStyle by remember {
+        mutableIntStateOf(readCustomBatteryInt(context, "status_bar_battery_style", 0))
+    }
+    var percentMode by remember {
+        mutableIntStateOf(readCustomBatteryInt(context, "status_bar_show_battery_percent", -1))
+    }
+
+    DisposableEffect(context) {
+        val cr = context.contentResolver
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
+                batteryStyle = readCustomBatteryInt(context, "status_bar_battery_style", 0)
+                percentMode = readCustomBatteryInt(context, "status_bar_show_battery_percent", -1)
+            }
+        }
+        try {
+            cr.registerContentObserver(
+                Settings.System.getUriFor("status_bar_battery_style"),
+                false,
+                observer,
+                UserHandle.USER_ALL
+            )
+            cr.registerContentObserver(
+                Settings.System.getUriFor("status_bar_show_battery_percent"),
+                false,
+                observer,
+                UserHandle.USER_ALL
+            )
+            cr.registerContentObserver(
+                Settings.System.getUriFor(Settings.System.SHOW_BATTERY_PERCENT),
+                false,
+                observer,
+                UserHandle.USER_ALL
+            )
+            cr.registerContentObserver(
+                Uri.parse("content://lineageos.platform/system"),
+                true,
+                observer,
+                UserHandle.USER_ALL
+            )
+        } catch (_: Throwable) {}
+        onDispose {
+            try {
+                cr.unregisterContentObserver(observer)
+            } catch (_: Throwable) {}
+        }
+    }
 
     val colorProvider = {
         if (isDarkProvider().isDarkTheme(bounds)) {
@@ -177,20 +267,225 @@ fun UnifiedBattery(
         }
     }
 
-    BatteryLayout(
-        attribution = viewModel.attribution,
-        levelProvider = { viewModel.level },
-        isFullProvider = { viewModel.isFull },
-        glyphsProvider = { viewModel.glyphList },
-        colorsProvider = colorProvider,
-        modifier =
-            modifier.sysuiResTag(BatteryViewModel.TEST_TAG).onLayoutRectChanged {
-                relativeLayoutBounds ->
-                bounds =
-                    with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
+    val currentLevel = viewModel.level ?: 0
+    val effectiveGlyphsProvider: () -> List<BatteryGlyph> = {
+        when (percentMode) {
+            0, 2 -> emptyList()
+            1 -> currentLevel.glyphRepresentation()
+            else -> viewModel.glyphList
+        }
+    }
+    val showTextNext = (percentMode == 2) && (batteryStyle != 4) && (batteryStyle != 5)
+
+    Row(
+        modifier = modifier
+            .sysuiResTag(BatteryViewModel.TEST_TAG)
+            .onLayoutRectChanged { relativeLayoutBounds ->
+                bounds = with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
             },
-        contentDescription = viewModel.contentDescription.load() ?: "",
-    )
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        when (batteryStyle) {
+            5 -> {
+                // Hidden battery icon
+                Spacer(modifier = Modifier.width(0.dp))
+            }
+            4 -> {
+                // Text-only battery style
+                val colors = colorProvider()
+                val prefix = if (viewModel.isCharging) "⚡" else ""
+                Text(
+                    text = "$prefix${currentLevel}%",
+                    color = colors.fill,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
+            6 -> {
+                // Portrait (vertical) battery icon
+                PortraitBatteryIcon(
+                    level = currentLevel,
+                    isCharging = viewModel.isCharging,
+                    colorsProvider = colorProvider,
+                )
+            }
+            1, 2, 3, 8, 9 -> {
+                // Circle (1/8), Dotted Circle (2/9), Filled Circle (3)
+                CircleBatteryIcon(
+                    level = currentLevel,
+                    style = batteryStyle,
+                    isCharging = viewModel.isCharging,
+                    showPercentInside = (percentMode == 1),
+                    colorsProvider = colorProvider,
+                )
+            }
+            else -> {
+                BatteryLayout(
+                    attribution = viewModel.attribution,
+                    levelProvider = { viewModel.level },
+                    isFullProvider = { viewModel.isFull },
+                    glyphsProvider = effectiveGlyphsProvider,
+                    colorsProvider = colorProvider,
+                    modifier = Modifier.fillMaxHeight(),
+                    contentDescription = viewModel.contentDescription.load() ?: "",
+                )
+            }
+        }
+
+        if (showTextNext) {
+            val colors = colorProvider()
+            Text(
+                text = "${currentLevel}%",
+                color = colors.fill,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PortraitBatteryIcon(
+    level: Int,
+    isCharging: Boolean,
+    colorsProvider: () -> BatteryColors,
+) {
+    Canvas(modifier = Modifier.fillMaxHeight().width(10.dp)) {
+        val colors = colorsProvider()
+        val w = size.width
+        val h = size.height
+        val capW = w * 0.46f
+        val capH = h * 0.10f
+        val bodyTop = capH + h * 0.04f
+        val bodyH = h - bodyTop
+        val corner = w * 0.24f
+
+        // Cap
+        drawRoundRect(
+            color = if (level >= 99) colors.fill else colors.backgroundOnly,
+            topLeft = Offset((w - capW) / 2f, 0f),
+            size = Size(capW, capH),
+            cornerRadius = CornerRadius(capH * 0.4f, capH * 0.4f),
+        )
+        // Body background
+        drawRoundRect(
+            color = colors.backgroundOnly,
+            topLeft = Offset(0f, bodyTop),
+            size = Size(w, bodyH),
+            cornerRadius = CornerRadius(corner, corner),
+        )
+        // Fill from bottom up
+        val clamped = level.coerceIn(0, 100) / 100f
+        if (clamped > 0f) {
+            val fillTop = bodyTop + bodyH * (1f - clamped)
+            clipRect(left = 0f, top = fillTop, right = w, bottom = h) {
+                drawRoundRect(
+                    color = colors.fill,
+                    topLeft = Offset(0f, bodyTop),
+                    size = Size(w, bodyH),
+                    cornerRadius = CornerRadius(corner, corner),
+                )
+            }
+        }
+        if (isCharging) {
+            val bolt = BatteryGlyph.Bolt
+            val s = (bodyH * 0.62f) / bolt.height
+            inset((w - bolt.width * s) / 2f, bodyTop + (bodyH - bolt.height * s) / 2f) {
+                scale(s, pivot = Offset.Zero) {
+                    drawPath(bolt.path, color = colors.attribution)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CircleBatteryIcon(
+    level: Int,
+    style: Int,
+    isCharging: Boolean,
+    showPercentInside: Boolean,
+    colorsProvider: () -> BatteryColors,
+) {
+    Canvas(modifier = Modifier.fillMaxHeight().width(15.dp)) {
+        val colors = colorsProvider()
+        val d = minOf(size.width, size.height)
+        val strokeW = d * 0.16f
+        val radius = (d - strokeW) / 2f
+        val centerOffset = Offset(size.width / 2f, size.height / 2f)
+        val clamped = level.coerceIn(0, 100) / 100f
+
+        if (style == 3) {
+            // Filled circle
+            drawCircle(
+                color = colors.backgroundOnly,
+                radius = d / 2f,
+                center = centerOffset,
+            )
+            if (clamped > 0f) {
+                drawCircle(
+                    color = colors.fill,
+                    radius = (d / 2f) * clamped,
+                    center = centerOffset,
+                )
+            }
+        } else {
+            // Ring / Dotted Ring
+            drawCircle(
+                color = colors.backgroundOnly,
+                radius = radius,
+                center = centerOffset,
+                style = Stroke(width = strokeW),
+            )
+            if (clamped > 0f) {
+                val strokeStyle = if (style == 2 || style == 9) {
+                    Stroke(
+                        width = strokeW,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(strokeW * 1.35f, strokeW * 0.95f), 0f)
+                    )
+                } else {
+                    Stroke(width = strokeW, cap = StrokeCap.Round)
+                }
+                drawArc(
+                    color = colors.fill,
+                    startAngle = -90f,
+                    sweepAngle = 360f * clamped,
+                    useCenter = false,
+                    topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
+                    size = Size(radius * 2f, radius * 2f),
+                    style = strokeStyle,
+                )
+            }
+        }
+
+        if (isCharging) {
+            val bolt = BatteryGlyph.Bolt
+            val s = (d * 0.48f) / bolt.height
+            inset(centerOffset.x - (bolt.width * s) / 2f, centerOffset.y - (bolt.height * s) / 2f) {
+                scale(s, pivot = Offset.Zero) {
+                    drawPath(bolt.path, color = if (style == 3) colors.attribution else colors.fill)
+                }
+            }
+        } else if (showPercentInside && level < 100) {
+            val glyphs = level.glyphRepresentation()
+            val totalW = glyphs.fold(0f) { acc, g -> acc + g.width } + (glyphs.size - 1).coerceAtLeast(0) * 0.6f
+            val maxH = glyphs.maxOfOrNull { it.height } ?: 1f
+            val s = (d * 0.42f) / maxH
+            var xOff = centerOffset.x - (totalW * s) / 2f
+            for (g in glyphs) {
+                val yOff = centerOffset.y - (g.height * s) / 2f
+                inset(xOff, yOff) {
+                    scale(s, pivot = Offset.Zero) {
+                        drawPath(g.path, color = if (style == 3) colors.attribution else colors.fill)
+                    }
+                }
+                xOff += (g.width + 0.6f) * s
+            }
+        }
+    }
 }
 
 @Composable

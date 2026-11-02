@@ -28,6 +28,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
@@ -54,9 +55,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.semantics.Role
@@ -67,7 +70,9 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.trace
+import com.android.internal.penguin.glass.LiquidGlass
 import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.compose.animation.Expandable
 import com.android.compose.animation.bounceable
@@ -227,6 +232,7 @@ fun ContentScope.Tile(
                 modifier =
                     modifier
                         .then(surfaceRevealModifier)
+                        .blazeGlassTileBorder(tileShape)
                         .borderOnFocus(
                             color = MaterialTheme.colorScheme.secondary,
                             tileShape.topEnd,
@@ -586,7 +592,8 @@ private object TileDefaults {
     @Composable
     @ReadOnlyComposable
     fun getColorForState(uiState: TileUiState, iconOnly: Boolean): TileColors {
-        return when (uiState.visualState) {
+        val style = LiquidGlass.getEffectiveStyle(LocalContext.current)
+        val base = when (uiState.visualState) {
             STATE_ACTIVE -> {
                 if (uiState.handlesToggleClick && !iconOnly) {
                     activeDualTargetTileColors()
@@ -604,6 +611,17 @@ private object TileDefaults {
             }
 
             else -> unavailableTileColors()
+        }
+        return when (style) {
+            LiquidGlass.STYLE_IOS_LIQUID_GLASS -> {
+                val bgAlpha = if (uiState.visualState == STATE_ACTIVE && (!uiState.handlesToggleClick || iconOnly)) 0.86f else 0.42f
+                base.copy(background = base.background.copy(alpha = bgAlpha))
+            }
+            LiquidGlass.STYLE_COLOROS_FROSTED -> {
+                val bgAlpha = if (uiState.visualState == STATE_ACTIVE && (!uiState.handlesToggleClick || iconOnly)) 0.92f else 0.66f
+                base.copy(background = base.background.copy(alpha = bgAlpha))
+            }
+            else -> base
         }
     }
 
@@ -663,4 +681,32 @@ private object TileDefaults {
 private fun resources(): Resources {
     LocalConfiguration.current
     return LocalResources.current
+}
+
+@Composable
+private fun Modifier.blazeGlassTileBorder(shape: Shape): Modifier {
+    val style = LiquidGlass.getEffectiveStyle(LocalContext.current)
+    return when (style) {
+        LiquidGlass.STYLE_IOS_LIQUID_GLASS -> {
+            this.border(
+                width = 1.25.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color(0x6EFFFFFF),
+                        Color(0x18FFFFFF),
+                        Color(0x4570B8FF),
+                    )
+                ),
+                shape = shape,
+            )
+        }
+        LiquidGlass.STYLE_COLOROS_FROSTED -> {
+            this.border(
+                width = 0.85.dp,
+                color = Color(0x28FFFFFF),
+                shape = shape,
+            )
+        }
+        else -> this
+    }
 }

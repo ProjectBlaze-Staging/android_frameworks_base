@@ -1,0 +1,144 @@
+/*
+ * Copyright (C) 2024 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.android.systemui.statusbar.quickactions.dynamicisland.media.ui.viewmodel
+
+import androidx.compose.runtime.getValue
+import com.android.systemui.common.shared.model.ContentDescription
+import com.android.systemui.common.shared.model.Icon
+import com.android.systemui.lifecycle.ExclusiveActivatable
+import com.android.systemui.lifecycle.Hydrator
+import com.android.systemui.statusbar.quickactions.dynamicisland.media.domain.interactor.MediaControlChipInteractor
+import com.android.systemui.statusbar.quickactions.dynamicisland.media.shared.model.MediaControlChipModel
+import com.android.systemui.statusbar.quickactions.popups.ui.model.ChipIcon
+import com.android.systemui.statusbar.quickactions.popups.ui.model.ColorsModel
+import com.android.systemui.statusbar.quickactions.popups.ui.model.HoverBehavior
+import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupChipId
+import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupContentModel
+import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupChipModel
+import com.android.systemui.statusbar.quickactions.popups.ui.viewmodel.DynamicIslandChipViewModel
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import java.util.Locale
+
+/**
+ * [DynamicIslandChipViewModel] for a media control chip in the status bar. This view model is
+ * responsible for converting the [MediaControlChipModel] to a [PopupChipModel] that can be used to
+ * display a media control chip.
+ */
+class MediaControlChipViewModel
+@AssistedInject
+constructor(
+    mediaControlChipInteractor: MediaControlChipInteractor,
+) : DynamicIslandChipViewModel, ExclusiveActivatable() {
+    private val hydrator: Hydrator = Hydrator("MediaControlChipViewModel.hydrator")
+    /**
+     * A snapshot [State] of the current [PopupChipModel]. This emits a new [PopupChipModel]
+     * whenever the underlying [MediaControlChipModel] changes.
+     */
+    override val chip: PopupChipModel by
+        hydrator.hydratedStateOf(
+            traceName = "chip",
+            initialValue = PopupChipModel.Hidden(PopupChipId.MediaControl),
+            source =
+                combine(
+                    mediaControlChipInteractor.mediaControlChipModel,
+                    mediaControlChipInteractor.mediaUseWaveform,
+                ) { model, useWaveform ->
+                    toPopupChipModel(model, useWaveform)
+                },
+        )
+
+    override suspend fun onActivated(): Nothing {
+        hydrator.activate()
+    }
+
+    private fun toPopupChipModel(model: MediaControlChipModel?, useWaveform: Boolean): PopupChipModel {
+        if (model == null || model.songName.isNullOrEmpty()) {
+            return PopupChipModel.Hidden(PopupChipId.MediaControl)
+        }
+
+        val contentDescription = model.appName?.let { ContentDescription.Loaded(description = it) }
+        val defaultIcon =
+            model.artworkIcon
+                ?: model.appIcon
+                ?: Icon.Resource(
+                    resId = com.android.internal.R.drawable.ic_audio_media,
+                    contentDescription = contentDescription,
+                )
+        return PopupChipModel.Shown(
+            chipId = PopupChipId.MediaControl,
+            icons = listOf(ChipIcon(icon = defaultIcon)),
+            chipText = normalizeSongTitle(model.songName.toString(), model.artistName?.toString()),
+            colors = ColorsModel.DynamicIsland,
+            hoverBehavior = createHoverBehavior(model),
+            popupContent = PopupContentModel.Media(model, useWaveform),
+            ownerPackage = model.packageName,
+        )
+    }
+
+    private fun createHoverBehavior(model: MediaControlChipModel): HoverBehavior {
+        val playOrPause = model.playOrPause ?: return HoverBehavior.None
+        val icon = playOrPause.icon ?: return HoverBehavior.None
+        val action = playOrPause.action ?: return HoverBehavior.None
+
+        val contentDescription =
+            ContentDescription.Loaded(description = playOrPause.contentDescription.toString())
+
+        return HoverBehavior.Buttons(
+            icons =
+                listOf(
+                    ChipIcon(
+                        icon =
+                            Icon.Loaded(drawable = icon, contentDescription = contentDescription),
+                        onClick = { action.run() },
+                    )
+                )
+        )
+    }
+
+    @AssistedFactory
+    interface Factory {
+        fun create(): MediaControlChipViewModel
+    }
+
+    private fun normalizeSongTitle(title: String, artist: String?): String {
+        if (title.isBlank()) return title
+        val separatorRegex = Regex("\\s*[-–—|•]\\s*")
+        val parts = title.split(separatorRegex, limit = 2)
+        if (parts.size != 2) return title
+
+        val left = parts[0].trim()
+        val right = parts[1].trim()
+        if (left.isBlank() || right.isBlank()) return title
+
+        val artistKey = artist?.toComparableKey() ?: return title
+        val leftKey = left.toComparableKey()
+        val rightKey = right.toComparableKey()
+
+        return when {
+            leftKey.contains(artistKey) -> right
+            rightKey.contains(artistKey) -> left
+            else -> title
+        }
+    }
+
+    private fun String.toComparableKey(): String {
+        return lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), " ").trim()
+    }
+}

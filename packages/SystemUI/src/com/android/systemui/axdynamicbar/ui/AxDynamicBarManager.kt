@@ -13,8 +13,7 @@ constructor(
 ) : CoreStartable {
 
     override fun start() {
-        viewModel.interactor.init()
-        expandedPanel.init()
+        // Replaced by PenguinOS DynamicIsland (StatusBarIsland)
     }
 }
 

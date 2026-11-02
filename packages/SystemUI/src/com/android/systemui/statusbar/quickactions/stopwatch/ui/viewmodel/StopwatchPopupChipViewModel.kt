@@ -1,0 +1,376 @@
+/*
+ * Copyright (C) 2026 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.android.systemui.statusbar.quickactions.stopwatch.ui.viewmodel
+
+import android.app.Notification
+import android.os.SystemClock
+import android.text.format.DateUtils
+import android.content.Context
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Chronometer
+import android.widget.FrameLayout
+import androidx.compose.runtime.getValue
+import com.android.systemui.ActivityIntentHelper
+import com.android.systemui.common.shared.model.ContentDescription
+import com.android.systemui.common.shared.model.Icon
+import com.android.systemui.dagger.qualifiers.Application
+import com.android.systemui.lifecycle.ExclusiveActivatable
+import com.android.systemui.lifecycle.Hydrator
+import com.android.systemui.plugins.ActivityStarter
+import com.android.systemui.res.R
+import com.android.systemui.statusbar.NotificationLockscreenUserManager
+import com.android.systemui.statusbar.quickactions.popups.shared.toSendAction
+import com.android.systemui.statusbar.quickactions.popups.shared.model.PopupActionModel
+import com.android.systemui.statusbar.quickactions.popups.shared.toActivityLaunchAction
+import com.android.systemui.statusbar.quickactions.popups.shared.DynamicIslandFeatureSettings.STOPWATCH
+import com.android.systemui.statusbar.quickactions.popups.shared.DynamicIslandFeatureSettings.observeDynamicIslandFeatureEnabled
+import com.android.systemui.statusbar.quickactions.popups.ui.model.ChipIcon
+import com.android.systemui.statusbar.quickactions.popups.ui.model.ColorsModel
+import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupChipId
+import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupChipModel
+import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupContentModel
+import com.android.systemui.statusbar.quickactions.popups.ui.viewmodel.DynamicIslandChipViewModel
+import com.android.systemui.statusbar.quickactions.stopwatch.shared.model.StopwatchPopupModel
+import com.android.systemui.statusbar.notification.collection.NotificationEntry
+import com.android.systemui.statusbar.notification.collection.notifcollection.CommonNotifCollection
+import com.android.systemui.statusbar.notification.collection.notifcollection.NotifCollectionListener
+import com.android.systemui.statusbar.policy.KeyguardStateController
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
+import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flatMapLatest
+import com.android.systemui.res.R as PenguinR
+import kotlinx.coroutines.flow.flow
+
+/** ViewModel backing stopwatch notifications inside the dynamic island. */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+class StopwatchPopupChipViewModel
+@AssistedInject
+constructor(
+    @Application private val context: Context,
+    private val notifCollection: CommonNotifCollection,
+    private val activityStarter: ActivityStarter,
+    private val activityIntentHelper: ActivityIntentHelper,
+    private val lockscreenUserManager: NotificationLockscreenUserManager,
+    private val keyguardStateController: KeyguardStateController,
+) : DynamicIslandChipViewModel, ExclusiveActivatable() {
+    private val hydrator = Hydrator("StopwatchPopupChipViewModel.hydrator")
+
+    override val chip: PopupChipModel by
+        hydrator.hydratedStateOf(
+            traceName = "chip",
+            initialValue = PopupChipModel.Hidden(PopupChipId.Stopwatch),
+            source =
+                callbackFlow {
+                        val listener =
+                            object : NotifCollectionListener {
+                                override fun onEntryAdded(entry: NotificationEntry) {
+                                    trySend(Unit)
+                                }
+
+                                override fun onEntryUpdated(entry: NotificationEntry) {
+                                    trySend(Unit)
+                                }
+
+                                override fun onEntryRemoved(entry: NotificationEntry, reason: Int) {
+                                    trySend(Unit)
+                                }
+
+                                override fun onRankingApplied() {
+                                    trySend(Unit)
+                                }
+                            }
+
+                        notifCollection.addCollectionListener(listener)
+                        trySend(Unit)
+                        awaitClose { notifCollection.removeCollectionListener(listener) }
+                    }
+                    .map {
+                        notifCollection.allNotifs
+                            .asSequence()
+                            .mapNotNull { entry ->
+                                entry.toStopwatchModel(
+                                    context = context,
+                                    activityStarter = activityStarter,
+                                    activityIntentHelper = activityIntentHelper,
+                                    lockscreenUserManager = lockscreenUserManager,
+                                    keyguardStateController = keyguardStateController,
+                                )
+                            }
+                            .firstOrNull()
+                    }
+                    .combine(
+                        observeDynamicIslandFeatureEnabled(context, STOPWATCH)
+                    ) { model, enabled ->
+                        model.takeIf { enabled }
+                    }
+                    .flatMapLatest { model ->
+                        flow<PopupChipModel> {
+                            if (model == null) {
+                                emit(PopupChipModel.Hidden(PopupChipId.Stopwatch))
+                            } else if (!model.isRunning) {
+                                val text = model.elapsedTimeText?.takeIf { it.isNotBlank() }
+                                    ?: DateUtils.formatElapsedTime(
+                                        (SystemClock.elapsedRealtime() - model.baseElapsedRealtimeMs)
+                                            .coerceAtLeast(0L) / 1_000L)
+                                emit(toPopupChipModel(model.copy(elapsedTimeText = text)))
+                            } else {
+                                while (true) {
+                                    val elapsedMs = (SystemClock.elapsedRealtime() -
+                                        model.baseElapsedRealtimeMs).coerceAtLeast(0L)
+                                    val elapsedSeconds = elapsedMs / 1_000L
+                                    emit(toPopupChipModel(model.copy(
+                                        elapsedTimeText = DateUtils.formatElapsedTime(elapsedSeconds),
+                                    )))
+                                    val afterEmitMs = (SystemClock.elapsedRealtime() -
+                                        model.baseElapsedRealtimeMs).coerceAtLeast(0L)
+                                    if (afterEmitMs / 1_000L == elapsedSeconds) {
+                                        delay(1_000L - afterEmitMs % 1_000L)
+                                    }
+                                }
+                            }
+                        }
+                    },
+        )
+
+    override suspend fun onActivated(): Nothing {
+        hydrator.activate()
+    }
+
+    private fun toPopupChipModel(model: StopwatchPopupModel?): PopupChipModel {
+        if (model == null) {
+            return PopupChipModel.Hidden(PopupChipId.Stopwatch)
+        }
+
+        return PopupChipModel.Shown(
+            chipId = PopupChipId.Stopwatch,
+            icons = listOfNotNull(model.icon?.let { ChipIcon(icon = it, onClick = model.onOpen) }),
+            chipText = model.elapsedTimeText,
+            colors = ColorsModel.DynamicIsland,
+            contentDescription = model.title,
+            popupContent = PopupContentModel.Stopwatch(model),
+        )
+    }
+
+    @AssistedFactory
+    interface Factory {
+        fun create(): StopwatchPopupChipViewModel
+    }
+}
+
+private fun NotificationEntry.toStopwatchModel(
+    context: Context,
+    activityStarter: ActivityStarter,
+    activityIntentHelper: ActivityIntentHelper,
+    lockscreenUserManager: NotificationLockscreenUserManager,
+    keyguardStateController: KeyguardStateController,
+): StopwatchPopupModel? {
+    if (!isStopwatchCandidate()) {
+        return null
+    }
+
+    val notification = sbn.notification
+    val chronometer = extractChronometerSnapshot(context) ?: return null
+    if (chronometer.isCountDown) {
+        return null
+    }
+
+    val appLabel = resolveAppLabel(context, sbn.packageName)
+    val fallbackIcon =
+        Icon.Resource(
+            resId = PenguinR.drawable.ic_dynamic_island_stopwatch,
+            contentDescription = ContentDescription.Resource(PenguinR.string.dynamic_island_stopwatch_title),
+        )
+
+    return StopwatchPopupModel(
+        icon = fallbackIcon,
+        title = context.getString(PenguinR.string.dynamic_island_stopwatch_title),
+        subtitle = appLabel.takeUnless { it.isBlank() },
+        baseElapsedRealtimeMs = chronometer.baseElapsedRealtimeMs,
+        isRunning = isRunning(notification),
+        elapsedTimeText =
+            chronometer.elapsedText.takeUnless {
+                isRunning(notification) || chronometer.elapsedText.isBlank()
+            },
+        onOpen =
+            sbn.notification.contentIntent.toActivityLaunchAction(
+                activityStarter = activityStarter,
+                activityIntentHelper = activityIntentHelper,
+                lockscreenUserManager = lockscreenUserManager,
+                keyguardStateController = keyguardStateController,
+            ),
+        actions = notification.toStopwatchActions(context),
+    )
+}
+
+internal fun NotificationEntry.isStopwatchCandidate(): Boolean {
+    val notification = sbn.notification
+    if (notification.contentIntent == null) {
+        return false
+    }
+    if (notification.contentView == null && notification.bigContentView == null &&
+        notification.headsUpContentView == null &&
+        !notification.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER)) {
+        return false
+    }
+    if (notification.extras.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN) ||
+        notification.channelId.orEmpty().contains("timer", ignoreCase = true)) return false
+
+    val searchText =
+        buildString {
+                append(sbn.packageName)
+                append(' ')
+                append(resolveAppLabel(context = null, packageName = sbn.packageName))
+                append(' ')
+                append(notification.contentIntent?.creatorPackage.orEmpty())
+                append(' ')
+                append(notification.extras.getCharSequence(Notification.EXTRA_TITLE) ?: "")
+                append(' ')
+                append(notification.extras.getCharSequence(Notification.EXTRA_TEXT) ?: "")
+                append(' ')
+                append(notification.extras.getCharSequence(Notification.EXTRA_SUB_TEXT) ?: "")
+            }
+            .lowercase(Locale.ROOT)
+
+    val hasClockHint =
+        searchText.contains("stopwatch") ||
+            searchText.contains("deskclock") ||
+            sbn.packageName.contains("clock", ignoreCase = true)
+
+    return hasClockHint
+}
+
+private fun NotificationEntry.extractChronometerSnapshot(context: Context): ChronometerSnapshot? {
+    val packageContext =
+        runCatching { context.createPackageContext(sbn.packageName, Context.CONTEXT_RESTRICTED) }
+            .getOrDefault(context)
+
+    val remoteSnapshot = sequenceOf(
+            sbn.notification.contentView,
+            sbn.notification.bigContentView,
+            sbn.notification.headsUpContentView,
+        )
+        .filterNotNull()
+        .mapNotNull { remoteViews ->
+            val rootView =
+                runCatching {
+                        remoteViews.apply(packageContext, FrameLayout(packageContext))
+                    }
+                    .getOrNull()
+                    ?: return@mapNotNull null
+            val chronometer = rootView.findChronometer() ?: return@mapNotNull null
+            ChronometerSnapshot(
+                baseElapsedRealtimeMs = chronometer.base,
+                isCountDown = chronometer.isCountDown,
+                elapsedText = chronometer.text?.toString().orEmpty(),
+            )
+        }
+        .firstOrNull()
+    if (remoteSnapshot != null) return remoteSnapshot
+
+    val notification = sbn.notification
+    if (!notification.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER) ||
+        notification.`when` <= 0L) return null
+    return ChronometerSnapshot(
+        baseElapsedRealtimeMs = SystemClock.elapsedRealtime() +
+            (notification.`when` - System.currentTimeMillis()),
+        isCountDown = notification.extras.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN),
+        elapsedText = "",
+    )
+}
+
+private fun View.findChronometer(): Chronometer? {
+    if (this is Chronometer) {
+        return this
+    }
+    if (this is ViewGroup) {
+        for (index in 0 until childCount) {
+            getChildAt(index).findChronometer()?.let { return it }
+        }
+    }
+    return null
+}
+
+private data class ChronometerSnapshot(
+    val baseElapsedRealtimeMs: Long,
+    val isCountDown: Boolean,
+    val elapsedText: String,
+)
+
+private fun resolveAppLabel(context: Context?, packageName: String): String {
+    val safeContext = context ?: return packageName
+    return runCatching {
+            val pm = safeContext.packageManager
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            pm.getApplicationLabel(appInfo)?.toString()
+        }
+        .getOrNull()
+        ?.takeUnless { it.isBlank() }
+        ?: packageName
+}
+
+private fun Notification.toStopwatchActions(context: Context): List<PopupActionModel> {
+    val actions = actions.orEmpty()
+    if (actions.isEmpty()) {
+        return emptyList()
+    }
+
+    return if (isRunning(this)) {
+        buildList {
+            actions.getOrNull(0)?.actionIntent?.toSendAction()?.let {
+                add(PopupActionModel(context.getString(R.string.controls_media_button_pause), it))
+            }
+            actions.getOrNull(1)?.actionIntent?.toSendAction()?.let {
+                add(PopupActionModel(context.getString(PenguinR.string.dynamic_island_action_lap), it))
+            }
+        }
+    } else {
+        buildList {
+            actions.getOrNull(0)?.actionIntent?.toSendAction()?.let {
+                add(PopupActionModel(context.getString(PenguinR.string.dynamic_island_action_resume), it))
+            }
+            actions.getOrNull(1)?.actionIntent?.toSendAction()?.let {
+                add(
+                    PopupActionModel(
+                        context.getString(PenguinR.string.dynamic_island_action_stop),
+                        it,
+                        emphasized = true,
+                    )
+                )
+            }
+        }
+    }
+}
+
+private fun isRunning(notification: Notification): Boolean {
+    val actionNames = notification.actions.orEmpty().map { action ->
+        runCatching { action.actionIntent?.intent?.action }.getOrNull().orEmpty()
+            .lowercase(Locale.ROOT)
+    }
+    if (actionNames.any { it.contains("pause_stopwatch") || it.contains("lap_stopwatch") }) return true
+    if (actionNames.any { it.contains("start_stopwatch") }) return false
+    val labels = notification.actions.orEmpty().map { it.title.toString().lowercase(Locale.ROOT) }
+    if (labels.any { it.contains("pause") || it.contains("lap") }) return true
+    if (labels.any { it.contains("resume") || it.contains("start") }) return false
+    return notification.flags and Notification.FLAG_ONGOING_EVENT != 0
+}

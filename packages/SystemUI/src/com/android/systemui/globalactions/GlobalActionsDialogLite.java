@@ -1138,12 +1138,12 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         }
     }
 
-    private boolean shouldShowRestartSubmenu() {
+    boolean shouldShowRestartSubmenu() {
         if (mKeyguardShowing) {
             return false;
         }
         return LineageSettings.Secure.getInt(mContext.getContentResolver(),
-                LineageSettings.Secure.ADVANCED_REBOOT, 0) == 1;
+                LineageSettings.Secure.ADVANCED_REBOOT, 1) == 1;
     }
 
     public void showRestartOptionsMenu() {
@@ -1770,10 +1770,6 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
      */
     @Override
     public void onDismiss(DialogInterface dialog) {
-        if (mRestartDialog != null && mRestartDialog.isShowing()) {
-            mRestartDialog.dismiss();
-            mRestartDialog = null;
-        }
         if (mDelegate != null && mDelegate.mCurrentDialog == dialog) {
             mDelegate = null;
         }
@@ -1930,8 +1926,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             Action item = mAdapter.getItem(position);
             if (!(item instanceof SilentModeTriStateAction)) {
                 if (mDelegate != null) {
-                    // don't dismiss the dialog if we're opening the power options menu
-                    if (!(item instanceof PowerOptionsAction)) {
+                    // don't dismiss the dialog if we're opening the power/restart options menu
+                    if (!(item instanceof PowerOptionsAction)
+                            && !(item instanceof RestartAction && shouldShowRestartSubmenu())) {
                         // Usually clicking an item shuts down the phone, locks, or starts an
                         // activity. We don't want to animate back into the power button when that
                         // happens, so we disable the dialog animation before dismissing.
@@ -2356,8 +2353,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
         private void onClick() {
             if (mDelegate != null) {
-                // don't dismiss the dialog if we're opening the power options menu
-                if (!(this instanceof PowerOptionsAction)) {
+                // don't dismiss the dialog if we're opening the power/restart options menu
+                if (!(this instanceof PowerOptionsAction)
+                        && !(this instanceof RestartAction && shouldShowRestartSubmenu())) {
                     // Usually clicking an item shuts down the phone, locks, or starts an
                     // activity. We don't want to animate back into the power button when that
                     // happens, so we disable the dialog animation before dismissing.

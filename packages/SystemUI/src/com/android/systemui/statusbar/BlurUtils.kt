@@ -89,7 +89,17 @@ constructor(
         if (ratio == 0f) {
             return 0f
         }
-        return MathUtils.lerp(minBlurRadius, maxBlurRadius, ratio)
+        val style = com.android.internal.penguin.glass.LiquidGlass.getEffectiveStyle(null)
+        if (style == com.android.internal.penguin.glass.LiquidGlass.STYLE_MATERIAL3_LITE) {
+            return 0f
+        }
+        val scale =
+            if (style == com.android.internal.penguin.glass.LiquidGlass.STYLE_IOS_LIQUID_GLASS) {
+                1.25f
+            } else {
+                0.78f
+            }
+        return MathUtils.lerp(minBlurRadius, maxBlurRadius * scale, ratio)
     }
 
     /**

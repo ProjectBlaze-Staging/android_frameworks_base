@@ -278,11 +278,19 @@ public final class PixelPropsUtils {
                         && sPpTargets.contains("com.google.android.mosey");
                 final String defaultCodename = isTablet
                         ? "tangorpro" : PixelDeviceRepository.getDefaultPhoneCodename();
-                final String codename = (packageName.equals(PACKAGE_GMS) && moseySpoofEnabled)
+                String selectedCodename = (packageName.equals(PACKAGE_GMS) && moseySpoofEnabled)
                         ? MOSEY_PIXEL_CODENAME
                         : (sPpModel != null && !sPpModel.isEmpty()
                                 ? sPpModel
                                 : defaultCodename);
+                if ("com.google.android.googlequicksearchbox".equals(packageName)
+                        && ("kodiak".equals(selectedCodename) || "grizzly".equals(selectedCodename)
+                                || "yogi".equals(selectedCodename) || "cubs".equals(selectedCodename)
+                                || "sasquatch".equals(selectedCodename) || "silverback".equals(selectedCodename)
+                                || "capuchin".equals(selectedCodename) || "bonobo".equals(selectedCodename))) {
+                    selectedCodename = MOSEY_PIXEL_CODENAME;
+                }
+                final String codename = selectedCodename;
                 final PixelDeviceRepository.PixelProfile profile =
                         PixelDeviceRepository.getProfileByCodename(
                                 context, codename, isTablet);

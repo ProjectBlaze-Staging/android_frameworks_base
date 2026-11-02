@@ -70,6 +70,31 @@ public final class GamePropsSpoofService {
     /** JSON array of custom user-defined profiles. */
     private static final String SETTING_CUSTOM_PROFILES  = "custom_spoof_profiles";
 
+    /** Default pre-configured high-FPS game spoof map when SETTING_PER_APPS has never been set. */
+    public static final String DEFAULT_PER_APPS_SPOOF =
+            "com.tencent.ig:ROG9P,"
+            + "com.pubg.krmobile:ROG9P,"
+            + "com.pubg.imobile:ROG9P,"
+            + "com.vng.pubgmobile:ROG9P,"
+            + "com.pubg.newstate:ROG9P,"
+            + "com.activision.callofduty.shooter:ROG9P,"
+            + "com.activision.callofduty.warzone:ROG9P,"
+            + "com.garena.game.codm:ROG9P,"
+            + "com.mobile.legends:RM10P,"
+            + "com.miHoYo.GenshinImpact:RM10P,"
+            + "com.cognosphere.genshinimpact:RM10P,"
+            + "com.HoYoverse.hkrpgoversea:RM10P,"
+            + "com.HoYoverse.Nap:RM10P,"
+            + "com.riotgames.league.wildrift:ROG9P,"
+            + "com.dts.freefireth:ROG9P,"
+            + "com.dts.freefiremax:ROG9P,"
+            + "com.supercell.brawlstars:ROG9P,"
+            + "com.levelinfinite.sgameGlobal:RM10P,"
+            + "com.ea.gp.fifamobile:S25U,"
+            + "com.epicgames.fortnite:ROG9P,"
+            + "com.carxtech.sr:ROG9P,"
+            + "com.gameloft.android.ANMP.GloftA9HM:OP13";
+
     // -------------------------------------------------------------------------
     // Singleton
     // -------------------------------------------------------------------------
@@ -325,6 +350,9 @@ public final class GamePropsSpoofService {
         try {
             spoofedApps = Settings.Secure.getString(
                     context.getContentResolver(), SETTING_PER_APPS);
+            if (spoofedApps == null) {
+                spoofedApps = DEFAULT_PER_APPS_SPOOF;
+            }
         } catch (Throwable e) {
             if (mDebug) Log.d(TAG, "Failed to read per-apps setting: " + e.getMessage());
             return;

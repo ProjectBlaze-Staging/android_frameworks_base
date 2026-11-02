@@ -421,4 +421,8 @@
          devices. -->
     <allow-in-power-save package="com.android.devicelockcontroller" />
     <allow-in-data-usage-save package="com.android.devicelockcontroller" />
+
+    <!-- Enable Contextual Search (Circle to Search / Omnient) system features -->
+    <feature name="android.software.contextualsearch" />
+    <feature name="com.google.android.feature.CONTEXTUAL_SEARCH" />
 </permissions>

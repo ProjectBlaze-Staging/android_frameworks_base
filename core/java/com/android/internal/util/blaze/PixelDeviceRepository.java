@@ -149,12 +149,14 @@ public final class PixelDeviceRepository {
     // eligible to become the default until added here.
     public static final List<String> GENERATION_ORDER = Collections.unmodifiableList(
             Arrays.asList(
-                    // Pixel 11 series (current default tier: Pro XL)
-                    "kodiak", "grizzly", "yogi", "cubs",
-                    // Pixel 10 series
+                    // Pixel 10 series (shipped & whitelisted in Velvet Circle to Search / GMS)
                     "mustang", "rango", "blazer", "frankel", "stallion",
                     // Pixel 9 series
                     "komodo", "caiman", "comet", "tokay", "tegu",
+                    // Pixel 8 series
+                    "husky", "shiba", "akita",
+                    // Pixel 11 series (canary/unreleased)
+                    "kodiak", "grizzly", "yogi", "cubs",
                     // Tablet
                     "tangorpro"
             ));
@@ -208,7 +210,7 @@ public final class PixelDeviceRepository {
         for (String c : GENERATION_ORDER) {
             if (present.contains(c)) return c;
         }
-        return "kodiak";
+        return "mustang";
     }
 
     public static String getDefaultPhoneCodename() {
@@ -219,12 +221,18 @@ public final class PixelDeviceRepository {
     public static final List<PixelProfile> FALLBACK_PROFILES;
     static {
         List<PixelProfile> f = new ArrayList<>();
-        f.add(new PixelProfile("kodiak",    "Pixel 11 Pro XL",   "google", "kodiak",    "kodiak",
-                "google/kodiak/kodiak:17/CD1A.260714.001.A9/15938155:user/release-keys",
-                "CD1A.260714.001.A9", "2026-08-05", 0L, null, false));
         f.add(new PixelProfile("mustang",   "Pixel 10 Pro XL",   "google", "mustang",   "mustang",
                 "google/mustang/mustang:17/CP2A.260805.005/15828068:user/release-keys",
                 "CP2A.260805.005", "2026-08-05", 0L, null, false));
+        f.add(new PixelProfile("komodo",    "Pixel 9 Pro XL",    "google", "komodo",    "komodo",
+                "google/komodo/komodo:17/CP2A.260805.005/15828068:user/release-keys",
+                "CP2A.260805.005", "2026-08-05", 0L, null, false));
+        f.add(new PixelProfile("husky",     "Pixel 8 Pro",       "google", "husky",     "husky",
+                "google/husky/husky:17/CP2A.260805.005/15828068:user/release-keys",
+                "CP2A.260805.005", "2026-08-05", 0L, null, false));
+        f.add(new PixelProfile("kodiak",    "Pixel 11 Pro XL",   "google", "kodiak",    "kodiak",
+                "google/kodiak/kodiak:17/CD1A.260714.001.A9/15938155:user/release-keys",
+                "CD1A.260714.001.A9", "2026-08-05", 0L, null, false));
         f.add(new PixelProfile("tangorpro", "Pixel Tablet",      "google", "tangorpro", "tangorpro",
                 "google/tangorpro/tangorpro:17/CP2A.260705.006/15641320:user/release-keys",
                 "CP2A.260705.005", "2026-07-05", 0L, null, false));

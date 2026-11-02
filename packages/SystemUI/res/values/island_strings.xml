@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 The PenguinOS Project
+     Copyright (C) 2026 The BlazeAOSP Project
+     SPDX-License-Identifier: Apache-2.0
+-->
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Dynamic island -->
+    <string name="dynamic_island_event_open">Open</string>
+    <string name="dynamic_island_event_charging">Charging</string>
+    <string name="dynamic_island_event_wireless_charging">Wireless charging</string>
+    <string name="dynamic_island_event_battery_saver">Battery saver</string>
+    <string name="dynamic_island_event_unlocked">Unlocked</string>
+    <string name="dynamic_island_event_disconnect">Disconnect</string>
+    <string name="dynamic_island_event_hotspot">Hotspot</string>
+    <string name="dynamic_island_event_connected_devices">Connected devices: %1$d</string>
+    <string name="dynamic_island_event_vpn">VPN</string>
+    <string name="dynamic_island_event_connected">Connected</string>
+    <string name="dynamic_island_event_connecting">Connecting</string>
+    <string name="dynamic_island_event_sound">Sound mode</string>
+    <string name="dynamic_island_event_ring">Ring</string>
+    <string name="dynamic_island_event_vibrate">Vibrate</string>
+    <string name="dynamic_island_event_silent">Silent</string>
+    <string name="dynamic_island_event_clipboard">Clipboard</string>
+    <string name="dynamic_island_event_call">Call</string>
+    <string name="dynamic_island_event_timer">Timer</string>
+    <string name="dynamic_island_event_recording">Audio recording</string>
+    <string name="dynamic_island_event_recent_apps">Recent apps</string>
+    <string name="dynamic_island_event_paused">Paused</string>
+    <string name="dynamic_island_event_saved">Saved</string>
+    <string name="dynamic_island_bluetooth_left_earbud">Left earbud</string>
+    <string name="dynamic_island_bluetooth_right_earbud">Right earbud</string>
+    <string name="dynamic_island_bluetooth_case">Case</string>
+    <string name="dynamic_island_charging_current">Current</string>
+    <string name="dynamic_island_charging_power">Power</string>
+    <string name="dynamic_island_charging_voltage">Voltage</string>
+    <string name="dynamic_island_charging_temperature">Temperature</string>
+    <string name="dynamic_island_action_lap">Lap</string>
+    <string name="dynamic_island_action_resume">Resume</string>
+    <string name="dynamic_island_action_snooze">Snooze</string>
+    <string name="dynamic_island_action_stop">Stop</string>
+    <string name="dynamic_island_alarm_active_title">Alarm</string>
+    <string name="dynamic_island_alarm_title">Next alarm</string>
+    <string name="dynamic_island_flashlight_enabled">Enabled</string>
+    <string name="dynamic_island_flashlight_short">ON</string>
+    <string name="dynamic_island_open_clock_action">Open clock</string>
+    <string name="dynamic_island_screen_record_active">Recording is active</string>
+    <string name="dynamic_island_screen_record_countdown">Starts in %1$ss</string>
+    <string name="dynamic_island_screen_record_short">REC</string>
+    <string name="dynamic_island_stopwatch_title">Stopwatch</string>
+</resources>

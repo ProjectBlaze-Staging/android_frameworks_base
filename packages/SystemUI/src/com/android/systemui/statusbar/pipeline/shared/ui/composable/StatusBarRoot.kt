@@ -46,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEvent
@@ -93,6 +94,7 @@ import com.android.systemui.scene.ui.view.WindowRootView
 import com.android.systemui.shade.ui.composable.VariableDayDate
 import com.android.systemui.statusbar.StatusBarAlwaysUseRegionSampling
 import com.android.systemui.statusbar.chips.ui.compose.OngoingActivityChips
+import com.android.systemui.penguin.StatusBarIsland
 import com.android.systemui.statusbar.core.NewStatusBarIcons
 import com.android.systemui.statusbar.core.StatusBarEventForwardingModernization
 import com.android.systemui.statusbar.core.StatusBarForDesktop
@@ -148,6 +150,7 @@ constructor(
     @DisplayAware private val homeStatusBarViewModelFactory: HomeStatusBarViewModelFactory,
     @DisplayAware private val headlineViewModelFactory: HeadlineViewModel.Factory,
     private val statusBarRegionSamplingViewModelFactory: StatusBarRegionSamplingViewModel.Factory,
+    private val island: StatusBarIsland,
     private val shadeWindowRootView: WindowRootView,
 ) {
     fun create(root: ViewGroup, andThen: (ViewGroup) -> Unit): ComposeView {
@@ -172,6 +175,7 @@ constructor(
                         eventAnimationInteractor = eventAnimationInteractor,
                         statusBarRegionSamplingViewModelFactory =
                             statusBarRegionSamplingViewModelFactory,
+                        island = island,
                         onViewCreated = andThen,
                         modifier = Modifier.sysUiResTagContainer(),
                     )
@@ -212,6 +216,7 @@ fun StatusBarRoot(
     statusBarRegionSamplingViewModelFactory: StatusBarRegionSamplingViewModel.Factory,
     onViewCreated: (ViewGroup) -> Unit,
     modifier: Modifier = Modifier,
+    island: StatusBarIsland? = null,
 ) {
     val displayId = parent.context.displayId
     val statusBarViewModel =
@@ -262,6 +267,8 @@ fun StatusBarRoot(
                 val phoneStatusBarView =
                     inflater.inflate(R.layout.status_bar, parent, false) as PhoneStatusBarView
 
+                val islandBoundsState = mutableStateOf(android.graphics.Rect())
+
                 addStartSideComposable(
                     phoneStatusBarView = phoneStatusBarView,
                     clockViewModelFactory = clockViewModelFactory,
@@ -269,6 +276,7 @@ fun StatusBarRoot(
                     iconViewStore = iconViewStore,
                     appHandlesViewModel = appHandlesViewModel,
                     context = context,
+                    islandBoundsState = islandBoundsState,
                 )
 
                 touchableExclusionRegionDisposableHandle =
@@ -286,6 +294,8 @@ fun StatusBarRoot(
                     phoneStatusBarView.requireViewById<NotificationIconContainer>(
                         R.id.notificationIcons
                     )
+
+                island?.attach(phoneStatusBarView) { bounds -> islandBoundsState.value = bounds }
 
                 // If the flag is enabled, create and add a compose section to the end
                 // of the system_icons container
@@ -397,6 +407,7 @@ private fun addStartSideComposable(
     iconViewStore: NotificationIconContainerViewBinder.IconViewStore?,
     appHandlesViewModel: AppHandlesViewModel,
     context: Context,
+    islandBoundsState: androidx.compose.runtime.MutableState<android.graphics.Rect>,
 ) {
     val startSideExceptHeadsUp =
         phoneStatusBarView.requireViewById<LinearLayout>(R.id.status_bar_start_side_except_heads_up)
@@ -511,6 +522,7 @@ private fun addStartSideComposable(
 
                 val chipsVisibilityModel = statusBarViewModel.ongoingActivityChips
                 if (chipsVisibilityModel.areChipsAllowed) {
+                    var overlapsIsland by remember { mutableStateOf(false) }
                     OngoingActivityChips(
                         chips = chipsVisibilityModel.chips,
                         iconViewStore = iconViewStore,
@@ -518,7 +530,25 @@ private fun addStartSideComposable(
                         // TODO(b/393581408): Now that we always enforce a max width on the chips,
                         //  we should be able to convert the chips to a LazyRow and get some
                         //  animations for free.
-                        modifier = Modifier.sysUiResTagContainer().widthIn(max = chipsMaxWidth),
+                        modifier =
+                            Modifier.sysUiResTagContainer()
+                                .widthIn(max = chipsMaxWidth)
+                                .alpha(if (overlapsIsland) 0f else 1f)
+                                .onGloballyPositioned { coordinates ->
+                                    val b = coordinates.boundsInWindow()
+                                    val chipRect =
+                                        android.graphics.Rect(
+                                            b.left.toInt(),
+                                            b.top.toInt(),
+                                            b.right.toInt(),
+                                            b.bottom.toInt(),
+                                        )
+                                    overlapsIsland =
+                                        android.graphics.Rect.intersects(
+                                            chipRect,
+                                            islandBoundsState.value,
+                                        )
+                                },
                     )
                 }
             }
