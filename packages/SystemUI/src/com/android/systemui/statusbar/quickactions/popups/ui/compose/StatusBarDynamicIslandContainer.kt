@@ -68,6 +68,8 @@ import com.android.systemui.penguin.CosFeature
 import com.android.systemui.penguin.rememberCosFeature
 import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupChipId
 import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupChipModel
+import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupContentModel
+import com.android.systemui.statusbar.quickactions.popups.ui.model.SystemEventKind
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -204,7 +206,12 @@ fun StatusBarDynamicIslandContainer(
     LaunchedEffect(swallowSeq) {
         if (swallowSeq != initialSwallowSeq) {
             initialSwallowSeq = swallowSeq
-            if (chips.any { it.chipId == PopupChipId.MediaControl }) {
+            val callChip = chips.firstOrNull {
+                (it.popupContent as? PopupContentModel.SystemEvent)?.kind == SystemEventKind.Call
+            }
+            if (callChip != null) {
+                selectedChipId = callChip.chipId
+            } else if (chips.any { it.chipId == PopupChipId.MediaControl }) {
                 selectedChipId = PopupChipId.MediaControl
             }
             if (!cos) {

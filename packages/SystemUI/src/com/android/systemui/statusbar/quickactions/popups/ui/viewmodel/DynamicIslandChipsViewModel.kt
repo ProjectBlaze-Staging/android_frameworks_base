@@ -51,6 +51,8 @@ import com.android.systemui.statusbar.quickactions.popups.shared.DynamicIslandFe
 import com.android.systemui.statusbar.quickactions.popups.shared.DynamicIslandFeatureSettings.readMasterDynamicIslandEnabled
 import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupChipId
 import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupChipModel
+import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupContentModel
+import com.android.systemui.statusbar.quickactions.popups.ui.model.SystemEventKind
 import com.android.systemui.statusbar.quickactions.screenrecord.ui.viewmodel.ScreenRecordPopupChipViewModel
 import com.android.systemui.statusbar.quickactions.stopwatch.ui.viewmodel.StopwatchPopupChipViewModel
 import dagger.assisted.AssistedFactory
@@ -213,7 +215,11 @@ constructor(
         val openApp = if (isOnLockscreen) null else foregroundPackage
         (systemEventChips.chips + candidateChips.filterIsInstance<PopupChipModel.Shown>())
             .filter {
+                val systemKind = (it.popupContent as? PopupContentModel.SystemEvent)?.kind
                 it.chipId == PopupChipId.MediaControl ||
+                    systemKind == SystemEventKind.Call ||
+                    systemKind == SystemEventKind.Timer ||
+                    systemKind == SystemEventKind.Recording ||
                     it.ownerPackage == null ||
                     it.ownerPackage != openApp
             }

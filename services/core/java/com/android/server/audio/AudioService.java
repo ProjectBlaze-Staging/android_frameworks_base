@@ -7673,6 +7673,49 @@ public class AudioService extends IAudioService.Stub
                 // when entering RINGTONE, IN_CALL or IN_COMMUNICATION mode, clear all SCO
                 // connections not started by the application changing the mode when pid changes
                 mDeviceBroker.postSetModeOwner(mode, pid, uid, token, signal);
+
+                // BlazeAOSP GSI Universal In-Call Audio Route & DSP Gain Unmute
+                if (SystemProperties.getBoolean("persist.sys.blaze.incall_audio_fix", true)) {
+                    final long callFixIdentity = Binder.clearCallingIdentity();
+                    try {
+                        if (mode == AudioSystem.MODE_IN_CALL
+                                || mode == AudioSystem.MODE_IN_COMMUNICATION) {
+                            mAudioSystem.setParameters("real_call=true;call_state=2;in_call=1");
+                            if (mAudioHandler != null) {
+                                mAudioHandler.postDelayed(() -> {
+                                    try {
+                                        int curMode = mMode.get();
+                                        if (curMode == AudioSystem.MODE_IN_CALL
+                                                || curMode == AudioSystem.MODE_IN_COMMUNICATION) {
+                                            final VolumeStreamState callVss =
+                                                    getVssForStreamOrDefault(
+                                                            AudioSystem.STREAM_VOICE_CALL);
+                                            final int callDevice =
+                                                    getDeviceForStream(
+                                                            AudioSystem.STREAM_VOICE_CALL);
+                                            final int curIdx =
+                                                    (callVss.getIndex(callDevice) + 5) / 10;
+                                            final int nudgeIdx =
+                                                    curIdx > 1 ? curIdx - 1 : curIdx + 1;
+                                            callVss.setStreamVolumeIndex(nudgeIdx, callDevice);
+                                            callVss.setStreamVolumeIndex(curIdx, callDevice);
+                                        }
+                                    } catch (Throwable t) {
+                                        Log.w(TAG, "GSI in-call volume nudge failed", t);
+                                    }
+                                }, 200L);
+                            }
+                        } else if ((previousMode == AudioSystem.MODE_IN_CALL
+                                || previousMode == AudioSystem.MODE_IN_COMMUNICATION)
+                                && mode == AudioSystem.MODE_NORMAL) {
+                            mAudioSystem.setParameters("real_call=false;call_state=1;in_call=0");
+                        }
+                    } catch (Throwable t) {
+                        Log.w(TAG, "GSI in-call audio route parameter sync failed", t);
+                    } finally {
+                        Binder.restoreCallingIdentity(callFixIdentity);
+                    }
+                }
             } else {
                 // reset here to avoid sticky out of sync condition (would have been reset
                 // by AudioDeviceBroker processing MSG_L_SET_MODE_OWNER_SIGNAL message)

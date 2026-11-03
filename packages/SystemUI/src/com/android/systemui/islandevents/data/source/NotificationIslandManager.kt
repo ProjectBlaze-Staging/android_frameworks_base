@@ -253,9 +253,11 @@ constructor(
 
                 if (sbn.notification?.category == Notification.CATEGORY_CALL) {
                     val isCallStyle =
-                        extras.containsKey(Notification.EXTRA_ANSWER_INTENT) ||
+                        sbn.isOngoing ||
+                            extras.containsKey(Notification.EXTRA_ANSWER_INTENT) ||
                             extras.containsKey(Notification.EXTRA_DECLINE_INTENT) ||
-                            extras.containsKey(Notification.EXTRA_HANG_UP_INTENT)
+                            extras.containsKey(Notification.EXTRA_HANG_UP_INTENT) ||
+                            (sbn.notification?.actions?.isNotEmpty() == true)
                     if (isCallStyle) {
                         if ("call" !in disabledTypes) {
                             handleCallNotification(sbn, extras)
@@ -824,30 +826,70 @@ constructor(
         }
 
     private fun handleCallNotification(sbn: StatusBarNotification, extras: Bundle) {
-        val callerName = extras.getString("android.title")
-        val number = extras.getString("android.text")
+        val callPerson =
+            runCatching {
+                extras.getParcelable(Notification.EXTRA_CALL_PERSON, android.app.Person::class.java)
+            }.getOrNull()
+        val callerName =
+            callPerson?.name?.toString()?.takeIf { it.isNotBlank() }
+                ?: extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.takeIf { it.isNotBlank() }
+                ?: extras.getString("android.title")
+        val number =
+            extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() }
+                ?: extras.getString("android.text")
         val callerPhoto =
-            try {
-                sbn.notification?.getLargeIcon()?.loadDrawable(context)
-            } catch (_: Exception) {
-                null
-            }
+            runCatching {
+                callPerson?.icon?.loadDrawable(context)
+                    ?: sbn.notification?.getLargeIcon()?.loadDrawable(context)
+            }.getOrNull()
 
         val allActions = sbn.notification?.actions ?: emptyArray()
-        val actions =
+        val actionList =
             allActions
                 .filter { a -> a.remoteInputs.isNullOrEmpty() && a.actionIntent != null }
-                .take(3)
                 .mapNotNull { a ->
                     a.title?.let { IslandEvent.NotificationAction(label = it, action = a) }
                 }
+                .toMutableList()
+
+        // Ensure CallStyle system actions (Answer / Decline / Hang Up) are available in Dynamic Island
+        val answerIntent =
+            runCatching {
+                extras.getParcelable(Notification.EXTRA_ANSWER_INTENT, android.app.PendingIntent::class.java)
+            }.getOrNull()
+        val declineIntent =
+            runCatching {
+                extras.getParcelable(Notification.EXTRA_DECLINE_INTENT, android.app.PendingIntent::class.java)
+            }.getOrNull()
+        val hangUpIntent =
+            runCatching {
+                extras.getParcelable(Notification.EXTRA_HANG_UP_INTENT, android.app.PendingIntent::class.java)
+            }.getOrNull()
+
+        if (answerIntent != null && actionList.none { it.action.actionIntent == answerIntent }) {
+            val label = context.getString(com.android.internal.R.string.call_notification_answer_action)
+            val action = Notification.Action.Builder(null, label, answerIntent).build()
+            actionList.add(0, IslandEvent.NotificationAction(label = label, action = action))
+        }
+        if (declineIntent != null && actionList.none { it.action.actionIntent == declineIntent }) {
+            val label = context.getString(com.android.internal.R.string.call_notification_decline_action)
+            val action = Notification.Action.Builder(null, label, declineIntent).build()
+            actionList.add(IslandEvent.NotificationAction(label = label, action = action))
+        }
+        if (hangUpIntent != null && actionList.none { it.action.actionIntent == hangUpIntent }) {
+            val label = context.getString(com.android.internal.R.string.call_notification_hang_up_action)
+            val action = Notification.Action.Builder(null, label, hangUpIntent).build()
+            actionList.add(IslandEvent.NotificationAction(label = label, action = action))
+        }
+        val actions = actionList.take(3)
 
         val androidCallType = extras.getInt(
             Notification.EXTRA_CALL_TYPE,
             Notification.CallStyle.CALL_TYPE_UNKNOWN,
         )
         val callType =
-            if (androidCallType == Notification.CallStyle.CALL_TYPE_INCOMING)
+            if (androidCallType == Notification.CallStyle.CALL_TYPE_INCOMING ||
+                (answerIntent != null && hangUpIntent == null))
                 "Phone:incoming"
             else "Phone:active"
 
@@ -860,7 +902,8 @@ constructor(
 
         val callWhen = sbn.notification?.`when` ?: 0L
         val connected =
-            callType == "Phone:active" && extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER)
+            callType == "Phone:active" &&
+                (extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER) || sbn.isOngoing)
         val previousCall = _callEvents.value.firstOrNull { it.sbn.key == sbn.key }
         val callStart = when {
             connected && callWhen > 0L -> callWhen

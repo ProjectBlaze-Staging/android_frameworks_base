@@ -155,15 +155,19 @@ constructor(
         if (viewRootImpl == null || !viewRootImpl.surfaceControl.isValid) {
             return
         }
-        updateTransactionApplier(viewRootImpl)
+        try {
+            updateTransactionApplier(viewRootImpl)
 
-        if (shouldBlur(radius)) {
-            applyLayeredBlur(viewRootImpl, radius, opaque, scale)
-            lastAppliedBlur = radius
-        } else {
-            val builder = SyncRtSurfaceTransactionApplier.SurfaceParams.Builder(viewRootImpl.surfaceControl)
-            builder.withOpaque(opaque)
-            transactionApplier.scheduleApply(builder.build())
+            if (shouldBlur(radius)) {
+                applyLayeredBlur(viewRootImpl, radius, opaque, scale)
+                lastAppliedBlur = radius
+            } else {
+                val builder = SyncRtSurfaceTransactionApplier.SurfaceParams.Builder(viewRootImpl.surfaceControl)
+                builder.withOpaque(opaque)
+                transactionApplier.scheduleApply(builder.build())
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "applyBlur transaction skipped due to surface state", t)
         }
     }
 

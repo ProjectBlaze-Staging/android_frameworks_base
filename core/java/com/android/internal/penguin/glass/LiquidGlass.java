@@ -33,8 +33,13 @@ public final class LiquidGlass {
 
     private static long sLastCheckMs;
     private static int sEffectiveStyle = STYLE_IOS_LIQUID_GLASS;
+    private static volatile boolean sShaderFailed = false;
 
     public static int getEffectiveStyle(Context context) {
+        if (sShaderFailed || android.os.SystemProperties.getBoolean(
+                "persist.sys.blaze.safe_ui_fallback", false)) {
+            return STYLE_COLOROS_FROSTED;
+        }
         if (context == null) {
             context = android.app.ActivityThread.currentApplication();
         }
@@ -121,16 +126,30 @@ public final class LiquidGlass {
             + "  return half4(clamp(color.rgb, 0.0, 1.0), 1.0) * alpha;\n"
             + "}\n";
 
-    private final RuntimeShader mShader = new RuntimeShader(SHADER);
+    private RuntimeShader mShader;
 
     {
-        mShader.setFloatUniform("innerShadow", 0f);
-        mShader.setFloatUniform("innerShadowWidth", 1f);
+        try {
+            if (!sShaderFailed) {
+                mShader = new RuntimeShader(SHADER);
+                mShader.setFloatUniform("innerShadow", 0f);
+                mShader.setFloatUniform("innerShadowWidth", 1f);
+            }
+        } catch (Throwable t) {
+            sShaderFailed = true;
+            mShader = null;
+        }
     }
 
     public LiquidGlass setInnerShadow(float width, float strength) {
-        mShader.setFloatUniform("innerShadowWidth", Math.max(width, 0.001f));
-        mShader.setFloatUniform("innerShadow", strength);
+        if (mShader != null) {
+            try {
+                mShader.setFloatUniform("innerShadowWidth", Math.max(width, 0.001f));
+                mShader.setFloatUniform("innerShadow", strength);
+            } catch (Throwable t) {
+                sShaderFailed = true;
+            }
+        }
         return this;
     }
 
@@ -140,46 +159,90 @@ public final class LiquidGlass {
     public static final @ColorInt int TINT_DARK = 0x991C1C1E;
 
     public LiquidGlass setShape(float left, float top, float right, float bottom, float radius) {
-        mShader.setFloatUniform("shape", left, top, right, bottom);
-        mShader.setFloatUniform("radius", radius);
+        if (mShader != null) {
+            try {
+                mShader.setFloatUniform("shape", left, top, right, bottom);
+                mShader.setFloatUniform("radius", radius);
+            } catch (Throwable t) {
+                sShaderFailed = true;
+            }
+        }
         return this;
     }
 
     public LiquidGlass setLens(float height, float amount, float dispersion) {
-        boolean frostedOnly = (sEffectiveStyle == STYLE_COLOROS_FROSTED);
-        mShader.setFloatUniform("refractionHeight", Math.max(height, 1f));
-        mShader.setFloatUniform("refractionAmount", frostedOnly ? 0f : amount);
-        mShader.setFloatUniform("dispersion", frostedOnly ? 0f : dispersion);
+        if (mShader != null) {
+            try {
+                boolean frostedOnly = (sEffectiveStyle == STYLE_COLOROS_FROSTED);
+                mShader.setFloatUniform("refractionHeight", Math.max(height, 1f));
+                mShader.setFloatUniform("refractionAmount", frostedOnly ? 0f : amount);
+                mShader.setFloatUniform("dispersion", frostedOnly ? 0f : dispersion);
+            } catch (Throwable t) {
+                sShaderFailed = true;
+            }
+        }
         return this;
     }
 
     public LiquidGlass setLook(float blurRadius, float saturation, float rim, @ColorInt int tint) {
-        boolean frostedOnly = (sEffectiveStyle == STYLE_COLOROS_FROSTED);
         mBlurRadius = blurRadius;
-        mShader.setFloatUniform("saturation", frostedOnly ? 1.2f : saturation);
-        mShader.setFloatUniform("rim", frostedOnly ? rim * 0.45f : rim);
-        mShader.setColorUniform("tint", tint);
+        if (mShader != null) {
+            try {
+                boolean frostedOnly = (sEffectiveStyle == STYLE_COLOROS_FROSTED);
+                mShader.setFloatUniform("saturation", frostedOnly ? 1.2f : saturation);
+                mShader.setFloatUniform("rim", frostedOnly ? rim * 0.45f : rim);
+                mShader.setColorUniform("tint", tint);
+            } catch (Throwable t) {
+                sShaderFailed = true;
+            }
+        }
         return this;
     }
 
     public RenderEffect build() {
-        RenderEffect lens = RenderEffect.createRuntimeShaderEffect(mShader, "content");
-        if (mBlurRadius > 0f) {
-            lens = RenderEffect.createChainEffect(lens,
-                    RenderEffect.createBlurEffect(mBlurRadius, mBlurRadius, Shader.TileMode.CLAMP));
+        try {
+            if (mShader == null || sShaderFailed) {
+                if (mBlurRadius > 0f) {
+                    return RenderEffect.createBlurEffect(
+                            mBlurRadius, mBlurRadius, Shader.TileMode.CLAMP);
+                }
+                return null;
+            }
+            RenderEffect lens = RenderEffect.createRuntimeShaderEffect(mShader, "content");
+            if (mBlurRadius > 0f) {
+                lens = RenderEffect.createChainEffect(lens,
+                        RenderEffect.createBlurEffect(
+                                mBlurRadius, mBlurRadius, Shader.TileMode.CLAMP));
+            }
+            return lens;
+        } catch (Throwable t) {
+            sShaderFailed = true;
+            return null;
         }
-        return lens;
     }
 
     public void applyTo(View view) {
-        if (getEffectiveStyle(view.getContext()) == STYLE_MATERIAL3_LITE) {
-            view.setBackdropRenderEffect(null);
-            return;
+        if (view == null) return;
+        try {
+            if (getEffectiveStyle(view.getContext()) == STYLE_MATERIAL3_LITE) {
+                view.setBackdropRenderEffect(null);
+                return;
+            }
+            view.setBackdropRenderEffect(build());
+        } catch (Throwable t) {
+            sShaderFailed = true;
+            try {
+                view.setBackdropRenderEffect(null);
+            } catch (Throwable ignored) {
+            }
         }
-        view.setBackdropRenderEffect(build());
     }
 
     public static void removeFrom(View view) {
-        view.setBackdropRenderEffect(null);
+        if (view == null) return;
+        try {
+            view.setBackdropRenderEffect(null);
+        } catch (Throwable ignored) {
+        }
     }
 }

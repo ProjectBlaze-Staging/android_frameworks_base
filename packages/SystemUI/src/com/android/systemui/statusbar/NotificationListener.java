@@ -126,6 +126,7 @@ public class NotificationListener extends NotificationListenerWithPlugins implem
                 for (NotificationHandler listener : mNotificationHandlers) {
                     listener.onNotificationPosted(sbn, completeMap);
                 }
+                com.android.systemui.util.ScrimUtils.get().onNotificationPosted(sbn);
             }
             for (NotificationHandler listener : mNotificationHandlers) {
                 listener.onNotificationsInitialized();
@@ -152,6 +153,7 @@ public class NotificationListener extends NotificationListenerWithPlugins implem
                 for (NotificationHandler handler : mNotificationHandlers) {
                     handler.onNotificationPosted(sbn, rankingMap);
                 }
+                com.android.systemui.util.ScrimUtils.get().onNotificationPosted(sbn);
             });
         } else if (isKeyInRankingMap(key, rankingMap)) {
             Log.wtf(TAG, "Plugin prevented post but left ranking " + key);
@@ -176,6 +178,7 @@ public class NotificationListener extends NotificationListenerWithPlugins implem
                 for (NotificationHandler handler : mNotificationHandlers) {
                     handler.onNotificationRemoved(sbn, rankingMap, reason);
                 }
+                com.android.systemui.util.ScrimUtils.get().onNotificationRemoved(sbn);
             });
         } else if (!isKeyInRankingMap(key, rankingMap)) {
             Log.wtf(TAG, "Plugin prevented removal but removed ranking " + key

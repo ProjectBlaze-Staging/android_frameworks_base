@@ -1458,6 +1458,10 @@ public class OomAdjusterImpl extends OomAdjuster {
                 adjType = "has-overlay-ui";
                 newAdj = PERCEPTIBLE_APP_ADJ;
                 newProcState = PROCESS_STATE_IMPORTANT_FOREGROUND;
+            } else if (isActiveDynamicIslandMediaProcess(app, now)) {
+                adjType = "blaze-island-media";
+                newAdj = PERCEPTIBLE_APP_ADJ;
+                newProcState = PROCESS_STATE_FOREGROUND_SERVICE;
             }
 
             if (adjType != null) {
@@ -2419,5 +2423,33 @@ public class OomAdjusterImpl extends OomAdjuster {
             boolean inZramWritebackState) {
         setIntermediateAdjLSP(app, app.getCurRawAdj(), app.getCurrentSchedulingGroup());
         applyOomAdjLSP(app, /* isBatchingOomAdj= */ false);
+    }
+
+    private long mLastMediaPkgCheckUptime = 0L;
+    private String mActiveIslandMediaPkg = null;
+
+    private boolean isActiveDynamicIslandMediaProcess(ProcessRecordInternal app, long now) {
+        if (now - mLastMediaPkgCheckUptime > 2000L) {
+            mLastMediaPkgCheckUptime = now;
+            try {
+                final android.app.ActivityThread at =
+                        android.app.ActivityThread.currentActivityThread();
+                final Context ctx = at != null ? at.getSystemContext() : null;
+                if (ctx != null) {
+                    int playing = android.provider.Settings.Global.getInt(
+                            ctx.getContentResolver(), "blaze_island_media_playing", 0);
+                    mActiveIslandMediaPkg = (playing == 1)
+                            ? android.provider.Settings.Global.getString(
+                                    ctx.getContentResolver(), "blaze_island_active_media_pkg")
+                            : null;
+                }
+            } catch (Throwable ignored) {
+                mActiveIslandMediaPkg = null;
+            }
+        }
+        final String pkg = mActiveIslandMediaPkg;
+        if (pkg == null || pkg.isEmpty() || app == null) return false;
+        return pkg.equals(app.getPackageName())
+                || (app.processName != null && app.processName.startsWith(pkg));
     }
 }

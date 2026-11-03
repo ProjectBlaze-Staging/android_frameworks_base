@@ -121,6 +121,9 @@ public class SystemUIApplicationImpl extends SystemUIApplication implements
     public void onCreate() {
         super.onCreate();
         Log.v(TAG, "SystemUIApplication created.");
+        if (!isSubprocess()) {
+            installSelfHealingCrashWatchdog();
+        }
         // This line is used to setup Dagger's dependency injection and should be kept at the
         // top of this method.
         TimingsTraceLog log = new TimingsTraceLog("SystemUIBootTiming",
@@ -544,5 +547,52 @@ public class SystemUIApplicationImpl extends SystemUIApplication implements
     @Override
     public WMComponent getWMComponent() {
         return mInitializer.getWMComponent();
+    }
+
+    private void installSelfHealingCrashWatchdog() {
+        final Thread.UncaughtExceptionHandler previousHandler =
+                Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
+            try {
+                final android.content.ContentResolver cr = getContentResolver();
+                final long now = android.os.SystemClock.elapsedRealtime();
+                final long lastCrash = android.provider.Settings.Global.getLong(
+                        cr, "blaze_sysui_last_crash_ts", 0L);
+                int count = (now - lastCrash < 60_000L)
+                        ? android.provider.Settings.Global.getInt(
+                                cr, "blaze_sysui_crash_count", 0) + 1
+                        : 1;
+                android.provider.Settings.Global.putLong(cr, "blaze_sysui_last_crash_ts", now);
+                android.provider.Settings.Global.putInt(cr, "blaze_sysui_crash_count", count);
+
+                final String stack = Log.getStackTraceString(throwable);
+                final boolean isGpuOrShaderFault = stack != null && (
+                        stack.contains("RuntimeShader")
+                        || stack.contains("LiquidGlass")
+                        || stack.contains("RenderEffect")
+                        || stack.contains("BlurUtils"));
+
+                if (count >= 2 || isGpuOrShaderFault) {
+                    Log.e(TAG, "BlazeWatchdog: SystemUI crash threshold reached (count=" + count
+                            + ", shaderFault=" + isGpuOrShaderFault
+                            + "). Engaging self-healing surface fallback!");
+                    int curStyle = android.provider.Settings.Secure.getInt(
+                            cr, "blaze_ui_glass_style", 0);
+                    int nextStyle = (curStyle == 0) ? 1 : 2;
+                    android.provider.Settings.Secure.putInt(
+                            cr, "blaze_ui_glass_style", nextStyle);
+                    try {
+                        android.os.SystemProperties.set(
+                                "persist.sys.blaze.safe_ui_fallback", "true");
+                    } catch (Throwable ignored) {
+                    }
+                }
+            } catch (Throwable ignored) {
+            } finally {
+                if (previousHandler != null) {
+                    previousHandler.uncaughtException(thread, throwable);
+                }
+            }
+        });
     }
 }
