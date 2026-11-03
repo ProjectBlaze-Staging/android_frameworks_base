@@ -18,6 +18,7 @@ package com.android.systemui.qs.panels.domain.interactor
 
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.qs.panels.data.repository.QSPreferencesRepository
+import com.android.systemui.qs.panels.shared.model.TileGridConfig
 import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.qs.pipeline.shared.TilesUpgradePath
 import javax.inject.Inject
@@ -27,6 +28,8 @@ import kotlinx.coroutines.flow.Flow
 class QSPreferencesInteractor @Inject constructor(private val repo: QSPreferencesRepository) {
     val largeTilesSpecs: Flow<Set<TileSpec>> = repo.largeTilesSpecs
     val editTooltipShown: Flow<Boolean> = repo.editTooltipShown
+    val tileGridConfigs: Flow<List<TileGridConfig>> = repo.tileGridConfigs
+    val tileGridConfigsLandscape: Flow<List<TileGridConfig>> = repo.tileGridConfigsLandscape
 
     fun setLargeTilesSpecs(specs: Set<TileSpec>) {
         repo.writeLargeTileSpecs(specs)
@@ -38,6 +41,10 @@ class QSPreferencesInteractor @Inject constructor(private val repo: QSPreference
 
     fun setEditTooltipShown(value: Boolean) {
         repo.writeEditTooltipShown(value)
+    }
+
+    fun writeTileSize(spec: TileSpec, spanCols: Int, spanRows: Int, landscape: Boolean = false) {
+        repo.writeTileSize(spec, spanCols, spanRows, landscape)
     }
 
     /**

@@ -32,6 +32,7 @@ import com.android.internal.logging.UiEventLogger
 import com.android.keyguard.BouncerPanelExpansionCalculator
 import com.android.systemui.Dumpable
 import com.android.systemui.animation.ShadeInterpolation
+import com.android.systemui.qs.panels.ui.compose.FloatingTileDragState
 import com.android.systemui.classifier.Classifier
 import com.android.systemui.classifier.domain.interactor.FalsingInteractor
 import com.android.systemui.common.ui.domain.interactor.ConfigurationInteractor
@@ -58,14 +59,20 @@ import com.android.systemui.qs.QSEvent
 import com.android.systemui.qs.composefragment.dagger.QSFragmentComposeLog
 import com.android.systemui.qs.composefragment.dagger.QSFragmentComposeModule
 import com.android.systemui.qs.footer.ui.viewmodel.FooterActionsViewModel
+import com.android.systemui.qs.panels.domain.interactor.QqsTilesInteractor
+import com.android.systemui.qs.panels.ui.viewmodel.InfiniteGridSnapshotViewModel
 import com.android.systemui.qs.panels.domain.interactor.TileSquishinessInteractor
 import com.android.systemui.qs.panels.ui.viewmodel.InFirstPageViewModel
+import com.android.systemui.qs.panels.ui.viewmodel.SectionEditModeViewModel
+import com.android.systemui.qs.panels.ui.viewmodel.EditTileViewModel
+import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.qs.panels.ui.viewmodel.MediaInRowInLandscapeViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.QuickQuickSettingsViewModel
 import com.android.systemui.qs.ui.viewmodel.QuickSettingsContainerViewModel
 import com.android.systemui.res.R
 import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.shade.LargeScreenHeaderHelper
+import com.android.systemui.shade.ShadeController
 import com.android.systemui.shade.ShadeDisplayAware
 import com.android.systemui.shade.domain.interactor.ShadeStatusBarComponentsInteractor
 import com.android.systemui.shade.transition.LargeScreenShadeInterpolator
@@ -83,14 +90,20 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import java.io.PrintWriter
 import javax.inject.Named
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
+
 
 class QSFragmentComposeViewModel
 @AssistedInject
@@ -104,7 +117,7 @@ constructor(
     deviceEntryBypassInteractor: DeviceEntryBypassInteractor,
     keyguardTransitionInteractor: KeyguardTransitionInteractor,
     private val largeScreenShadeInterpolator: LargeScreenShadeInterpolator,
-    @ShadeDisplayAware configurationInteractor: ConfigurationInteractor,
+    @ShadeDisplayAware private val configurationInteractor: ConfigurationInteractor,
     private val largeScreenHeaderHelper: LargeScreenHeaderHelper,
     private val squishinessInteractor: TileSquishinessInteractor,
     private val falsingInteractor: FalsingInteractor,
@@ -119,6 +132,9 @@ constructor(
     private val mediaCarouselInteractor: MediaCarouselInteractor,
     val mediaViewModelFactory: MediaViewModel.Factory,
     shadeStatusBarComponentsInteractor: ShadeStatusBarComponentsInteractor,
+    val sectionEditModeViewModel: SectionEditModeViewModel,
+    val qqsTilesInteractor: QqsTilesInteractor,
+    val infiniteGridSnapshotViewModelFactory: InfiniteGridSnapshotViewModel.Factory,
 ) : Dumpable, ExclusiveActivatable() {
 
     val containerViewModel = containerViewModelFactory.create(supportsBrightnessMirroring = true)
@@ -147,6 +163,59 @@ constructor(
         footerActionsViewModelFactory.create(lifecycleScope).also {
             lifecycleScope.launch { footerActionsController.init() }
         }
+
+    private val _showTilePicker = MutableStateFlow(false)
+    val showTilePicker = _showTilePicker.asStateFlow()
+    
+    val isEditingOneUi = MutableStateFlow(false)
+
+    val isCustomizingUi = combine(
+        containerViewModel.editModeViewModel.isEditing,
+        sectionEditModeViewModel.isEditingSections,
+        isEditingOneUi,
+        showTilePicker,
+        snapshotFlow { FloatingTileDragState.isExternalDrag },
+    ) { a, b, c, d, isExternalDrag -> (a && !b) || c || (d && !isExternalDrag) }
+
+    var wasEditingBeforePicker = false
+
+    fun openTilePicker() {
+        wasEditingBeforePicker = containerViewModel.editModeViewModel.isEditing.value
+        _showTilePicker.value = true
+    }
+
+    fun closeTilePicker(stayInLayoutEditMode: Boolean = false) {
+        _showTilePicker.value = false
+        if (!stayInLayoutEditMode && !wasEditingBeforePicker) {
+            containerViewModel.editModeViewModel.stopEditing()
+        }
+    }
+
+    fun openOneUiEdit() {
+        wasEditingBeforePicker = containerViewModel.editModeViewModel.isEditing.value
+        isEditingOneUi.value = true
+    }
+
+    fun closeOneUiEdit(stayInLayoutEditMode: Boolean = false) {
+        isEditingOneUi.value = false
+        if (!stayInLayoutEditMode && !wasEditingBeforePicker) {
+            containerViewModel.editModeViewModel.stopEditing()
+        }
+        com.android.systemui.qs.panels.ui.compose.FloatingTileDragState.clearFallbackTiles()
+    }
+
+    fun getTilesForPicker(): Flow<List<EditTileViewModel>> {
+        return containerViewModel.editModeViewModel.tilesForPicker
+    }
+
+    fun addTileFromPicker(tile: EditTileViewModel) {
+        com.android.systemui.qs.panels.ui.compose.FloatingTileDragState.fallbackTiles[tile.tileSpec] = tile
+        sectionEditModeViewModel.addMainQSTile(
+            com.android.systemui.qs.panels.shared.model.FloatingTile(tile.tileSpec, com.android.systemui.qs.panels.shared.model.SectionType.TILES, 1, 1)
+        )
+        containerViewModel.editModeViewModel.addTile(tile.tileSpec)
+        closeTilePicker()
+    }
 
     var isQsExpanded by mutableStateOf(false)
 
@@ -289,11 +358,15 @@ constructor(
 
     val viewAlpha by derivedStateOf {
         when {
-            isInBouncerTransit ->
-                BouncerPanelExpansionCalculator.aboutToShowBouncerProgress(alphaProgress)
-            isKeyguardState -> alphaProgress
-            isSmallScreen -> ShadeInterpolation.getContentAlpha(alphaProgress)
-            else -> largeScreenShadeInterpolator.getQsAlpha(alphaProgress)
+            isSmallScreen -> 1f
+            isInSplitShade ->
+                if (isTransitioningToFullShade || isKeyguardState) {
+                    lockscreenToShadeProgress
+                } else {
+                    panelExpansionFraction
+                }
+            isTransitioningToFullShade -> lockscreenToShadeProgress
+            else -> panelExpansionFraction
         }
     }
 
@@ -514,6 +587,8 @@ constructor(
             launch { quickQuickSettingsViewModel.activate() }
             launch { qqsMediaInRowViewModel.activate() }
             launch { qsMediaInRowViewModel.activate() }
+            launch { sectionEditModeViewModel.activate() }
+            awaitCancellation()
         }
     }
 
@@ -567,6 +642,7 @@ constructor(
                 println("isCustomizing", containerViewModel.editModeViewModel.isEditing.value)
                 println("inFirstPage", inFirstPage)
                 println("isBrightnessSliderVisible", containerViewModel.isBrightnessSliderVisible)
+                println("showTilePicker", showTilePicker.value)
             }
             printSection("Expansion state") {
                 println("qsExpansion", qsExpansion)

@@ -16,6 +16,8 @@
 
 package com.android.systemui.qs.panels.ui.viewmodel
 
+import com.android.systemui.lifecycle.ExclusiveActivatable
+
 import android.content.Context
 import androidx.compose.ui.util.fastMap
 import androidx.recyclerview.widget.DiffUtil
@@ -53,6 +55,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -66,14 +69,16 @@ constructor(
     private val minTilesInteractor: MinimumTilesInteractor,
     private val uiEventLogger: UiEventLogger,
     @ShadeDisplayAware private val configurationInteractor: ConfigurationInteractor,
-    @ShadeDisplayAware private val context: Context,
+    @ShadeDisplayAware internal val context: Context,
     @Named("Default") private val defaultGridLayout: GridLayout,
     @Application private val applicationScope: CoroutineScope,
     @Background private val bgDispatcher: CoroutineDispatcher,
     gridLayoutTypeInteractor: GridLayoutTypeInteractor,
     gridLayoutMap: Map<GridLayoutType, @JvmSuppressWildcards GridLayout>,
-) {
+) : ExclusiveActivatable() {
     private val _isEditing = MutableStateFlow(false)
+    
+    private val _explicitTiles = MutableStateFlow<Set<TileSpec>?>(null)
 
     /**
      * Whether we should be editing right now. Use [startEditing] and [stopEditing] to change this.
@@ -88,35 +93,21 @@ constructor(
     /**
      * Flow of view models for each tile that should be visible in edit mode (or empty flow when not
      * editing).
-     *
-     * Guarantees of the data:
-     * * The data for the tiles is fetched once whenever [isEditing] goes from `false` to `true`.
-     *   This prevents icons/labels changing while in edit mode.
-     * * It tracks the current tiles as they are added/removed/moved by the user.
-     * * The tiles that are current will be in the same relative order as the user sees them in
-     *   Quick Settings.
-     * * The tiles that are not current will preserve their relative order even when the current
-     *   tiles change.
-     * * Tiles that are not available will be filtered out. None of them can be current (as they
-     *   cannot be created), and they won't be able to be added.
      */
     val tiles: Flow<List<EditTileViewModel>> =
         isEditing.flatMapLatest { isEditing ->
             if (isEditing) {
                 val editTilesData = editTilesListInteractor.getTilesToEdit()
-                // Query only the non current platform tiles, as any current tile is clearly
-                // available
                 val unavailable =
                     tilesAvailabilityInteractor.getUnavailableTiles(
                         editTilesData.stockTiles
                             .map { it.tileSpec }
                             .minus(currentTilesInteractor.currentTilesSpecs.toSet())
                     )
-                currentTilesInteractor.currentTiles
-                    .map { tiles ->
-                        val currentSpecs = tiles.map { it.spec }
+                combine(currentTilesInteractor.currentTiles, _explicitTiles) { currentTilesList, explicitSpecs ->
+                        val currentSpecs = explicitSpecs ?: currentTilesList.map { it.spec }.toSet()
                         val dualTargetSpecs =
-                            tiles
+                            currentTilesList
                                 .filter { it.tile.state.handlesSecondaryClick }
                                 .map { it.spec }
                                 .toSet()
@@ -131,7 +122,7 @@ constructor(
                             .map {
                                 val current = it.tileSpec in currentSpecs
                                 val isDualTarget = current && it.tileSpec in dualTargetSpecs
-                                val availableActions = buildSet {
+                                val availableEditActions = buildSet {
                                     if (current) {
                                         add(AvailableEditActions.MOVE)
                                         if (canRemoveTiles) {
@@ -149,7 +140,7 @@ constructor(
                                     it.appIcon,
                                     current,
                                     isDualTarget,
-                                    availableActions,
+                                    availableEditActions,
                                     it.category,
                                 )
                             }
@@ -163,6 +154,49 @@ constructor(
                 emptyFlow()
             }
         }
+
+    /**
+     * Always-on flow of all tiles with live [EditTileViewModel.isCurrent] state, intended
+     * for the tile picker UI.
+     */
+    val tilesForPicker: Flow<List<EditTileViewModel>> =
+        kotlinx.coroutines.flow.flow { emit(editTilesListInteractor.getTilesToEdit()) }
+            .flatMapLatest { editTilesData ->
+                val allTiles = editTilesData.stockTiles + editTilesData.customTiles
+                val unavailable =
+                    tilesAvailabilityInteractor.getUnavailableTiles(
+                        editTilesData.stockTiles
+                            .map { it.tileSpec }
+                            .minus(currentTilesInteractor.currentTilesSpecs.toSet())
+                    )
+
+                combine(currentTilesInteractor.currentTiles, _explicitTiles) { currentTilesList, explicitSpecs ->
+                        val currentSpecs = explicitSpecs ?: currentTilesList.map { it.spec }.toSet()
+                        allTiles
+                            .filterNot { it.tileSpec in unavailable }
+                            .map {
+                                val current = it.tileSpec in currentSpecs
+                                UnloadedEditTileViewModel(
+                                    it.tileSpec,
+                                    it.icon,
+                                    it.label,
+                                    it.appName,
+                                    it.appIcon,
+                                    isCurrent = current,
+                                    isDualTarget = false,
+                                    availableEditActions = if (current) {
+                                        setOf(AvailableEditActions.MOVE, AvailableEditActions.REMOVE)
+                                    } else {
+                                        setOf(AvailableEditActions.ADD)
+                                    },
+                                    it.category,
+                                )
+                            }
+                    }
+                    .combine(configurationInteractor.onAnyConfigurationChange.emitOnStart()) {
+                        tiles, _ -> tiles.fastMap { it.load(context) }
+                    }
+            }
 
     /** @see isEditing */
     fun startEditing() {
@@ -180,21 +214,22 @@ constructor(
         _isEditing.value = false
     }
 
+    override suspend fun onActivated(): Nothing {
+        awaitCancellation()
+    }
+
     /**
-     * Immediately adds [tileSpec] to the current tiles at [position]. If the [tileSpec] was already
-     * present, it will be moved to the new position.
+     * Immediately adds [tileSpec] to the current tiles at [position].
      */
     fun addTile(tileSpec: TileSpec, position: Int = POSITION_AT_END) {
-        val specs = currentTilesInteractor.currentTilesSpecs.toMutableList()
+        val specs = (_explicitTiles.value?.toMutableList() ?: currentTilesInteractor.currentTilesSpecs.toMutableList())
         val currentPosition = specs.indexOf(tileSpec)
         val moved = currentPosition != -1
 
         if (currentPosition != -1) {
-            // No operation needed if the element is already in the list at the right position
             if (currentPosition == position) {
                 return
             }
-            // Removing tile if it's present at a different position to insert it at the new index.
             specs.removeAt(currentPosition)
         }
 
@@ -210,8 +245,7 @@ constructor(
             if (moved && position == POSITION_AT_END) specs.size - 1 else position,
         )
 
-        // Setting the new tiles as one operation to avoid UI jank with tiles disappearing and
-        // reappearing
+        _explicitTiles.value = specs.toSet()
         currentTilesInteractor.setTiles(specs)
     }
 
@@ -222,10 +256,13 @@ constructor(
             /* uid= */ 0,
             /* packageName= */ tileSpec.metricSpec,
         )
+        _explicitTiles.value = _explicitTiles.value?.minus(tileSpec)
         currentTilesInteractor.removeTiles(listOf(tileSpec))
     }
 
     fun setTiles(tileSpecs: List<TileSpec>) {
+        _explicitTiles.value = tileSpecs.toSet()
+        
         val currentTiles = currentTilesInteractor.currentTilesSpecs
         currentTilesInteractor.setTiles(tileSpecs)
         applicationScope.launch(bgDispatcher) {

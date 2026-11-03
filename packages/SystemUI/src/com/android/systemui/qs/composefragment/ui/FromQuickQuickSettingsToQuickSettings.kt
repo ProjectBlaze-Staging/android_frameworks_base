@@ -16,9 +16,26 @@
 
 package com.android.systemui.qs.composefragment.ui
 
+import androidx.compose.animation.core.tween
+import com.android.compose.animation.scene.ContentKey
+import com.android.compose.animation.scene.ElementKey
+import com.android.compose.animation.scene.ElementMatcher
 import com.android.compose.animation.scene.TransitionBuilder
+import com.android.systemui.qs.composefragment.MiniPlayerElementKey
 import com.android.systemui.qs.composefragment.SceneKeys
 import com.android.systemui.qs.shared.ui.QuickSettings.Elements
+
+private val QqsMiniPlayerMatcher = object : ElementMatcher {
+    override fun matches(key: ElementKey, content: ContentKey): Boolean {
+        return key == MiniPlayerElementKey.MiniPlayer && content == SceneKeys.QuickQuickSettings
+    }
+}
+
+private val QsMiniPlayerMatcher = object : ElementMatcher {
+    override fun matches(key: ElementKey, content: ContentKey): Boolean {
+        return key == MiniPlayerElementKey.MiniPlayer && content == SceneKeys.QuickSettings
+    }
+}
 
 fun TransitionBuilder.quickQuickSettingsToQuickSettings(
     animateTilesExpansion: () -> Boolean = { true }
@@ -31,6 +48,8 @@ fun TransitionBuilder.quickQuickSettingsToQuickSettings(
     anchoredTranslate(Elements.QuickSettingsContent, Elements.GridAnchor)
 
     sharedElement(Elements.TileElementMatcher, enabled = animateTilesExpansion())
+    sharedElement(Elements.BrightnessSlider)
+    sharedElement(MiniPlayerElementKey.MiniPlayer)
 
     // This will animate between 0f (QQS) and 0.5, fading in the QQS tiles when coming back
     // from non first page QS. The QS content ends fading out at 0.43f, so there's a brief
@@ -38,4 +57,26 @@ fun TransitionBuilder.quickQuickSettingsToQuickSettings(
     // overlap.
     fractionRange(end = 0.5f) { fade(SceneKeys.QqsTileElementMatcher) }
     anchoredTranslate(SceneKeys.QqsTileElementMatcher, Elements.GridAnchor)
+}
+
+fun TransitionBuilder.quickQuickSettingsToQuickSettingsOneUI() {
+    spec = tween(durationMillis = 350)
+
+    sharedElement(MiniPlayerElementKey.MiniPlayer, enabled = false)
+
+    fractionRange(end = 0.3f) {
+        fade(SceneKeys.QuickQuickSettingsContent)
+        fade(SceneKeys.QqsBrightnessSlider)
+        fade(QqsMiniPlayerMatcher)
+    }
+
+    fractionRange(start = 0.6f) {
+        fade(Elements.QuickSettingsContent)
+        fade(SceneKeys.QsBrightnessSlider)
+        fade(QsMiniPlayerMatcher)
+    }
+
+    fractionRange(start = 0.75f) {
+        fade(Elements.FooterActions)
+    }
 }

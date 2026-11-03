@@ -37,12 +37,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Arrangement.spacedBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.State
@@ -51,13 +58,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -67,6 +77,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -79,7 +90,9 @@ import com.android.compose.animation.bounceable
 import com.android.compose.animation.rememberExpandableController
 import com.android.compose.animation.scene.ContentScope
 import com.android.compose.modifiers.thenIf
+import com.android.compose.modifiers.width
 import com.android.compose.theme.LocalAndroidColorScheme
+import com.android.internal.graphics.ColorUtils
 import com.android.mechanics.compose.modifier.verticalFadeContentReveal
 import com.android.mechanics.compose.modifier.verticalTactileSurfaceReveal
 import com.android.mechanics.effects.VerticalTactileSurfaceRevealEffect
@@ -92,14 +105,14 @@ import com.android.systemui.haptics.msdl.qs.TileHapticsViewModel
 import com.android.systemui.lifecycle.rememberViewModel
 import com.android.systemui.qs.flags.QsDetailedView
 import com.android.systemui.qs.panels.ui.compose.BounceableInfo
-import com.android.systemui.qs.panels.ui.compose.Tooltip
-import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.ActiveIconCornerRadius
-import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.ActiveTileCornerRadius
-import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.InactiveIconCornerRadius
-import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.InactiveTileCornerRadius
-import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.TileHeight
-import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.longPressLabelMoreDetails
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.ActiveCornerRadius
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.InactiveCornerRadius
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.tileHeight
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.TileArrangementPadding
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.TilePaddingLarge
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.TileStartPadding
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.longPressLabelSettings
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.longPressLabelMoreDetails
 import com.android.systemui.qs.panels.ui.viewmodel.AccessibilityUiState
 import com.android.systemui.qs.panels.ui.viewmodel.DetailsViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.IconProvider
@@ -113,8 +126,28 @@ import com.android.systemui.qs.ui.composable.QuickSettingsShade
 import com.android.systemui.qs.ui.compose.borderOnFocus
 import com.android.systemui.res.R
 import kotlinx.coroutines.CoroutineScope
-import platform.test.motion.compose.values.MotionTestValueKey
-import platform.test.motion.compose.values.motionTestValues
+
+private const val TEST_TAG_SMALL = "qs_tile_small"
+private const val TEST_TAG_LARGE = "qs_tile_large"
+
+@Composable
+fun TileLazyGrid(
+    columns: GridCells,
+    modifier: Modifier = Modifier,
+    state: LazyGridState = rememberLazyGridState(),
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    content: LazyGridScope.() -> Unit,
+) {
+    LazyVerticalGrid(
+        state = state,
+        columns = columns,
+        verticalArrangement = spacedBy(CommonTileDefaults.TileArrangementPadding),
+        horizontalArrangement = spacedBy(CommonTileDefaults.TileArrangementPadding),
+        contentPadding = contentPadding,
+        modifier = modifier,
+        content = content,
+    )
+}
 
 private val TileViewModel.traceName
     get() = spec.toString().takeLast(Trace.MAX_SECTION_NAME_LEN)
@@ -126,28 +159,33 @@ private val TileViewModel.traceName
  *
  * @param tile The [TileViewModel] containing the data and logic for the tile.
  * @param iconOnly A boolean indicating whether to display only the icon of the tile or the full
- *   tile content (false for large tiles).
+ * tile content (false for large tiles).
  * @param squishiness The float value representing the current squishiness factor of the tile, used
- *   for animations.
+ * for animations.
  * @param coroutineScope The [CoroutineScope] to launch coroutines for animations.
- * @param tileHapticsViewModelFactory A factory for creating a [TileHapticsViewModel] instance, used
- *   for haptic feedback.
+ * @param tileHapticsViewModelFactoryProvider A provider for creating a [TileHapticsViewModel]
+ * instance, used for haptic feedback.
+ * @param interactionSource An optional [MutableInteractionSource] to track user interactions with
+ * the tile, used by the parent composable to animate a bounce effect. Tiles may or may not use
+ * this interaction source to control whether they should bounce or not.
  * @param modifier An optional [Modifier] to be applied to the root composable of the tile.
  * @param isVisible Whether the tile is currently visible. Defaults to true.
  * @param requestToggleTextFeedback A lambda function that is invoked when a toggleable icon only
- *   tile is clicked, used to request the feedback text.
+ * tile is clicked, used to request the feedback text.
  * @param detailsViewModel An optional [DetailsViewModel] used to handle navigation to a detailed
- *   view when a tile is clicked, if applicable.
+ * view when a tile is clicked, if applicable.
  * @param enableRevealEffect If `true`, the tiles will animate using the reveal animation.
  */
 @Composable
 fun ContentScope.Tile(
     tile: TileViewModel,
     iconOnly: Boolean,
+    spanRows: Int = 1,
     squishiness: () -> Float,
     coroutineScope: CoroutineScope,
-    bounceableInfo: BounceableInfo,
+    bounceableInfo: BounceableInfo?,
     tileHapticsViewModelFactory: TileHapticsViewModel.Factory,
+    interactionSource: MutableInteractionSource? = null,
     modifier: Modifier = Modifier,
     isVisible: () -> Boolean = { true },
     requestToggleTextFeedback: (TileSpec) -> Unit = {},
@@ -158,11 +196,6 @@ fun ContentScope.Tile(
         val currentBounceableInfo by rememberUpdatedState(bounceableInfo)
         val resources = resources()
 
-        /*
-         * Use produce state because [QSTile.State] doesn't have well defined equals (due to
-         * inheritance). This way, even if tile.state changes, uiState may not change and lead to
-         * recomposition.
-         */
         val uiState by
             produceState(tile.currentState.toUiState(resources), tile, resources) {
                 tile.state.collect { value = it.toUiState(resources) }
@@ -180,11 +213,20 @@ fun ContentScope.Tile(
                 tileHapticsViewModelFactory.create(tile)
             }
 
-        // TODO(b/361789146): Draw the shapes instead of clipping
-        val tileShape by TileDefaults.animateTileShapeAsState(uiState)
+        val density = LocalDensity.current
+        val tileHeightDp = tileHeight()
+        val height = remember(spanRows, density, tileHeightDp, iconOnly) {
+            if (iconOnly) {
+                tileHeightDp
+            } else {
+                with(density) {
+                    (tileHeightDp.toPx() * spanRows + TileArrangementPadding.toPx() * (spanRows - 1)).toDp()
+                }
+            }
+        }
+        
+        val tileShape by TileDefaults.animateTileShapeAsState(state = uiState.visualState, iconOnly = iconOnly)
         val animatedColor by animateColorAsState(colors.background, label = "QSTileBackgroundColor")
-        val isDualTarget = uiState.handlesToggleClick
-        val interactionSource = remember { MutableInteractionSource() }
 
         val surfaceRevealModifier: Modifier
         val contentRevealModifier: Modifier
@@ -194,7 +236,7 @@ fun ContentScope.Tile(
 
             val animatedCornerRadius by animateDpAsState(TileDefaults.tileRadius(uiState))
 
-            val inactiveCornerRadius = InactiveIconCornerRadius
+            val inactiveCornerRadius = TileDefaults.InactiveIconCornerRadius
             surfaceRevealModifier =
                 Modifier.verticalTactileSurfaceReveal(
                     deltaY = marginBottom,
@@ -215,144 +257,119 @@ fun ContentScope.Tile(
             contentRevealModifier = Modifier
         }
 
-        val expandable =
-            if (dynamicTargetResolutionEnabled()) tile.expandable
-            else remember { Expandable(mutableSetOf()) }
-        Tooltip(
-            text = uiState.label,
-            modifier = modifier,
-            enabled = Flags.enableQsTileTooltips(),
-        ) { modifier ->
-            TileExpandable(
-                expandable = expandable,
-                color = { animatedColor },
-                shape = tileShape,
-                squishiness = squishiness,
-                hapticsViewModel = hapticsViewModel,
-                modifier =
-                    modifier
-                        .then(surfaceRevealModifier)
-                        .blazeGlassTileBorder(tileShape)
-                        .borderOnFocus(
-                            color = MaterialTheme.colorScheme.secondary,
-                            tileShape.topEnd,
-                        )
-                        .sysuiResTag("tile_expandable")
-                        .fillMaxWidth()
-                        .bounceable(
-                            currentBounceableInfo.bounceable,
-                            currentBounceableInfo.previousTile,
-                            currentBounceableInfo.nextTile,
+        TileExpandable(
+            color = { animatedColor },
+            shape = tileShape,
+            squishiness = if (iconOnly) { { 1f } } else squishiness,
+            hapticsViewModel = hapticsViewModel,
+            modifier =
+                modifier
+                    .then(surfaceRevealModifier)
+                    .blazeGlassTileBorder(tileShape)
+                    .borderOnFocus(color = MaterialTheme.colorScheme.secondary, tileShape.topEnd)
+                    .then(
+                        if (iconOnly)
+                            Modifier.width { tileHeightDp.roundToPx() }
+                        else
+                            Modifier.fillMaxWidth(0.9f)
+                    )
+                    .thenIf(currentBounceableInfo != null) {
+                        Modifier.bounceable(
+                            bounceable = currentBounceableInfo!!.bounceable,
+                            previousBounceable = currentBounceableInfo!!.previousTile,
+                            nextBounceable = currentBounceableInfo!!.nextTile,
                             orientation = Orientation.Horizontal,
-                            bounceEnd = currentBounceableInfo.bounceEnd,
-                            interactionSource = interactionSource,
-                        ),
-            ) { expandable ->
-                // Use main click on long press for small, available dual target tiles.
-                // Open settings otherwise.
-                val useLongClickToSettings = !(iconOnly && isDualTarget && isClickable)
-                val longClick: (() -> Unit)? =
-                    {
-                            hapticsViewModel.setTileInteractionState(
-                                TileHapticsViewModel.TileInteractionState.LONG_CLICKED
-                            )
+                            bounceEnd = currentBounceableInfo!!.bounceEnd,
+                        )
+                    },
+        ) { expandable ->
+            val useLongClickToSettings = !(iconOnly && uiState.handlesToggleClick && isClickable)
+            val longClick: (() -> Unit)? =
+                {
+                        hapticsViewModel?.setTileInteractionState(
+                            TileHapticsViewModel.TileInteractionState.LONG_CLICKED
+                        )
 
-                            if (useLongClickToSettings) {
-                                tile.settingsClick(expandable)
-                            } else {
-                                val hasDetails =
-                                    QsDetailedView.isEnabled &&
-                                        detailsViewModel?.onTileClicked(tile.spec) == true
-                                if (!hasDetails) {
-                                    tile.mainClick(expandable)
-                                }
-                            }
+                        if (useLongClickToSettings) {
+                            tile.settingsClick(expandable)
+                        } else {
+                            tile.mainClick(expandable)
                         }
-                        .takeIf { !useLongClickToSettings || uiState.handlesSettingsClick }
+                    }
+                    .takeIf { !useLongClickToSettings }
 
-                // Bounce the tile's container if it is toggleable and is not a large
-                // dual target tile. These don't toggle on main click.
-                val bounceContainer = uiState.isToggleable && (iconOnly || !isDualTarget)
-                TileContainer(
-                    interactionSource = interactionSource.takeIf { bounceContainer },
-                    onClick = onClick@{
-                            if (!isClickable) return@onClick
+            val bounceContainer = uiState.isToggleable && (iconOnly || !uiState.handlesToggleClick)
+            TileContainer(
+                interactionSource = interactionSource.takeIf { bounceContainer },
+                height = height,
+                onClick = onClick@{
+                        if (!isClickable) return@onClick
 
-                            if (iconOnly && isDualTarget) {
-                                tile.toggleClick()
-                            } else {
-                                val hasDetails =
-                                    QsDetailedView.isEnabled &&
-                                        detailsViewModel?.onTileClicked(tile.spec) == true
-                                if (hasDetails) return@onClick
+                        val hasDetails =
+                            QsDetailedView.isEnabled &&
+                                detailsViewModel?.onTileClicked(tile.spec) == true
+                        if (hasDetails) return@onClick
 
-                                // For those tile's who doesn't have a detailed view, process with
-                                // their `onClick` behavior.
+                        if (iconOnly && uiState.handlesToggleClick) {
+                            tile.toggleClick()
+                        } else {
+                            tile.mainClick(expandable)
+                        }
+
+                        hapticsViewModel?.setTileInteractionState(
+                            TileHapticsViewModel.TileInteractionState.CLICKED
+                        )
+                        coroutineScope.launch {
+                            val detailsVisible =
+                                QsDetailedView.isEnabled &&
+                                    detailsViewModel?.onTileClicked(tile.spec) == true
+                            if (!detailsVisible && !bounceContainer) {
                                 tile.mainClick(expandable)
                             }
-
-                            // Side effects of the click
-                            hapticsViewModel.setTileInteractionState(
+                        }
+                        if (uiState.isToggleable && iconOnly) {
+                            requestToggleTextFeedback(tile.spec)
+                        }
+                    },
+                onLongClick = longClick,
+                accessibilityUiState = uiState.accessibilityUiState,
+                iconOnly = iconOnly,
+                isDualTarget = uiState.handlesToggleClick,
+                modifier = contentRevealModifier,
+            ) {
+                val iconProvider: Context.() -> Icon = { getTileIcon(icon = icon) }
+                if (iconOnly) {
+                    SmallTileContent(
+                        iconProvider = iconProvider,
+                        color = colors.icon,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                } else {
+                    val iconShape by TileDefaults.animateIconShapeAsState(uiState.visualState)
+                    val secondaryClick: (() -> Unit)? =
+                        {
+                            hapticsViewModel?.setTileInteractionState(
                                 TileHapticsViewModel.TileInteractionState.CLICKED
                             )
-
-                            coroutineScope.launch {
-                                // Bounce the content of the tile if we're not animating the
-                                // container.
-                                if (!bounceContainer) {
-                                    currentBounceableInfo.bounceable.animateContentBounce(iconOnly)
-                                }
-                            }
-                            if (uiState.isToggleable && iconOnly) {
-                                // And show footer text feedback for icons
-                                requestToggleTextFeedback(tile.spec)
-                            }
-                        },
-                    onLongClick = longClick,
-                    accessibilityUiState = uiState.accessibilityUiState,
-                    iconOnly = iconOnly,
-                    isDualTarget = isDualTarget,
-                    modifier = contentRevealModifier,
-                ) {
-                    val iconProvider: Context.() -> Icon = { getTileIcon(icon = icon) }
-                    if (iconOnly) {
-                        SmallTileContent(
-                            iconProvider = iconProvider,
-                            color = colors.icon,
-                            modifier =
-                                Modifier.align(Alignment.Center).bounceScale {
-                                    currentBounceableInfo.bounceable.iconBounceScale
-                                },
-                        )
-                    } else {
-                        val iconShape by TileDefaults.animateIconShapeAsState(uiState)
-                        val secondaryClick: (() -> Unit)? =
-                            {
-                                    hapticsViewModel.setTileInteractionState(
-                                        TileHapticsViewModel.TileInteractionState.CLICKED
-                                    )
-                                    tile.toggleClick()
-                                }
-                                .takeIf { isDualTarget }
-                        LargeTileContent(
-                            label = uiState.label,
-                            secondaryLabel = uiState.secondaryLabel,
-                            iconProvider = iconProvider,
-                            sideDrawable = uiState.sideDrawable,
-                            colors = colors,
-                            iconShape = iconShape,
-                            toggleClick = secondaryClick,
-                            onLongClick = longClick,
-                            accessibilityUiState = uiState.accessibilityUiState,
-                            squishiness = squishiness,
-                            isVisible = isVisible,
-                            textScale = { currentBounceableInfo.bounceable.textBounceScale },
-                            modifier =
-                                Modifier.largeTilePadding(
-                                    isDualTarget = uiState.handlesSettingsClick
-                                ),
-                        )
-                    }
+                            tile.toggleClick()
+                        }.takeIf { uiState.handlesToggleClick }
+                        
+                    LargeTileContent(
+                        label = uiState.label,
+                        secondaryLabel = uiState.secondaryLabel,
+                        iconProvider = iconProvider,
+                        sideDrawable = uiState.sideDrawable,
+                        colors = colors,
+                        iconShape = iconShape,
+                        toggleClick = secondaryClick,
+                        onLongClick = longClick,
+                        accessibilityUiState = uiState.accessibilityUiState,
+                        squishiness = squishiness,
+                        isVisible = isVisible,
+                        textScale = { 1f },
+                        modifier =
+                            Modifier.largeTilePadding(isDualTarget = uiState.handlesToggleClick),
+                    )
                 }
             }
         }
@@ -361,7 +378,6 @@ fun ContentScope.Tile(
 
 @Composable
 private fun TileExpandable(
-    expandable: Expandable,
     color: () -> Color,
     shape: Shape,
     squishiness: () -> Float,
@@ -370,12 +386,10 @@ private fun TileExpandable(
     content: @Composable (Expandable) -> Unit,
 ) {
     Expandable(
-        expandable = expandable,
         controller = rememberExpandableController(color = color, shape = shape),
         modifier =
             modifier
                 .clip(shape)
-                .motionTestValues { squishiness() exportAs TileMotionTestKeys.Squishness }
                 .verticalSquish(squishiness),
         useModifierBasedImplementation = true,
     ) {
@@ -391,77 +405,26 @@ fun TileContainer(
     iconOnly: Boolean,
     isDualTarget: Boolean,
     interactionSource: MutableInteractionSource?,
+    height: Dp,
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Box(
         modifier =
             modifier
-                .height(TileHeight)
+                .height(height)
                 .fillMaxWidth()
                 .tileCombinedClickable(
                     onClick = onClick ?: {},
                     onLongClick = onLongClick,
                     accessibilityUiState = accessibilityUiState,
+                    interactionSource = interactionSource,
                     iconOnly = iconOnly,
                     isDualTarget = isDualTarget,
-                    interactionSource = interactionSource,
                 )
                 .tileTestTag(iconOnly),
-        content = content,
+        content = content
     )
-}
-
-@Composable
-fun SmallStaticTile(
-    uiState: TileUiState,
-    iconProvider: IconProvider,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit = {},
-) {
-    val colors = TileDefaults.getColorForState(uiState = uiState, iconOnly = true)
-
-    Box(
-        modifier
-            .clip(TileDefaults.animateTileShapeAsState(uiState).value)
-            .background(colors.background)
-            .size(TileHeight)
-            .clickable(onClick = onClick)
-    ) {
-        SmallTileContent(
-            iconProvider = { getTileIcon(icon = iconProvider) },
-            color = colors.icon,
-            modifier = Modifier.align(Alignment.Center),
-        )
-    }
-}
-
-@Composable
-fun LargeStaticTile(
-    uiState: TileUiState,
-    iconProvider: IconProvider,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit = {},
-) {
-    val colors = TileDefaults.getColorForState(uiState = uiState, iconOnly = false)
-
-    Box(
-        modifier
-            .clip(TileDefaults.animateTileShapeAsState(uiState).value)
-            .background(colors.background)
-            .height(TileHeight)
-            .clickable(onClick = onClick)
-            .largeTilePadding()
-    ) {
-        LargeTileContent(
-            label = uiState.label,
-            secondaryLabel = "",
-            iconProvider = { getTileIcon(icon = iconProvider) },
-            sideDrawable = null,
-            colors = colors,
-            squishiness = { 1f },
-        )
-    }
 }
 
 private fun Context.getTileIcon(icon: IconProvider): Icon {
@@ -523,33 +486,43 @@ data class TileColors(
     val icon: Color,
 )
 
-@VisibleForTesting
-object TileMotionTestKeys {
-    val Squishness = MotionTestValueKey<Float>("tile_squishiness")
-}
-
 private object TileDefaults {
-    /** An active tile uses the active color as background */
+    val ActiveIconCornerRadius = ActiveCornerRadius
+    val ActiveTileCornerRadius = ActiveCornerRadius
+    val InactiveIconCornerRadius = InactiveCornerRadius
+    val InactiveTileCornerRadius = InactiveCornerRadius
+
+    /** Half-alpha shade tile color, derived from the current context's themed color. */
+    val shadeTileColor: Color
+        @Composable
+        @ReadOnlyComposable
+        get() {
+            val context = LocalContext.current
+            val tileColor = context.getColor(R.color.shade_tile_color)
+            val tileColorAlpha = ColorUtils.setAlphaComponent(tileColor, (0.5f * 255).toInt())
+            return Color(tileColorAlpha)
+        }
+
+    /** An active icon tile uses the active color as background */
     @Composable
     @ReadOnlyComposable
     fun activeTileColors(): TileColors =
         TileColors(
             background = MaterialTheme.colorScheme.primary,
-            iconBackground = MaterialTheme.colorScheme.primary,
+            iconBackground = Color.Transparent,
             label = MaterialTheme.colorScheme.onPrimary,
             secondaryLabel = MaterialTheme.colorScheme.onPrimary,
             icon = MaterialTheme.colorScheme.onPrimary,
         )
 
-    /** An active tile with dual target only show the active color on the icon */
     @Composable
     @ReadOnlyComposable
     fun activeDualTargetTileColors(): TileColors =
         TileColors(
-            background = LocalAndroidColorScheme.current.surfaceEffect1,
-            iconBackground = MaterialTheme.colorScheme.primary,
-            label = MaterialTheme.colorScheme.onSurface,
-            secondaryLabel = MaterialTheme.colorScheme.onSurface,
+            background = MaterialTheme.colorScheme.primary,
+            iconBackground = Color.Transparent,
+            label = MaterialTheme.colorScheme.onPrimary,
+            secondaryLabel = MaterialTheme.colorScheme.onPrimary,
             icon = MaterialTheme.colorScheme.onPrimary,
         )
 
@@ -557,8 +530,8 @@ private object TileDefaults {
     @ReadOnlyComposable
     fun inactiveDualTargetTileColors(): TileColors =
         TileColors(
-            background = LocalAndroidColorScheme.current.surfaceEffect1,
-            iconBackground = LocalAndroidColorScheme.current.surfaceEffect2,
+            background = shadeTileColor,
+            iconBackground = Color.Transparent,
             label = MaterialTheme.colorScheme.onSurface,
             secondaryLabel = MaterialTheme.colorScheme.onSurface,
             icon = MaterialTheme.colorScheme.onSurface,
@@ -568,24 +541,22 @@ private object TileDefaults {
     @ReadOnlyComposable
     fun inactiveTileColors(): TileColors =
         TileColors(
-            background = LocalAndroidColorScheme.current.surfaceEffect1,
+            background = shadeTileColor,
             iconBackground = Color.Transparent,
             label = MaterialTheme.colorScheme.onSurface,
             secondaryLabel = MaterialTheme.colorScheme.onSurface,
-            icon = MaterialTheme.colorScheme.onSurface,
+            icon = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
     @Composable
     @ReadOnlyComposable
     fun unavailableTileColors(): TileColors {
-        val surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = .18f)
-        val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .38f)
         return TileColors(
-            background = surfaceColor,
-            iconBackground = surfaceColor,
-            label = onSurfaceVariantColor,
-            secondaryLabel = onSurfaceVariantColor,
-            icon = onSurfaceVariantColor,
+            background = shadeTileColor,
+            iconBackground = Color.Transparent,
+            label = MaterialTheme.colorScheme.onSurface,
+            secondaryLabel = MaterialTheme.colorScheme.onSurface,
+            icon = MaterialTheme.colorScheme.onSurface,
         )
     }
 
@@ -601,7 +572,6 @@ private object TileDefaults {
                     activeTileColors()
                 }
             }
-
             STATE_INACTIVE -> {
                 if (uiState.handlesToggleClick && !iconOnly) {
                     inactiveDualTargetTileColors()
@@ -609,7 +579,6 @@ private object TileDefaults {
                     inactiveTileColors()
                 }
             }
-
             else -> unavailableTileColors()
         }
         return when (style) {
@@ -633,7 +602,7 @@ private object TileDefaults {
             else -> InactiveIconCornerRadius
         }
     }
-
+    
     @Composable
     fun tileRadius(uiState: TileUiState): Dp {
         return when (uiState.visualState) {
@@ -644,16 +613,30 @@ private object TileDefaults {
     }
 
     @Composable
-    fun animateIconShapeAsState(uiState: TileUiState): State<RoundedCornerShape> {
+    fun animateTileShapeAsState(state: Int, iconOnly: Boolean = false): State<RoundedCornerShape> {
+        val targetRadius = if (iconOnly) {
+            InactiveTileCornerRadius
+        } else {
+            if (state == STATE_ACTIVE) ActiveTileCornerRadius else InactiveTileCornerRadius
+        }
+        
         return animateShapeAsState(
-            targetValue = iconRadius(uiState),
-            label = "QSTileIconCornerRadius",
+            targetValue = targetRadius,
+            label = "QSTileBackgroundCornerRadius",
         )
     }
 
     @Composable
     fun animateTileShapeAsState(uiState: TileUiState): State<RoundedCornerShape> {
         return animateShapeAsState(targetValue = tileRadius(uiState), label = "QSTileCornerRadius")
+    }
+
+    @Composable
+    fun animateIconShapeAsState(state: Int): State<RoundedCornerShape> {
+        return animateShapeAsState(
+            targetValue = if (state == STATE_ACTIVE) ActiveIconCornerRadius else InactiveIconCornerRadius,
+            label = "QSTileIconCornerRadius"
+        )
     }
 
     @Composable

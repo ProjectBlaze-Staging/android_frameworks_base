@@ -33,6 +33,7 @@ import com.android.systemui.qs.pipeline.shared.InternetTileMigration.migrateInte
 import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.qs.pipeline.shared.TilesUpgradePath
 import com.android.systemui.settings.UserFileManager
+import com.android.systemui.qs.panels.shared.model.TileGridConfig
 import com.android.systemui.user.data.repository.UserRepository
 import com.android.systemui.util.kotlin.SharedPreferencesExt.observe
 import com.android.systemui.util.kotlin.emitOnStart
@@ -45,6 +46,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import org.json.JSONArray
 
 /** Repository for QS user preferences. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -70,6 +72,24 @@ constructor(
             )
             .onEach { logger.i("Restored state for QS preferences.") }
             .emitOnStart()
+
+    /** Grid configuration for tiles (size and position) for the current user. */
+    val tileGridConfigs: Flow<List<TileGridConfig>> =
+        combine(backupRestorationEvents, userRepository.selectedUserInfo, ::Pair)
+            .flatMapLatest { (_, userInfo) ->
+                val prefs = getSharedPrefs(userInfo.id)
+                prefs.observe().emitOnStart().map { prefs.getTileGridConfigs() }
+            }
+            .flowOn(backgroundDispatcher)
+
+    /** Grid configuration for tiles in landscape orientation. */
+    val tileGridConfigsLandscape: Flow<List<TileGridConfig>> =
+        combine(backupRestorationEvents, userRepository.selectedUserInfo, ::Pair)
+            .flatMapLatest { (_, userInfo) ->
+                val prefs = getSharedPrefs(userInfo.id)
+                prefs.observe().emitOnStart().map { prefs.getTileGridConfigs(landscape = true) }
+            }
+            .flowOn(backgroundDispatcher)
 
     /** Set of [TileSpec] to display as large tiles for the current user. */
     val largeTilesSpecs: Flow<Set<TileSpec>> =
@@ -98,6 +118,29 @@ constructor(
                 }
             }
             .flowOn(backgroundDispatcher)
+
+    /** Writes the tile grid configuration for the current user. */
+    fun writeTileGridConfigs(configs: List<TileGridConfig>, landscape: Boolean = false) {
+        with(getSharedPrefs(userRepository.getSelectedUserInfo().id)) {
+            writeTileGridConfigsInternal(configs, landscape)
+        }
+    }
+
+    /** Writes the size of a specific tile. */
+    fun writeTileSize(spec: TileSpec, spanCols: Int, spanRows: Int, landscape: Boolean = false) {
+        with(getSharedPrefs(userRepository.getSelectedUserInfo().id)) {
+            val configs = getTileGridConfigs(landscape).toMutableList()
+            val index = configs.indexOfFirst { it.spec == spec }
+            
+            if (index != -1) {
+                configs[index] = configs[index].copy(spanCols = spanCols, spanRows = spanRows)
+            } else {
+                configs.add(TileGridConfig(spec, spanCols, spanRows, configs.size))
+            }
+            
+            writeTileGridConfigsInternal(configs, landscape)
+        }
+    }
 
     /** Sets for the current user the set of [TileSpec] to display as large tiles. */
     fun writeLargeTileSpecs(specs: Set<TileSpec>, changeDefault: Boolean = true) {
@@ -140,6 +183,45 @@ constructor(
                 .remove(LARGE_TILES_SPECS_KEY)
                 .remove(LARGE_TILES_DEFAULT_KEY)
                 .apply()
+        }
+    }
+
+    private fun SharedPreferences.writeTileGridConfigsInternal(
+        configs: List<TileGridConfig>,
+        landscape: Boolean
+    ) {
+        val jsonArray = JSONArray()
+        configs.forEachIndexed { index, config ->
+            jsonArray.put(config.copy(position = index).toJson())
+        }
+        
+        val key = if (landscape) TILE_GRID_CONFIGS_LANDSCAPE_KEY else TILE_GRID_CONFIGS_KEY
+        edit().putString(key, jsonArray.toString()).apply()
+    }
+
+    private fun SharedPreferences.getTileGridConfigs(landscape: Boolean = false): List<TileGridConfig> {
+        val key = if (landscape) TILE_GRID_CONFIGS_LANDSCAPE_KEY else TILE_GRID_CONFIGS_KEY
+        val jsonString = getString(key, null) ?: return emptyList()
+        
+        return try {
+            val jsonArray = JSONArray(jsonString)
+            val configs = mutableListOf<TileGridConfig>()
+            
+            for (i in 0 until jsonArray.length()) {
+                val jsonObject = jsonArray.getJSONObject(i)
+                TileGridConfig.fromJson(jsonObject)?.let { configs.add(it) }
+            }
+            
+            configs.sortedBy { it.position }
+        } catch (e: Exception) {
+            logger.e("Failed to parse tile grid configs", e)
+            emptyList()
+        }
+    }
+
+    fun getTileSize(spec: TileSpec, landscape: Boolean = false): Pair<Int, Int>? {
+        with(getSharedPrefs(userRepository.getSelectedUserInfo().id)) {
+            return getTileGridConfigs(landscape).find { it.spec == spec }?.let { it.spanCols to it.spanRows }
         }
     }
 
@@ -213,6 +295,8 @@ constructor(
 
     companion object {
         private const val TAG = "QSPreferencesRepository"
+        private const val TILE_GRID_CONFIGS_KEY = "tile_grid_configs"
+        private const val TILE_GRID_CONFIGS_LANDSCAPE_KEY = "tile_grid_configs_landscape"
         private const val LARGE_TILES_SPECS_KEY = "large_tiles_specs"
         private const val LARGE_TILES_DEFAULT_KEY = "large_tiles_default"
         private const val EDIT_TOOLTIP_SHOWN_KEY = "edit_tooltip_shown"

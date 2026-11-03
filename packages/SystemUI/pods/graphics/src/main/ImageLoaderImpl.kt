@@ -17,6 +17,7 @@
 package com.android.systemui.graphics
 
 import android.annotation.AnyThread
+import android.annotation.DrawableRes
 import android.annotation.Px
 import android.annotation.SuppressLint
 import android.annotation.WorkerThread
@@ -279,6 +280,17 @@ constructor(
             Log.w(TAG, "Failed to load source $source", e)
             return null
         }
+    }
+
+    @AnyThread
+    suspend fun loadDrawableRes(
+        @DrawableRes resId: Int,
+        context: Context = defaultContext,
+    ): Drawable? = withContext(backgroundDispatcher) {
+        val ctx = context ?: defaultContext
+        val drawable = ResourcesCompat.getDrawable(ctx.resources, resId, ctx.theme)
+            ?: null
+        drawable
     }
 
     companion object {

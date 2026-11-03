@@ -16,14 +16,19 @@
 
 package com.android.systemui.qs.external.ui.dialog
 
+import android.content.Context
 import android.content.DialogInterface.BUTTON_NEGATIVE
 import android.content.DialogInterface.BUTTON_POSITIVE
+import android.content.DialogInterface.OnClickListener
 import android.content.DialogInterface.OnMultiChoiceClickListener
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement.spacedBy
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
@@ -31,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -43,14 +49,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.android.compose.PlatformButton
 import com.android.compose.PlatformOutlinedButton
-import com.android.compose.dialog.AlertDialogContent
 import com.android.compose.theme.PlatformTheme
 import com.android.systemui.Flags
+import com.android.systemui.common.shared.model.Icon
+import com.android.compose.dialog.AlertDialogContent
 import com.android.systemui.lifecycle.rememberViewModel
 import com.android.systemui.qs.external.TileData
 import com.android.systemui.qs.external.ui.viewmodel.TileRequestDialogViewModel
-import com.android.systemui.qs.panels.ui.compose.infinitegrid.LargeStaticTile
-import com.android.systemui.qs.panels.ui.compose.infinitegrid.SmallStaticTile
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.TileHeight
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.LargeTileContent
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.TileColors
+import com.android.systemui.qs.tileimpl.QSTileImpl
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.phone.SystemUIDialog
 import com.android.systemui.statusbar.phone.SystemUIDialogFactory
@@ -108,23 +117,17 @@ constructor(
                             textAlign = TextAlign.Start,
                         )
 
-                        if (Flags.qsSizesInTileRequestDialog()) {
-                            TileFormatsRow(
-                                viewModel = viewModel,
-                                selectedLargeFormat = selectedLargeFormat,
-                            )
-                        } else {
-                            LargeStaticTile(
-                                uiState = viewModel.uiState,
-                                iconProvider = viewModel.iconProvider,
-                                modifier =
-                                    Modifier.width(
-                                        dimensionResource(
-                                            id = R.dimen.qs_tile_service_request_tile_width
-                                        )
-                                    ),
-                            )
-                        }
+                        DialogTile(
+                            uiState = viewModel.uiState,
+                            iconProvider = viewModel.iconProvider,
+                            context = dialog.context,
+                            modifier =
+                                Modifier.width(
+                                    dimensionResource(
+                                        id = R.dimen.qs_tile_service_request_tile_width
+                                    )
+                                ),
+                        )
                     }
                 },
                 positiveButton = {
@@ -160,79 +163,50 @@ constructor(
     }
 
     @Composable
-    private fun TileFormatsRow(
-        viewModel: TileRequestDialogViewModel,
-        selectedLargeFormat: MutableState<Boolean>,
+    private fun DialogTile(
+        uiState: com.android.systemui.qs.panels.ui.viewmodel.TileUiState,
+        iconProvider: com.android.systemui.qs.panels.ui.viewmodel.IconProvider,
+        context: Context,
         modifier: Modifier = Modifier,
     ) {
-        Row(horizontalArrangement = spacedBy(24.dp), modifier = modifier) {
-            TileFormatRadioButton(
-                selected = !selectedLargeFormat.value,
-                viewModel = viewModel,
-                formatContentDescription =
-                    stringResource(
-                        R.string.qs_tile_request_dialog_small_format_content_description
-                    ),
-                onClick = { selectedLargeFormat.value = false },
-            ) {
-                SmallStaticTile(
-                    uiState = viewModel.uiState,
-                    iconProvider = viewModel.iconProvider,
-                ) {
-                    selectedLargeFormat.value = false
-                }
-            }
+        val colors = TileColors(
+            background = MaterialTheme.colorScheme.surfaceContainerHigh,
+            iconBackground = MaterialTheme.colorScheme.surfaceContainerHighest,
+            label = MaterialTheme.colorScheme.onSurface,
+            secondaryLabel = MaterialTheme.colorScheme.onSurfaceVariant,
+            icon = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
-            TileFormatRadioButton(
-                selected = selectedLargeFormat.value,
-                viewModel = viewModel,
-                formatContentDescription =
-                    stringResource(
-                        R.string.qs_tile_request_dialog_large_format_content_description
-                    ),
-                onClick = { selectedLargeFormat.value = true },
-            ) {
-                LargeStaticTile(
-                    uiState = viewModel.uiState,
-                    iconProvider = viewModel.iconProvider,
-                    modifier =
-                        Modifier.width(
-                            dimensionResource(id = R.dimen.qs_tile_service_request_tile_width)
-                        ),
-                ) {
-                    selectedLargeFormat.value = true
-                }
-            }
-        }
-    }
-
-    @Composable
-    private fun TileFormatRadioButton(
-        selected: Boolean,
-        viewModel: TileRequestDialogViewModel,
-        formatContentDescription: String,
-        modifier: Modifier = Modifier,
-        onClick: () -> Unit,
-        tile: @Composable () -> Unit,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier =
-                modifier.clearAndSetSemantics {
-                    // Set the semantics on the parent column since the tile and radio button are
-                    // essentially one button and shouldn't be able to be focused on separately
-                    contentDescription = formatContentDescription + ", " + viewModel.uiState.label
-                    this.selected = selected
-                    this.onClick {
-                        onClick()
-                        true
-                    }
-                    role = Role.RadioButton
-                },
+        Box(
+            modifier
+                .clip(RoundedCornerShape(24.dp))
+                .background(colors.background)
+                .height(TileHeight)
         ) {
-            tile()
-
-            RadioButton(selected = selected, onClick = onClick)
+            val iconProviderContext: Context.() -> Icon = { 
+                iconProvider.icon?.let {
+                    if (it is QSTileImpl.ResourceIcon) {
+                        Icon.Resource(it.resId, null)
+                    } else {
+                        Icon.Loaded(it.getDrawable(context), null)
+                    }
+                } ?: Icon.Resource(R.drawable.ic_error_outline, null)
+            }
+            
+            LargeTileContent(
+                label = uiState.label,
+                secondaryLabel = uiState.secondaryLabel,
+                iconProvider = iconProviderContext,
+                sideDrawable = uiState.sideDrawable,
+                colors = colors,
+                iconShape = RoundedCornerShape(16.dp),
+                toggleClick = null,
+                onLongClick = null,
+                accessibilityUiState = uiState.accessibilityUiState,
+                squishiness = { 1f },
+                isVisible = { true },
+                textScale = { 1f },
+            )
         }
     }
 

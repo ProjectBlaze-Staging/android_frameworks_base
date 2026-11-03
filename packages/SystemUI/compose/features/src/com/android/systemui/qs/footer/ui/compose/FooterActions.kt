@@ -16,19 +16,12 @@
 
 package com.android.systemui.qs.footer.ui.compose
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
@@ -38,13 +31,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerSize
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -54,10 +45,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,49 +54,33 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.constrainHeight
-import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.android.compose.animation.Expandable
 import com.android.compose.animation.scene.ContentScope
 import com.android.compose.lifecycle.LaunchedEffectWithLifecycle
-import com.android.compose.modifiers.animatedBackground
 import com.android.compose.theme.LocalAndroidColorScheme
 import com.android.compose.theme.colorAttr
 import com.android.systemui.Flags.notificationShadeBlur
 import com.android.systemui.animation.Expandable
 import com.android.systemui.common.shared.model.Icon
-import com.android.systemui.common.ui.compose.Icon
 import com.android.systemui.common.ui.compose.load
 import com.android.systemui.compose.modifiers.sysuiResTag
-import com.android.systemui.qs.footer.domain.model.FooterTextButtonModel
-import com.android.systemui.qs.footer.ui.compose.FooterActionsDefaults.FOOTER_TEXT_FADE_DURATION_MILLIS
-import com.android.systemui.qs.footer.ui.compose.FooterActionsDefaults.FOOTER_TEXT_MINIMUM_SCALE_Y
-import com.android.systemui.qs.footer.ui.compose.FooterActionsDefaults.FooterButtonHeight
 import com.android.systemui.qs.footer.ui.viewmodel.FooterActionsButtonViewModel
 import com.android.systemui.qs.footer.ui.viewmodel.FooterActionsForegroundServicesButtonViewModel
 import com.android.systemui.qs.footer.ui.viewmodel.FooterActionsSecurityButtonViewModel
 import com.android.systemui.qs.footer.ui.viewmodel.FooterActionsViewModel
-import com.android.systemui.qs.footer.ui.viewmodel.FooterTextButtonViewModel
-import com.android.systemui.qs.panels.ui.viewmodel.TextFeedbackViewModel
 import com.android.systemui.qs.shared.ui.QuickSettings
 import com.android.systemui.qs.ui.composable.QuickSettingsTheme
 import com.android.systemui.qs.ui.compose.borderOnFocus
 import com.android.systemui.res.R
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 @Composable
@@ -146,9 +119,8 @@ fun ContentScope.FooterActionsWithAnimatedVisibility(
 fun FooterActions(viewModel: FooterActionsViewModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
 
-    // Collect alphas as soon as we are composed, even when not visible.
+    // Collect alpha as soon as we are composed, even when not visible.
     val alpha by viewModel.alpha.collectAsStateWithLifecycle()
-    val backgroundAlpha = viewModel.backgroundAlpha.collectAsStateWithLifecycle()
 
     var security by remember { mutableStateOf<FooterActionsSecurityButtonViewModel?>(null) }
     var foregroundServices by remember {
@@ -156,10 +128,6 @@ fun FooterActions(viewModel: FooterActionsViewModel, modifier: Modifier = Modifi
     }
     var userSwitcher by remember { mutableStateOf<FooterActionsButtonViewModel?>(null) }
     var settings by remember { mutableStateOf<FooterActionsButtonViewModel?>(null) }
-
-    var textFeedback by remember {
-        mutableStateOf<TextFeedbackViewModel>(TextFeedbackViewModel.NoFeedback)
-    }
 
     LaunchedEffect(context, viewModel) {
         launch {
@@ -173,80 +141,34 @@ fun FooterActions(viewModel: FooterActionsViewModel, modifier: Modifier = Modifi
         viewModel.security,
         viewModel.foregroundServices,
         viewModel.userSwitcher,
-        viewModel.textFeedback,
         viewModel.settings,
         minActiveState = Lifecycle.State.RESUMED,
     ) {
         launch { viewModel.security.collect { security = it } }
         launch { viewModel.foregroundServices.collect { foregroundServices = it } }
         launch { viewModel.userSwitcher.collect { userSwitcher = it } }
-        launch { viewModel.textFeedback.collect { textFeedback = it } }
         launch { viewModel.settings.collect { settings = it } }
     }
 
-    val backgroundColor =
-        if (!notificationShadeBlur()) colorAttr(R.attr.underSurface) else Color.Transparent
-    val backgroundAlphaValue = if (!notificationShadeBlur()) backgroundAlpha::value else ({ 0f })
     val contentColor = MaterialTheme.colorScheme.onSurface
-    val backgroundTopRadius = dimensionResource(R.dimen.qs_corner_radius)
-    val backgroundModifier =
-        remember(backgroundColor, backgroundAlphaValue, backgroundTopRadius) {
-            Modifier.animatedBackground(
-                { backgroundColor },
-                backgroundAlphaValue,
-                RoundedCornerShape(topStart = backgroundTopRadius, topEnd = backgroundTopRadius),
-            )
-        }
-
-    val horizontalPadding = dimensionResource(R.dimen.qs_content_horizontal_padding)
     Row(
-        modifier
-            .fillMaxWidth()
-            .graphicsLayer { this.alpha = alpha }
-            .then(backgroundModifier)
-            .padding(
-                top = dimensionResource(R.dimen.qs_footer_actions_top_padding),
-                bottom = dimensionResource(R.dimen.qs_footer_actions_bottom_padding),
-                start = horizontalPadding,
-                end = horizontalPadding,
-            )
-            .layout { measurable, constraints ->
-                // All buttons have a 4dp padding to increase their touch size. To be consistent
-                // with the View implementation, we want to left-most and right-most buttons to be
-                // visually aligned with the left and right sides of this row. So we let this
-                // component be 2*4dp wider and then offset it by -4dp to the start.
-                val inset = 4.dp.roundToPx()
-                val additionalWidth = inset * 2
-                val newConstraints =
-                    if (constraints.hasBoundedWidth) {
-                        constraints.copy(maxWidth = constraints.maxWidth + additionalWidth)
-                    } else {
-                        constraints
-                    }
-                val placeable = measurable.measure(newConstraints)
-
-                val width = constraints.constrainWidth(placeable.width - additionalWidth)
-                val height = constraints.constrainHeight(placeable.height)
-                layout(width, height) { placeable.place(-inset, 0) }
-            },
+        modifier.graphicsLayer { this.alpha = alpha },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
             val useModifierBasedExpandable = true
 
-            // The viewModel to show, in order of priority:
-            // 1. Text feedback
-            // 2. Security
-            // 3. Foreground services
-            val textViewModel: FooterTextButtonViewModel? =
-                textFeedback as? TextFeedbackViewModel.LoadedTextFeedback
-                    ?: (security ?: foregroundServices)
-            AnimatedFooterTextButton(textViewModel, useModifierBasedExpandable, Modifier.weight(1f))
-
-            // Only add the foreground services number if text shouldn't be displayed
+            // Foreground services number button (icon + count badge)
             ForegroundServicesNumberButton(
-                { foregroundServices.takeIf { it?.model?.displayText == false } },
+                { foregroundServices },
                 useModifierBasedExpandable,
+            )
+
+            // Security button as icon-only (VPN, device management, etc.)
+            SecurityIconButton(
+                { security },
+                useModifierBasedExpandable,
+                Modifier.sysuiResTag("security_button"),
             )
 
             IconButton(
@@ -269,76 +191,6 @@ fun FooterActions(viewModel: FooterActionsViewModel, modifier: Modifier = Modifi
 }
 
 /**
- * Animated text button for [FooterTextButtonViewModel].
- *
- * This composable animates the entry/exit of the button, as well as cross fade the content when the
- * displayed information changes.
- */
-@Composable
-private fun AnimatedFooterTextButton(
-    textViewModel: FooterTextButtonViewModel?,
-    useModifierBasedExpandable: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val transition = updateTransition(textViewModel?.model)
-    val scaleY by transition.animateFloat { if (it == null) FOOTER_TEXT_MINIMUM_SCALE_Y else 1f }
-    val alpha by transition.animateFloat { if (it == null) 0f else 1f }
-    val onClick: ((Expandable) -> Unit)? =
-        textViewModel?.onClick?.let { onClick ->
-            val context = LocalContext.current
-            { expandable -> onClick(context, expandable) }
-        }
-
-    Box(
-        modifier
-            .height(FooterButtonHeight)
-            .animatedScaledHeight { scaleY }
-            .animatedWidth()
-            .graphicsLayer { this.alpha = alpha }
-    ) {
-        val colors = textButtonColors()
-        CircleExpandable(
-            color = colors.background,
-            contentColor = colors.content,
-            borderStroke = colors.border,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            onClick = onClick,
-            useModifierBasedImplementation = useModifierBasedExpandable,
-        ) {
-            transition.AnimatedContent(
-                transitionSpec = {
-                    // Using delayMillis to animate the fade in after the fade out completes at the
-                    // halfway point
-                    fadeIn(
-                        tween(
-                            durationMillis = FOOTER_TEXT_FADE_DURATION_MILLIS,
-                            delayMillis = FOOTER_TEXT_FADE_DURATION_MILLIS,
-                        )
-                    ) togetherWith
-                        fadeOut(tween(durationMillis = FOOTER_TEXT_FADE_DURATION_MILLIS)) using
-                        null // Using a SizeTransform causes a weird horizontal translation
-                }
-            ) {
-                when (it) {
-                    is FooterTextButtonModel.FooterBasicButtonModel -> {
-                        TextButtonContent(it.icon, it.text, showChevron = onClick != null)
-                    }
-                    is FooterTextButtonModel.FooterForegroundServicesButtonModel -> {
-                        TextButtonContent(
-                            it.icon,
-                            it.text,
-                            showChevron = onClick != null,
-                            showNewDot = it.hasNewChanges,
-                        )
-                    }
-                    null -> {}
-                }
-            }
-        }
-    }
-}
-
-/**
  * The foreground services button in number format.
  *
  * The visibility of this button is animated.
@@ -348,9 +200,10 @@ private fun ForegroundServicesNumberButton(
     model: () -> FooterActionsForegroundServicesButtonViewModel?,
     useModifierBasedExpandable: Boolean,
 ) {
-    val transition = updateTransition(model())
-    val alpha by transition.animateFloat { if (it == null) 0f else 1f }
-    (transition.currentState ?: transition.targetState)?.let {
+    val viewModel = model()
+    val alpha = if (viewModel == null) 0f else 1f
+
+    viewModel?.let {
         val onClick: (Expandable) -> Unit =
             it.onClick.let { onClick ->
                 val context = LocalContext.current
@@ -397,19 +250,49 @@ private fun IconButton(
     }
 }
 
+/** Security button with icon only (VPN, device management, etc.) */
+@Composable
+private fun SecurityIconButton(
+    model: () -> FooterActionsSecurityButtonViewModel?,
+    useModifierBasedExpandable: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val viewModel = model() ?: return
+    val context = LocalContext.current
+    val colors = textButtonColors()
+
+    CircleExpandable(
+        color = colors.background,
+        onClick = { expandable ->
+            viewModel.onClick?.invoke(context, expandable)
+        },
+        modifier = modifier,
+        useModifierBasedImplementation = useModifierBasedExpandable,
+    ) {
+        androidx.compose.material3.Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = colors.content,
+        )
+    }
+}
+
 // TODO(b/394738023): Use com.android.systemui.common.ui.compose.Icon instead
 @Composable
 private fun FooterIcon(icon: Icon, modifier: Modifier = Modifier, tint: Color) {
     val contentDescription = icon.contentDescription?.load()
     when (icon) {
         is Icon.Loaded -> {
-            Icon(icon.drawable.toBitmap().asImageBitmap(), contentDescription, modifier, tint)
+            // Convert only when the drawable changes, not on every recomposition.
+            val bitmap = remember(icon.drawable) { icon.drawable.toBitmap().asImageBitmap() }
+            androidx.compose.material3.Icon(bitmap, contentDescription, modifier, tint = tint)
         }
-        is Icon.Resource -> Icon(painterResource(icon.resId), contentDescription, modifier, tint)
+        is Icon.Resource -> androidx.compose.material3.Icon(painterResource(icon.resId), contentDescription, modifier, tint = tint)
     }
 }
 
-/** A button with a number an an optional dot (to indicate new changes). */
+/** A button with a number and an optional dot (to indicate new changes). */
 @Composable
 private fun NumberButton(
     number: Int,
@@ -434,7 +317,7 @@ private fun NumberButton(
         modifier = modifier,
         useModifierBasedImplementation = useModifierBasedExpandable,
     ) {
-        Box(Modifier.size(FooterButtonHeight)) {
+        Box(Modifier.size(FooterActionsDefaults.FooterButtonHeight)) {
             Box(
                 Modifier.fillMaxSize()
                     .clip(CircleShape)
@@ -472,7 +355,7 @@ private fun CircleExpandable(
     useModifierBasedImplementation: Boolean,
     content: @Composable (Expandable) -> Unit,
 ) {
-    Expandable(
+    com.android.compose.animation.Expandable(
         color = color,
         contentColor = contentColor,
         borderStroke = borderStroke,
@@ -497,129 +380,6 @@ private fun NewChangesDot(modifier: Modifier = Modifier) {
 
     Canvas(modifier.size(12.dp).semantics { this.contentDescription = contentDescription }) {
         drawCircle(color)
-    }
-}
-
-/** A larger button with an icon, some text and an optional dot (to indicate new changes). */
-@Composable
-private fun TextButton(
-    icon: Icon,
-    text: String,
-    showNewDot: Boolean,
-    onClick: ((Expandable) -> Unit)?,
-    useModifierBasedExpandable: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val colors = textButtonColors()
-    CircleExpandable(
-        color = colors.background,
-        contentColor = colors.content,
-        borderStroke = colors.border,
-        modifier = modifier.padding(horizontal = 4.dp),
-        onClick = onClick,
-        useModifierBasedImplementation = useModifierBasedExpandable,
-    ) {
-        Row(
-            Modifier.padding(horizontal = dimensionResource(R.dimen.qs_footer_padding)),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(icon, Modifier.padding(end = 12.dp).size(20.dp), colors.content)
-
-            Text(
-                text,
-                Modifier.weight(1f),
-                style = MaterialTheme.typography.labelLarge,
-                letterSpacing = 0.em,
-                color = colors.content,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            if (showNewDot) {
-                NewChangesDot(Modifier.padding(start = 8.dp))
-            }
-
-            if (onClick != null) {
-                Icon(
-                    painterResource(com.android.internal.R.drawable.ic_chevron_end),
-                    contentDescription = null,
-                    Modifier.padding(start = 8.dp).size(20.dp),
-                    colors.content,
-                )
-            }
-        }
-    }
-}
-
-/** Content to display in the footer text button. */
-@Composable
-private fun TextButtonContent(
-    icon: Icon,
-    text: String,
-    modifier: Modifier = Modifier,
-    showNewDot: Boolean = false,
-    showChevron: Boolean = false,
-) {
-    val contentColor = textButtonColors().content
-    Row(
-        modifier.padding(horizontal = dimensionResource(R.dimen.qs_footer_padding)),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, Modifier.padding(end = 12.dp).size(20.dp), contentColor)
-
-        Text(
-            text,
-            Modifier.weight(1f),
-            style = MaterialTheme.typography.labelLarge,
-            letterSpacing = 0.em,
-            color = contentColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-
-        if (showNewDot) {
-            NewChangesDot(Modifier.padding(start = 8.dp))
-        }
-
-        if (showChevron) {
-            Icon(
-                painterResource(com.android.internal.R.drawable.ic_chevron_end),
-                contentDescription = null,
-                Modifier.padding(start = 8.dp).size(20.dp),
-                contentColor,
-            )
-        }
-    }
-}
-
-/** Animate the width of this composable based on the incoming width constraints. */
-@Composable
-private fun Modifier.animatedWidth(): Modifier {
-    var targetWidth by remember { mutableIntStateOf(0) }
-    var animatable by remember { mutableStateOf<Animatable<Int, AnimationVector1D>?>(null) }
-    val scope = rememberCoroutineScope()
-    return layout { measurable, constraints ->
-        targetWidth = constraints.maxWidth
-        val anim =
-            animatable ?: Animatable(targetWidth, Int.VectorConverter).also { animatable = it }
-        if (anim.targetValue != targetWidth) {
-            scope.launch { anim.animateTo(targetWidth) }
-        }
-        val newConstraints = constraints.copy(minWidth = anim.value, maxWidth = anim.value)
-        val placeable = measurable.measure(newConstraints)
-        layout(constraints.maxWidth, placeable.height) { placeable.placeRelative(0, 0) }
-    }
-}
-
-/** Animate the height of this composable based on [scale]. */
-@Composable
-private fun Modifier.animatedScaledHeight(scale: () -> Float): Modifier {
-    return layout { measurable, constraints ->
-        val newHeight = (constraints.maxHeight * scale()).roundToInt()
-        val newConstraints = constraints.copy(minHeight = newHeight, maxHeight = newHeight)
-        val placeable = measurable.measure(newConstraints)
-        // Layout using the max height to animate the expansion from the top
-        layout(constraints.maxWidth, constraints.maxHeight) { placeable.placeRelative(0, 0) }
     }
 }
 
@@ -649,7 +409,7 @@ private fun buttonColorsForModel(footerAction: FooterActionsButtonViewModel): Bu
     return if (notificationShadeBlur()) {
         when (footerAction) {
             is FooterActionsButtonViewModel.PowerActionViewModel ->
-                FooterActionsDefaults.activeButtonColors()
+                FooterActionsDefaults.inactiveButtonColors() // Same as settings
             is FooterActionsButtonViewModel.SettingsActionViewModel ->
                 FooterActionsDefaults.inactiveButtonColors()
             is FooterActionsButtonViewModel.UserSwitcherViewModel ->
@@ -672,8 +432,6 @@ private data class TextButtonColors(
 )
 
 private object FooterActionsDefaults {
-    const val FOOTER_TEXT_MINIMUM_SCALE_Y = .2f
-    const val FOOTER_TEXT_FADE_DURATION_MILLIS = 83
     val FooterButtonHeight = 40.dp
 
     @Composable

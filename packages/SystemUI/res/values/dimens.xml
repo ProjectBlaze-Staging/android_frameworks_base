@@ -703,7 +703,10 @@
     <dimen name="pull_span_min">25dp</dimen>
 
     <dimen name="qs_corner_radius">28dp</dimen>
-    <dimen name="qs_tile_margin_horizontal">8dp</dimen>
+    <dimen name="qs_tile_height">80dp</dimen>
+    <dimen name="qs_tile_margin_horizontal">20dp</dimen>
+    <dimen name="custom_qs_tile_height">72dp</dimen>
+    <dimen name="qs_brightness_slider_height">56dp</dimen>
     <dimen name="qs_tile_margin_vertical">@dimen/qs_tile_margin_horizontal</dimen>
     <dimen name="qs_brightness_margin_top">8dp</dimen>
     <dimen name="brightness_dialog_expanded_width">364dp</dimen>
@@ -2306,5 +2309,16 @@
 
     <dimen name="usb_device_dialog_button_background_radius_full">360dp</dimen>
     <!-- Usb Device Dialog values end -->
+
+    <!-- Modular QS status bar & panel dimens -->
+    <dimen name="qs_status_bar_margin_end">16dp</dimen>
+    <dimen name="qs_status_bar_margin_start">16dp</dimen>
+    <dimen name="qs_status_bar_margin_top">16dp</dimen>
+    <dimen name="qs_status_bar_data_margin_top">-7dp</dimen>
+    <dimen name="qqs_status_bar_margin_top">12dp</dimen>
+    <dimen name="qqs_status_bar_text_size">15dp</dimen>
+    <dimen name="qqs_status_bar_height">63dp</dimen>
+    <dimen name="nt_qs_panel_padding_top">19dp</dimen>
+    <dimen name="nt_qqs_layout_margin_top">0dp</dimen>
 
 </resources>

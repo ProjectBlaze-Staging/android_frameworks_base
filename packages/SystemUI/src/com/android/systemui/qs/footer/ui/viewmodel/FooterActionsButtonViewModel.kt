@@ -75,7 +75,7 @@ sealed interface FooterActionsButtonViewModel {
             )
         @ColorInt
         override val iconTintFallback: Int =
-            Utils.getColorAttrDefaultColor(context, R.attr.onShadeActive)
-        @AttrRes override val backgroundColorFallback: Int = R.attr.shadeActive
+            Utils.getColorAttrDefaultColor(context, R.attr.onShadeInactiveVariant)
+        @AttrRes override val backgroundColorFallback: Int = R.attr.shadeInactive
     }
 }

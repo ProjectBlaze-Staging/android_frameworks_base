@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -126,6 +126,9 @@ constructor(
     @VisibleForTesting var wallpaperSupportsAmbientMode: Boolean = false
 
     // tracks whether app launch transition is in progress. This involves two independent factors
+
+    private val oneUIBlurEnhancement = true
+
     // that control blur, shade expansion and app launch animation from outside sysui.
     // They can complete out of order, this flag will be reset by the animation that finishes later.
     private var appLaunchTransitionIsInProgress = false
@@ -256,8 +259,13 @@ constructor(
         }
 
     private fun computeBlurAndZoomOut(): Pair<Int, Float> {
-        val animationRadius =
-            MathUtils.constrain(
+        val enhancedExpansion = if (shouldApplyShadeBlur()) {
+            applyOneUIBlurCurve(shadeExpansion)
+        } else {
+            0f
+        }
+        
+        val animationRadius = MathUtils.constrain(
                 shadeAnimation.radius,
                 blurUtils.minBlurRadius,
                 blurUtils.maxBlurRadius,
@@ -265,7 +273,7 @@ constructor(
         val expansionRadius =
             blurUtils.blurRadiusOfRatio(
                 ShadeInterpolation.getNotificationScrimAlpha(
-                    if (shouldApplyShadeBlur()) shadeExpansion else 0f
+                    if (shouldApplyShadeBlur()) enhancedExpansion else 0f
                 )
             )
         var combinedBlur =
@@ -536,6 +544,25 @@ constructor(
                 }
             }
         }
+    }
+
+    private fun applyOneUIBlurCurve(expansion: Float): Float {
+        if (!oneUIBlurEnhancement) return expansion
+        
+        return when {
+            expansion < 0.2f -> {
+                val t = expansion / 0.2f
+                t * t * 0.4f
+            }
+            expansion < 0.7f -> {
+                val t = (expansion - 0.2f) / 0.5f
+                0.4f + Math.pow(t.toDouble(), 1.6).toFloat() * 0.5f
+            }
+            else -> {
+                val t = (expansion - 0.7f) / 0.3f
+                0.9f + (t * t * (3f - 2f * t) * 0.1f)
+            }
+        }.coerceIn(0f, 1f)
     }
 
     fun addListener(listener: DepthListener) {

@@ -18,6 +18,9 @@
 -->
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
            xmlns:androidprv="http://schemas.android.com/apk/prv/res/android">
+
+    <color name="shade_tile_color">@android:color/system_neutral1_0</color>
+
     <drawable name="system_bar_background">@color/system_bar_background_opaque</drawable>
     <color name="system_bar_background_opaque">#ff000000</color>
     <color name="system_bar_background_transparent">#00000000</color>

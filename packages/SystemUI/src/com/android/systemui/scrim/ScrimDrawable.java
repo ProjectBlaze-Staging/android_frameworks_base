@@ -22,12 +22,16 @@ import android.animation.ValueAnimator;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ColorFilter;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
+import android.graphics.RadialGradient;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.Xfermode;
 import android.graphics.drawable.Drawable;
 import android.view.animation.DecelerateInterpolator;
@@ -42,10 +46,17 @@ import com.android.systemui.statusbar.notification.stack.StackStateAnimator;
 public class ScrimDrawable extends Drawable {
     private static final String TAG = "ScrimDrawable";
 
+    private static final int GRADIENT_LAYER_COUNT = 3;
+    private static final float[] GRADIENT_POSITIONS = {0f, 0.5f, 1.0f};
+    private static final float GRADIENT_RADIUS_MULTIPLIER = 1.5f;
+    private static final float COLOR_BLEND_INTENSITY = 0.15f;
+
     private boolean mShouldUseLargeScreenSize;
     private final Paint mPaint;
+    private final Paint mGradientPaint;
     private final Path mPath = new Path();
     private final RectF mBoundsRectF = new RectF();
+    private final int[] mGradientColors = new int[GRADIENT_LAYER_COUNT];
 
     private int mAlpha = 255;
     private int mMainColor;
@@ -57,16 +68,27 @@ public class ScrimDrawable extends Drawable {
     private float mBottomEdgeRadius = -1;
     private boolean mCornerRadiusEnabled;
 
+    private int mAccentColor = Color.TRANSPARENT;
+    private int mBackgroundTintColor = Color.TRANSPARENT;
+    private float mGlassEffectIntensity = 0f;
+    private Shader mGlassmorphismShader;
+    // Shader creation allocates a native object; rebuild lazily in draw() only
+    // when an input (color, accent, tint, intensity, bounds) has changed.
+    private boolean mGlassShaderDirty = true;
+
     public ScrimDrawable() {
         mPaint = new Paint();
         mPaint.setStyle(Paint.Style.FILL);
+
+        mGradientPaint = new Paint();
+        mGradientPaint.setStyle(Paint.Style.FILL);
+        mGradientPaint.setAntiAlias(true);
+
         mShouldUseLargeScreenSize = false;
     }
 
     /**
-     * Sets the background color.
-     * @param mainColor the color.
-     * @param animated if transition should be interpolated.
+     * Sets the background color with OneUI glassmorphism enhancement.
      */
     public void setColor(int mainColor, boolean animated) {
         if (mainColor == mMainColorTo) {
@@ -87,6 +109,7 @@ public class ScrimDrawable extends Drawable {
             anim.addUpdateListener(animation -> {
                 float ratio = (float) animation.getAnimatedValue();
                 mMainColor = ColorUtils.blendARGB(mainFrom, mainColor, ratio);
+                mGlassShaderDirty = true;
                 invalidateSelf();
             });
             anim.addListener(new AnimatorListenerAdapter() {
@@ -102,8 +125,92 @@ public class ScrimDrawable extends Drawable {
             mColorAnimation = anim;
         } else {
             mMainColor = mainColor;
+            mGlassShaderDirty = true;
             invalidateSelf();
         }
+    }
+
+    /**
+     * Set accent color for glassmorphism effect
+     */
+    public void setAccentColor(int accentColor) {
+        if (mAccentColor != accentColor) {
+            mAccentColor = accentColor;
+            mGlassShaderDirty = true;
+            invalidateSelf();
+        }
+    }
+
+    /**
+     * Set background tint for color sampling effect
+     */
+    public void setBackgroundTint(int tintColor, float intensity) {
+        if (mBackgroundTintColor != tintColor || mGlassEffectIntensity != intensity) {
+            mBackgroundTintColor = tintColor;
+            mGlassEffectIntensity = intensity;
+            mGlassShaderDirty = true;
+            invalidateSelf();
+        }
+    }
+
+    /**
+     * Creates OneUI-style glassmorphism shader with color sampling
+     */
+    private void updateGlassmorphismShader() {
+        Rect bounds = getBounds();
+        if (bounds.isEmpty()) {
+            return;
+        }
+        mGlassShaderDirty = false;
+
+        float width = bounds.width();
+        float height = bounds.height();
+        float centerX = width / 2f;
+        float centerY = height / 2f;
+
+        int baseAlpha = Color.alpha(mMainColor);
+        int baseRed = Color.red(mMainColor);
+        int baseGreen = Color.green(mMainColor);
+        int baseBlue = Color.blue(mMainColor);
+
+        int[] colors = mGradientColors;
+        float[] positions = GRADIENT_POSITIONS;
+
+        if (mAccentColor != Color.TRANSPARENT && mGlassEffectIntensity > 0) {
+            int accentRed = Color.red(mAccentColor);
+            int accentGreen = Color.green(mAccentColor);
+            int accentBlue = Color.blue(mAccentColor);
+
+            for (int i = 0; i < GRADIENT_LAYER_COUNT; i++) {
+                float blendRatio = mGlassEffectIntensity * COLOR_BLEND_INTENSITY * (1f - positions[i]);
+                int r = (int) (baseRed * (1 - blendRatio) + accentRed * blendRatio);
+                int g = (int) (baseGreen * (1 - blendRatio) + accentGreen * blendRatio);
+                int b = (int) (baseBlue * (1 - blendRatio) + accentBlue * blendRatio);
+                int a = Math.max(0, Math.min(255, (int) (baseAlpha * (1f - positions[i] * 0.3f)))); // Fade at edges, clamped
+
+                colors[i] = Color.argb(a, r, g, b);
+            }
+
+            float radius = (float) Math.sqrt(width * width + height * height) / 2f * GRADIENT_RADIUS_MULTIPLIER;
+            mGlassmorphismShader = new RadialGradient(
+                centerX, centerY, radius,
+                colors, positions,
+                Shader.TileMode.CLAMP
+            );
+        } else {
+            colors[0] = ColorUtils.setAlphaComponent(mMainColor, Math.min(255, (int) (baseAlpha * 1.1f)));
+            colors[1] = mMainColor;
+            colors[2] = ColorUtils.setAlphaComponent(mMainColor, Math.max(0, (int) (baseAlpha * 0.85f)));
+
+
+            mGlassmorphismShader = new LinearGradient(
+                0, 0, 0, height,
+                colors, positions,
+                Shader.TileMode.CLAMP
+            );
+        }
+
+        mGradientPaint.setShader(mGlassmorphismShader);
     }
 
     @Override
@@ -144,9 +251,6 @@ public class ScrimDrawable extends Drawable {
         mShouldUseLargeScreenSize = v;
     }
 
-    /**
-     * Corner radius used by either concave or convex corners.
-     */
     public void setRoundedCorners(float radius) {
         if (radius == mCornerRadius) {
             return;
@@ -159,9 +263,6 @@ public class ScrimDrawable extends Drawable {
         invalidateSelf();
     }
 
-    /**
-     * If we should draw a rounded rect instead of a rect.
-     */
     public void setRoundedCornersEnabled(boolean enabled) {
         if (mCornerRadiusEnabled == enabled) {
             return;
@@ -170,9 +271,6 @@ public class ScrimDrawable extends Drawable {
         invalidateSelf();
     }
 
-    /**
-     * If we should draw a concave rounded rect instead of a rect.
-     */
     public void setBottomEdgeConcave(boolean enabled) {
         if (enabled && mConcaveInfo != null) {
             return;
@@ -186,10 +284,6 @@ public class ScrimDrawable extends Drawable {
         invalidateSelf();
     }
 
-    /**
-     * Location of concave edge.
-     * @see #setBottomEdgeConcave(boolean)
-     */
     public void setBottomEdgePosition(int y) {
         if (mBottomEdgePosition == y) {
             return;
@@ -211,66 +305,73 @@ public class ScrimDrawable extends Drawable {
 
     @Override
     public void draw(@NonNull Canvas canvas) {
+        if (mGlassEffectIntensity > 0) {
+            if (mGlassShaderDirty) {
+                updateGlassmorphismShader();
+            }
+            if (mGlassmorphismShader != null) {
+                mGradientPaint.setAlpha((int) (mAlpha * mGlassEffectIntensity));
+                drawShape(canvas, mGradientPaint);
+            }
+        }
+
         mPaint.setColor(mMainColor);
         mPaint.setAlpha(mAlpha);
+        drawShape(canvas, mPaint);
+    }
+
+    private void drawShape(Canvas canvas, Paint paint) {
         if (mConcaveInfo != null) {
-            drawConcave(canvas);
+            canvas.save();
+            canvas.clipOutPath(mConcaveInfo.mPath);
+            canvas.drawRect(getBounds().left, getBounds().top, getBounds().right,
+                    mBottomEdgePosition + mConcaveInfo.mPathOverlap, paint);
+            canvas.restore();
         } else if (mCornerRadiusEnabled && mCornerRadius > 0) {
-            float topEdgeRadius = mCornerRadius;
-            float bottomEdgeRadius = mBottomEdgeRadius == -1.0 ? mCornerRadius : mBottomEdgeRadius;
-
-            mBoundsRectF.set(getBounds());
-
-            // When the back gesture causes the notification scrim to be scaled down,
-            // this offset "reveals" the rounded bottom edge as it "pulls away".
-            // We must *not* make this adjustment on largescreen shades (where the corner is sharp).
-            if (!mShouldUseLargeScreenSize && mBottomEdgeRadius != -1) {
-                mBoundsRectF.bottom -= bottomEdgeRadius;
-            }
-
-            // We need a box with rounded corners but its lower corners are not rounded on large
-            // screen devices in "portrait" orientation.
-            // Thus, we cannot draw a symmetric rounded rectangle via canvas.drawRoundRect()
-            // and must build a box with different corner radii at the top and at the bottom.
-            // Additionally, when the scrim is pushed to the very bottom of the screen, do not draw
-            // anything (drawing a rounded box with these specifications is not possible).
-            // TODO(b/271030611) perhaps this could be accomplished via Path.addRoundRect instead?
-            if (mBoundsRectF.bottom - mBoundsRectF.top > bottomEdgeRadius) {
-                mPath.reset();
-                mPath.moveTo(mBoundsRectF.right, mBoundsRectF.top + topEdgeRadius);
-                mPath.cubicTo(mBoundsRectF.right, mBoundsRectF.top + topEdgeRadius,
-                        mBoundsRectF.right, mBoundsRectF.top,
-                        mBoundsRectF.right - topEdgeRadius, mBoundsRectF.top);
-                mPath.lineTo(mBoundsRectF.left + topEdgeRadius, mBoundsRectF.top);
-                mPath.cubicTo(mBoundsRectF.left + topEdgeRadius, mBoundsRectF.top,
-                        mBoundsRectF.left, mBoundsRectF.top,
-                        mBoundsRectF.left, mBoundsRectF.top + topEdgeRadius);
-                mPath.lineTo(mBoundsRectF.left, mBoundsRectF.bottom - bottomEdgeRadius);
-                mPath.cubicTo(mBoundsRectF.left, mBoundsRectF.bottom - bottomEdgeRadius,
-                        mBoundsRectF.left, mBoundsRectF.bottom,
-                        mBoundsRectF.left + bottomEdgeRadius, mBoundsRectF.bottom);
-                mPath.lineTo(mBoundsRectF.right - bottomEdgeRadius, mBoundsRectF.bottom);
-                mPath.cubicTo(mBoundsRectF.right - bottomEdgeRadius, mBoundsRectF.bottom,
-                        mBoundsRectF.right, mBoundsRectF.bottom,
-                        mBoundsRectF.right, mBoundsRectF.bottom - bottomEdgeRadius);
-                mPath.close();
-                canvas.drawPath(mPath, mPaint);
-            }
+            drawRoundedRect(canvas, paint);
         } else {
             canvas.drawRect(getBounds().left, getBounds().top, getBounds().right,
-                    getBounds().bottom, mPaint);
+                    getBounds().bottom, paint);
+        }
+    }
+
+    private void drawRoundedRect(Canvas canvas, Paint paint) {
+        float topEdgeRadius = mCornerRadius;
+        float bottomEdgeRadius = mBottomEdgeRadius == -1.0 ? mCornerRadius : mBottomEdgeRadius;
+
+        mBoundsRectF.set(getBounds());
+
+        if (!mShouldUseLargeScreenSize && mBottomEdgeRadius != -1) {
+            mBoundsRectF.bottom -= bottomEdgeRadius;
+        }
+
+        if (mBoundsRectF.bottom - mBoundsRectF.top > bottomEdgeRadius) {
+            mPath.reset();
+            mPath.moveTo(mBoundsRectF.right, mBoundsRectF.top + topEdgeRadius);
+            mPath.cubicTo(mBoundsRectF.right, mBoundsRectF.top + topEdgeRadius,
+                    mBoundsRectF.right, mBoundsRectF.top,
+                    mBoundsRectF.right - topEdgeRadius, mBoundsRectF.top);
+            mPath.lineTo(mBoundsRectF.left + topEdgeRadius, mBoundsRectF.top);
+            mPath.cubicTo(mBoundsRectF.left + topEdgeRadius, mBoundsRectF.top,
+                    mBoundsRectF.left, mBoundsRectF.top,
+                    mBoundsRectF.left, mBoundsRectF.top + topEdgeRadius);
+            mPath.lineTo(mBoundsRectF.left, mBoundsRectF.bottom - bottomEdgeRadius);
+            mPath.cubicTo(mBoundsRectF.left, mBoundsRectF.bottom - bottomEdgeRadius,
+                    mBoundsRectF.left, mBoundsRectF.bottom,
+                    mBoundsRectF.left + bottomEdgeRadius, mBoundsRectF.bottom);
+            mPath.lineTo(mBoundsRectF.right - bottomEdgeRadius, mBoundsRectF.bottom);
+            mPath.cubicTo(mBoundsRectF.right - bottomEdgeRadius, mBoundsRectF.bottom,
+                    mBoundsRectF.right, mBoundsRectF.bottom,
+                    mBoundsRectF.right, mBoundsRectF.bottom - bottomEdgeRadius);
+            mPath.close();
+            canvas.drawPath(mPath, paint);
         }
     }
 
     @Override
     protected void onBoundsChange(Rect bounds) {
         updatePath();
-    }
-
-    private void drawConcave(Canvas canvas) {
-        canvas.clipOutPath(mConcaveInfo.mPath);
-        canvas.drawRect(getBounds().left, getBounds().top, getBounds().right,
-                mBottomEdgePosition + mConcaveInfo.mPathOverlap, mPaint);
+        mGlassShaderDirty = true;
     }
 
     private void updatePath() {

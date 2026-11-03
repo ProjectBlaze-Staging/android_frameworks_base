@@ -5,6 +5,10 @@
 
 package com.android.systemui.statusbar.quickactions.popups.ui.compose
 
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
@@ -16,9 +20,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,6 +48,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -179,6 +186,72 @@ internal fun CosIslandShell(
         width.animateTo(target + extraPx, tween(200, easing = CosIsland.SwitchGrow))
         launch { scale.animateTo(1f, tween(500, easing = CosIsland.SwitchSettle)) }
         width.animateTo(target, tween(500, easing = CosIsland.SwitchSettle))
+    }
+
+    suspend fun swallowSwell() = coroutineScope {
+        val target = (if (natural.width > 0) natural.width.toFloat() else width.value).coerceAtLeast(holePx)
+        busy = true
+        try {
+            launch {
+                width.animateTo(
+                    (target - extraPx * 0.35f).coerceAtLeast(holePx),
+                    tween(65, easing = CosIsland.Move),
+                )
+            }
+            scale.animateTo(0.92f, tween(65, easing = CosIsland.Move))
+            launch {
+                width.animateTo(
+                    (target + extraPx * 2.15f).coerceAtMost(maxWidthPx.toFloat()),
+                    tween(210, easing = CosIsland.SwitchGrow),
+                )
+            }
+            launch {
+                height.animateTo(
+                    heightPx * 1.12f,
+                    tween(210, easing = CosIsland.SwitchGrow),
+                )
+            }
+            scale.animateTo(1.18f, tween(210, easing = CosIsland.SwitchGrow))
+            launch { width.animateTo(target, tween(460, easing = CosIsland.SwitchSettle)) }
+            launch { height.animateTo(heightPx, tween(460, easing = CosIsland.SwitchSettle)) }
+            scale.animateTo(1f, tween(460, easing = CosIsland.SwitchSettle))
+        } finally {
+            busy = false
+        }
+    }
+
+    val context = LocalContext.current
+    var swallowSeq by remember {
+        mutableIntStateOf(
+            runCatching {
+                Settings.Global.getInt(context.contentResolver, "blaze_island_swallow_seq", 0)
+            }.getOrDefault(0)
+        )
+    }
+    var initialSwallowSeq by remember { mutableIntStateOf(swallowSeq) }
+    DisposableEffect(context) {
+        val resolver = context.contentResolver
+        val uri = Settings.Global.getUriFor("blaze_island_swallow_seq")
+        val observer =
+            object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    swallowSeq =
+                        runCatching {
+                            Settings.Global.getInt(resolver, "blaze_island_swallow_seq", 0)
+                        }.getOrDefault(0)
+                }
+            }
+        if (uri != null) {
+            resolver.registerContentObserver(uri, false, observer)
+        }
+        onDispose { resolver.unregisterContentObserver(observer) }
+    }
+
+    LaunchedEffect(swallowSeq) {
+        if (swallowSeq != initialSwallowSeq && currentVisible) {
+            initialSwallowSeq = swallowSeq
+            swallowSwell()
+        }
     }
 
     LaunchedEffect(Unit) {

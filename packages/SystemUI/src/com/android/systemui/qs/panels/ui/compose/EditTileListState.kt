@@ -17,15 +17,19 @@
 package com.android.systemui.qs.panels.ui.compose
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.geometry.Offset
+import com.android.systemui.qs.panels.shared.model.GridPlacement
 import com.android.systemui.qs.panels.shared.model.SizedTile
 import com.android.systemui.qs.panels.shared.model.SizedTileImpl
+import com.android.systemui.qs.panels.shared.model.TileGridConfig
 import com.android.systemui.qs.panels.ui.compose.selection.PlacementEvent
 import com.android.systemui.qs.panels.ui.model.GridCell
+import com.android.systemui.qs.panels.ui.model.SpacerGridCell
 import com.android.systemui.qs.panels.ui.model.TileGridCell
 import com.android.systemui.qs.panels.ui.model.toGridCells
 import com.android.systemui.qs.panels.ui.viewmodel.EditTileViewModel
@@ -40,7 +44,14 @@ class EditTileListState(
     initialLargeTiles: Set<TileSpec>,
     val columns: Int,
     val largeTilesSpan: Int,
+    private val forceUnitSpan: Boolean = false,
 ) : DragAndDropState {
+
+    private val _tileGridConfigs =
+        mutableMapOf<TileSpec, Pair<Int, Int>>().apply {
+            initialTiles.forEach { tile -> put(tile.tileSpec, tile.spanCols to tile.spanRows) }
+        }
+
     override var draggedCell by mutableStateOf<SizedTile<EditTileViewModel>?>(null)
         private set
 
@@ -65,15 +76,38 @@ class EditTileListState(
     var largeTilesSpecs: Set<TileSpec> = initialLargeTiles
         private set
 
-    /** Update the grid with this new list of tiles and new set of large tileSpecs. */
-    fun updateTiles(tiles: List<EditTileViewModel>, largeTiles: Set<TileSpec>) {
-        largeTilesSpecs = largeTiles
-        tiles.toGridCells(largeTiles).let {
-            _tiles.apply {
-                clear()
-                addAll(it)
-            }
+    /**
+     * Updates the tiles list with new tiles, preserving grid configurations.
+     */
+    fun updateTiles(newTiles: List<EditTileViewModel>, newLargeTiles: Set<TileSpec>) {
+        newTiles.forEach { tile ->
+            _tileGridConfigs[tile.tileSpec] = tile.spanCols to tile.spanRows
         }
+
+        largeTilesSpecs = newLargeTiles
+        regenerateGridWithTiles(newTiles)
+    }
+
+    /**
+     * Set the size of a specific tile.
+     */
+    fun setTileSize(spec: TileSpec, spanCols: Int, spanRows: Int) {
+        _tileGridConfigs[spec] = spanCols.coerceIn(1, 4) to spanRows.coerceIn(1, 3)
+
+        val tileIndex = _tiles.indexOfFirst { it is TileGridCell && it.tile.tileSpec == spec }
+        if (tileIndex != -1) {
+            val cell = _tiles[tileIndex] as TileGridCell
+            _tiles[tileIndex] = cell.copy(width = getTileSize(spec).first)
+            regenerateGrid()
+        }
+    }
+
+    /**
+     * Get the size of a tile (spanCols x spanRows).
+     */
+    fun getTileSize(spec: TileSpec): Pair<Int, Int> {
+        if (forceUnitSpan) return 1 to 1
+        return _tileGridConfigs[spec] ?: (1 to 1)
     }
 
     fun tileSpecs(): List<TileSpec> {
@@ -110,17 +144,8 @@ class EditTileListState(
         return _tiles.indexOfFirst { it is TileGridCell && it.tile.tileSpec == tileSpec }
     }
 
-    /** Resize the tile corresponding to the [TileSpec] to [toIcon] */
-    fun resizeTile(tileSpec: TileSpec, toIcon: Boolean) {
-        val fromIndex = indexOf(tileSpec)
-        if (fromIndex != INVALID_INDEX) {
-            val cell = _tiles[fromIndex] as TileGridCell
-
-            if (cell.isIcon == toIcon) return
-
-            _tiles[fromIndex] = cell.copy(width = if (toIcon) 1 else largeTilesSpan)
-            regenerateGrid(fromIndex)
-        }
+    override fun onMoved(position: Offset) {
+        draggedPosition = position
     }
 
     override fun isMoving(tileSpec: TileSpec): Boolean {
@@ -134,28 +159,43 @@ class EditTileListState(
 
     override fun onTargeting(target: Int, insertAfter: Boolean) {
         val draggedTile = draggedCell ?: return
-
         val fromIndex = indexOf(draggedTile.tile.tileSpec)
-        if (fromIndex == target) {
+        if (fromIndex == INVALID_INDEX) {
             return
         }
 
-        val insertionIndex = if (insertAfter) target + 1 else target
-        if (fromIndex != INVALID_INDEX) {
-            val cell = _tiles.removeAt(fromIndex)
-            regenerateGrid()
-            _tiles.add(insertionIndex.coerceIn(0, _tiles.size), cell)
-        } else {
-            // Add the tile with a temporary row/col which will get reassigned when
-            // regenerating spacers
-            _tiles.add(insertionIndex.coerceIn(0, _tiles.size), TileGridCell(draggedTile, 0, 0))
-        }
+        val targetIndex =
+            targetIndexForPlacement(
+                PlacementEvent.PlaceToIndex(
+                    movingSpec = draggedTile.tile.tileSpec,
+                    targetIndex = target,
+                )
+            )
 
+        val movingItem = _tiles.removeAt(fromIndex) as TileGridCell
+        _tiles.add(targetIndex, movingItem)
         regenerateGrid()
     }
 
-    override fun onMoved(offset: Offset) {
-        draggedPosition = offset
+    override fun onDrop() {
+        draggedCell = null
+        draggedPosition = Offset.Unspecified
+        dragType = null
+        // Remove the spacers
+        regenerateGrid()
+    }
+
+    /** Resize the tile corresponding to the [TileSpec] to [toIcon] */
+    fun resizeTile(tileSpec: TileSpec, toIcon: Boolean) {
+        val fromIndex = indexOf(tileSpec)
+        if (fromIndex != INVALID_INDEX) {
+            val cell = _tiles[fromIndex] as TileGridCell
+
+            if (cell.isIcon == toIcon) return
+
+            _tiles[fromIndex] = cell.copy(width = if (toIcon) 1 else largeTilesSpan)
+            regenerateGrid(fromIndex)
+        }
     }
 
     override fun movedOutOfBounds() {
@@ -167,15 +207,6 @@ class EditTileListState(
         draggedPosition = Offset.Unspecified
 
         // Regenerate spacers without the dragged tile
-        regenerateGrid()
-    }
-
-    override fun onDrop() {
-        draggedCell = null
-        draggedPosition = Offset.Unspecified
-        dragType = null
-
-        // Remove the spacers
         regenerateGrid()
     }
 
@@ -216,33 +247,196 @@ class EditTileListState(
         }
     }
 
-    private fun List<EditTileViewModel>.toGridCells(largeTiles: Set<TileSpec>): List<GridCell> {
-        return map {
-                SizedTileImpl(it, if (largeTiles.contains(it.tileSpec)) largeTilesSpan else 1)
+    /**
+     * Calculate grid positions for tiles with custom sizes.
+     */
+    private fun calculateGridPositions(tiles: List<TileGridCell>): List<GridPlacement> {
+        val placements = mutableListOf<GridPlacement>()
+        val occupied = mutableSetOf<Pair<Int, Int>>()
+
+        tiles.forEach { tile ->
+            val (spanCols, spanRows) = getTileSize(tile.tile.tileSpec)
+            var placed = false
+            var searchRow = 0
+
+            while (!placed) {
+                for (col in 0 until columns) {
+                    if (col + spanCols > columns) continue
+
+                    var fits = true
+                    for (r in 0 until spanRows) {
+                        for (c in 0 until spanCols) {
+                            if (occupied.contains((searchRow + r) to (col + c))) {
+                                fits = false
+                                break
+                            }
+                        }
+                        if (!fits) break
+                    }
+
+                    if (fits) {
+                        placements.add(GridPlacement(col, searchRow, spanCols, spanRows))
+                        for (r in 0 until spanRows) {
+                            for (c in 0 until spanCols) {
+                                occupied.add((searchRow + r) to (col + c))
+                            }
+                        }
+                        placed = true
+                        break
+                    }
+                }
+                if (!placed) searchRow++
             }
-            .toGridCells(columns)
+        }
+
+        return placements
+    }
+
+    private fun List<EditTileViewModel>.toGridCells(largeTiles: Set<TileSpec>): List<GridCell> {
+        val sizedTiles =
+            map {
+                SizedTileImpl(
+                    it,
+                    if (forceUnitSpan) 1 else if (largeTiles.contains(it.tileSpec)) largeTilesSpan else 1,
+                )
+            }
+        return sizedTiles.toGridCellsWithSizes(0)
+    }
+
+    /**
+     * Regenerate grid with new tiles list.
+     */
+    private fun regenerateGridWithTiles(newTiles: List<EditTileViewModel>) {
+        val currentTileCells = _tiles.filterIsInstance<TileGridCell>()
+        val currentSpecs = currentTileCells.map { it.tile.tileSpec }.toSet()
+        val newSpecs = newTiles.map { it.tileSpec }.toSet()
+
+        val tilesToKeep = currentTileCells.filter { it.tile.tileSpec in newSpecs }
+
+        val specsToAdd = newSpecs - currentSpecs
+        val tilesToAdd = newTiles.filter { it.tileSpec in specsToAdd }
+
+        val updatedTiles =
+            tilesToKeep
+                .map { cell ->
+                    val newTile = newTiles.find { it.tileSpec == cell.tile.tileSpec }
+                    if (newTile != null) {
+                        cell.copy(tile = newTile)
+                    } else {
+                        cell
+                    }
+                }
+                .map { it.tile } + tilesToAdd
+
+        _tiles.clear()
+
+        val sizedTiles =
+            updatedTiles.map { tile ->
+                val (spanCols, _) = getTileSize(tile.tileSpec)
+                SizedTileImpl(tile, spanCols)
+            }
+
+        _tiles.addAll(sizedTiles.toGridCellsWithSizes(0))
     }
 
     /** Regenerate the list of [GridCell] with their new potential rows */
     private fun regenerateGrid() {
-        _tiles.filterIsInstance<TileGridCell>().toGridCells(columns).let {
-            _tiles.clear()
-            _tiles.addAll(it)
+        val orderedItems = _tiles.filterIsInstance<TileGridCell>()
+        _tiles.clear()
+
+        val placements = calculateGridPositions(orderedItems)
+
+        orderedItems.forEachIndexed { index, item ->
+            val placement = placements.getOrElse(index) { GridPlacement(0, 0, 1, 1) }
+            val (spanCols, _) = getTileSize(item.tile.tileSpec)
+
+            _tiles.add(
+                item.copy(row = placement.gridY, column = placement.gridX, width = spanCols)
+            )
         }
     }
 
     /**
-     * Regenerate the list of [GridCell] with their new potential rows from [fromIndex], leaving
+     * Regenerate the grid of [GridCell] with their new potential rows from [fromIndex], leaving
      * cells before that untouched.
      */
     private fun regenerateGrid(fromIndex: Int) {
         val fromRow = _tiles[fromIndex].row
         val (pre, post) = _tiles.partition { it.row < fromRow }
-        post.filterIsInstance<TileGridCell>().toGridCells(columns, startingRow = fromRow).let {
-            _tiles.clear()
-            _tiles.addAll(pre)
-            _tiles.addAll(it)
+        val rebuilt =
+            post
+                .filterIsInstance<TileGridCell>()
+                .map { SizedTileImpl(it.tile, getTileSize(it.tile.tileSpec).first) }
+                .toGridCellsWithSizes(fromRow)
+        _tiles.clear()
+        _tiles.addAll(pre)
+        _tiles.addAll(rebuilt)
+    }
+
+    /**
+     * Convert sized tiles to grid cells with proper positioning.
+     */
+    private fun List<SizedTile<EditTileViewModel>>.toGridCellsWithSizes(
+        startingRow: Int
+    ): List<GridCell> {
+        val cells = mutableListOf<GridCell>()
+        val occupied = mutableSetOf<Pair<Int, Int>>()
+        val startRow = startingRow
+        var currentRow = startingRow
+
+        this.forEach { sizedTile ->
+            val tile = sizedTile.tile
+            val (spanCols, spanRows) = getTileSize(tile.tileSpec)
+
+            var placed = false
+            var searchRow = currentRow
+
+            while (!placed) {
+                for (col in 0 until columns) {
+                    if (col + spanCols > columns) continue
+
+                    var fits = true
+                    for (r in 0 until spanRows) {
+                        for (c in 0 until spanCols) {
+                            if (occupied.contains((searchRow + r) to (col + c))) {
+                                fits = false
+                                break
+                            }
+                        }
+                        if (!fits) break
+                    }
+
+                    if (fits) {
+                        cells.add(
+                            TileGridCell(
+                                sizedTile = sizedTile,
+                                row = searchRow,
+                                column = col,
+                            )
+                        )
+
+                        for (r in 0 until spanRows) {
+                            for (c in 0 until spanCols) {
+                                occupied.add((searchRow + r) to (col + c))
+                            }
+                        }
+
+                        placed = true
+                        break
+                    }
+                }
+
+                if (!placed) {
+                    val usedInRow = occupied.count { it.first == searchRow }
+                    if (usedInRow > 0 && usedInRow < columns) {
+                        repeat(columns - usedInRow) { cells.add(SpacerGridCell(searchRow)) }
+                    }
+                    searchRow++
+                }
+            }
         }
+
+        return cells
     }
 
     companion object {

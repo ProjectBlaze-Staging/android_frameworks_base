@@ -163,11 +163,25 @@ constructor(
             isEnabled,
             isDynamicIslandEnabled,
             mediaControlsEnabled ->
-                if (isEnabled && isDynamicIslandEnabled && mediaControlsEnabled) {
-                    mediaControlState.model?.withPlaybackInfo(playbackInfo)
-                } else {
-                    null
+                val resolvedModel =
+                    if (isEnabled && isDynamicIslandEnabled && mediaControlsEnabled) {
+                        mediaControlState.model?.withPlaybackInfo(playbackInfo)
+                    } else {
+                        null
+                    }
+                runCatching {
+                    Settings.Global.putString(
+                        context.contentResolver,
+                        "blaze_island_active_media_pkg",
+                        resolvedModel?.packageName ?: "",
+                    )
+                    Settings.Global.putInt(
+                        context.contentResolver,
+                        "blaze_island_media_playing",
+                        if (resolvedModel != null && resolvedModel.isPlaying) 1 else 0,
+                    )
                 }
+                resolvedModel
             }
 
     val mediaUseWaveform: StateFlow<Boolean> =

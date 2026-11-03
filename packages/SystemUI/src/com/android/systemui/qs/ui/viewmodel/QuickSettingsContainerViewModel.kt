@@ -27,14 +27,22 @@ import com.android.systemui.media.remedia.ui.viewmodel.MediaCarouselVisibility
 import com.android.systemui.media.remedia.ui.viewmodel.MediaViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.DetailsViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.EditModeViewModel
+import com.android.systemui.qs.panels.ui.viewmodel.EditTileViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.MediaInRowInLandscapeViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.TileGridViewModel
+import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.shade.ShadeDisplayAware
+import com.android.systemui.shade.domain.interactor.ShadeDisplaysInteractor
 import com.android.systemui.shade.ui.viewmodel.ShadeHeaderViewModel
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -70,6 +78,26 @@ constructor(
     val shadeHeaderViewModel = shadeHeaderViewModelFactory.create()
 
     val tileGridViewModel = tileGridViewModelFactory.create()
+
+    private val _showTilePicker = MutableStateFlow(false)
+
+    val showTilePicker: StateFlow<Boolean> = _showTilePicker.asStateFlow()
+
+    fun openTilePicker() {
+        _showTilePicker.value = true
+        editModeViewModel.startEditing()
+    }
+
+    fun closeTilePicker() {
+        _showTilePicker.value = false
+    }
+
+    fun getTilesForPicker(): Flow<List<EditTileViewModel>> = editModeViewModel.tilesForPicker
+
+    fun addTileFromPicker(tileSpec: TileSpec) {
+        editModeViewModel.addTile(tileSpec)
+        closeTilePicker()
+    }
 
     val showMedia: Boolean by mediaCarouselInteractor.hasAnyMedia.hydratedStateOf()
 

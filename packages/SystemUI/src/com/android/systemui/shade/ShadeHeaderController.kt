@@ -553,7 +553,11 @@ constructor(
 
     private fun updateScrollY() {
         if (!largeScreenActive) {
-            header.scrollY = qsScrollY
+            if (qsExpandedFraction >= 1.0f) {
+                header.scrollY = 0
+            } else {
+                header.scrollY = qsScrollY
+            }
         }
     }
 
@@ -613,7 +617,11 @@ constructor(
     private fun updatePosition() {
         if (!largeScreenActive && visible) {
             logInstantEvent("updatePosition: $qsExpandedFraction")
-            header.progress = qsExpandedFraction
+            if (qsExpandedFraction >= 1.0f) {
+                header.progress = 1.0f
+            } else {
+                header.progress = qsExpandedFraction
+            }
             updateBatteryMode()
         }
     }

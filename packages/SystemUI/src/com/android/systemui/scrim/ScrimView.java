@@ -251,6 +251,10 @@ public class ScrimView extends View {
         if (mDrawable instanceof ScrimDrawable) {
             // Optimization to blend colors and avoid a color filter
             ScrimDrawable drawable = (ScrimDrawable) mDrawable;
+            if (mTintColor == Color.TRANSPARENT || Color.alpha(mTintColor) == 0) {
+                drawable.setColor(Color.TRANSPARENT, animated);
+                return;
+            }
             float tintAmount = Color.alpha(mTintColor) / 255f;
 
             int mainTinted = mTintColor;

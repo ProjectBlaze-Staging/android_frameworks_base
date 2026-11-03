@@ -16,6 +16,10 @@
 
 package com.android.systemui.statusbar.quickactions.popups.ui.compose
 
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -36,6 +40,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -54,6 +59,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -167,6 +173,49 @@ fun StatusBarDynamicIslandContainer(
             1f,
             spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = 650f),
         )
+    }
+
+    val context = LocalContext.current
+    var swallowSeq by remember {
+        mutableIntStateOf(
+            runCatching {
+                Settings.Global.getInt(context.contentResolver, "blaze_island_swallow_seq", 0)
+            }.getOrDefault(0)
+        )
+    }
+    var initialSwallowSeq by remember { mutableIntStateOf(swallowSeq) }
+    DisposableEffect(context) {
+        val resolver = context.contentResolver
+        val uri = Settings.Global.getUriFor("blaze_island_swallow_seq")
+        val observer =
+            object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    swallowSeq =
+                        runCatching {
+                            Settings.Global.getInt(resolver, "blaze_island_swallow_seq", 0)
+                        }.getOrDefault(0)
+                }
+            }
+        if (uri != null) {
+            resolver.registerContentObserver(uri, false, observer)
+        }
+        onDispose { resolver.unregisterContentObserver(observer) }
+    }
+    LaunchedEffect(swallowSeq) {
+        if (swallowSeq != initialSwallowSeq) {
+            initialSwallowSeq = swallowSeq
+            if (chips.any { it.chipId == PopupChipId.MediaControl }) {
+                selectedChipId = PopupChipId.MediaControl
+            }
+            if (!cos) {
+                switchScaleAnim.animateTo(0.90f, tween(60, easing = FastOutSlowInEasing))
+                switchScaleAnim.animateTo(1.18f, tween(180, easing = FastOutSlowInEasing))
+                switchScaleAnim.animateTo(
+                    1f,
+                    spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = 520f),
+                )
+            }
+        }
     }
 
     fun selectRelative(direction: Int) {

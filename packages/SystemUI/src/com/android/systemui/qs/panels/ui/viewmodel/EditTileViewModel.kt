@@ -45,6 +45,8 @@ data class UnloadedEditTileViewModel(
     val isDualTarget: Boolean,
     val availableEditActions: Set<AvailableEditActions>,
     val category: TileCategory,
+    val spanCols: Int = 1,
+    val spanRows: Int = 1,
 ) {
     fun load(context: Context): EditTileViewModel {
         val loadedLabel = label.toAnnotatedString(context) ?: AnnotatedString(tileSpec.spec)
@@ -69,6 +71,8 @@ data class UnloadedEditTileViewModel(
             isDualTarget = isDualTarget,
             availableEditActions = availableEditActions,
             category = category,
+            spanCols = spanCols,
+            spanRows = spanRows,
         )
     }
 }
@@ -103,6 +107,8 @@ data class EditTileViewModel(
     val isDualTarget: Boolean,
     val availableEditActions: Set<AvailableEditActions>,
     override val category: TileCategory,
+    val spanCols: Int = 1,
+    val spanRows: Int = 1,
 ) : CategoryAndName {
     override val name
         get() = label.text

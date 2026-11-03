@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -43,6 +43,8 @@ import com.android.systemui.keyguard.ui.transitions.BlurConfig
 import com.android.systemui.res.R
 import java.io.PrintWriter
 import javax.inject.Inject
+import kotlin.math.pow
+import kotlin.math.sin
 
 @SysUISingleton
 open class BlurUtils
@@ -69,22 +71,18 @@ constructor(
         get() = _transactionApplier
 
     private var earlyWakeupEnabled = false
-
-    /** Token for early wakeup requests to SurfaceFlinger. */
     private val earlyWakeupInfo = EarlyWakeupInfo()
-
-    /** When this is true, early wakeup flag is not reset on surface flinger when blur drops to 0 */
     private var persistentEarlyWakeupRequired = false
 
     init {
         dumpManager.registerDumpable(this)
         earlyWakeupInfo.token = Binder()
+        earlyWakeupInfo.trace = BlurUtils::class.java.name
     }
 
     @VisibleForTesting
     open fun createTransaction(): SurfaceControl.Transaction = SurfaceControl.Transaction()
 
-    /** Translates a ratio from 0 to 1 to a blur radius in pixels. */
     fun blurRadiusOfRatio(ratio: Float): Float {
         if (ratio == 0f) {
             return 0f
@@ -99,13 +97,28 @@ constructor(
             } else {
                 0.78f
             }
-        return MathUtils.lerp(minBlurRadius, maxBlurRadius * scale, ratio)
+        val enhancedRatio = applyOneUIBlurCurve(ratio)
+        return MathUtils.lerp(minBlurRadius, maxBlurRadius * scale, enhancedRatio)
     }
 
-    /**
-     * Translates a ratio from 0 to 1 to a blur radius in pixels for AOD. We use half of the
-     * maxBlurRadius for AOD wallpaper blur.
-     */
+    private fun applyOneUIBlurCurve(ratio: Float): Float {
+        return when {
+            ratio < 0.3f -> {
+                val t = ratio / 0.3f
+                t * t * (3f - 2f * t) * 0.3f
+            }
+            ratio < 0.7f -> {
+                val t = (ratio - 0.3f) / 0.4f
+                0.3f + (t.pow(1.8f)) * 0.5f
+            }
+            else -> {
+                val t = (ratio - 0.7f) / 0.3f
+                val overshoot = sin(t * Math.PI.toFloat() * 0.5f) * 0.05f
+                0.8f + (t * t * (3f - 2f * t) * 0.2f) + overshoot
+            }
+        }.coerceIn(0f, 1f)
+    }
+
     fun blurRadiusOfRatioForAod(ratio: Float): Float {
         if (ratio == 0f) {
             return 0f
@@ -113,7 +126,6 @@ constructor(
         return MathUtils.lerp(minBlurRadius, maxBlurRadius / 2, ratio)
     }
 
-    /** Translates a blur radius in pixels to a ratio between 0 to 1. */
     fun ratioOfBlurRadius(blur: Float): Float {
         if (blur == 0f) {
             return 0f
@@ -121,8 +133,8 @@ constructor(
         return MathUtils.map(
             minBlurRadius,
             maxBlurRadius,
-            0f /* maxStart */,
-            1f /* maxStop */,
+            0f,
+            1f,
             blur,
         )
     }
@@ -139,42 +151,45 @@ constructor(
         }
     }
 
-    /**
-     * Applies background blurs to a {@link ViewRootImpl}.
-     *
-     * @param viewRootImpl The window root.
-     * @param radius blur radius in pixels.
-     * @param opaque if surface is opaque, regardless or having blurs or no.
-     * @param scale blur scale effect relative to 1.0
-     */
     fun applyBlur(viewRootImpl: ViewRootImpl?, radius: Int, opaque: Boolean, scale: Float = 1.0f) {
         if (viewRootImpl == null || !viewRootImpl.surfaceControl.isValid) {
             return
         }
         updateTransactionApplier(viewRootImpl)
-        val builder =
-            SyncRtSurfaceTransactionApplier.SurfaceParams.Builder(viewRootImpl.surfaceControl)
-        if (shouldBlur(radius)) {
-            builder.withBackgroundBlurRadius(radius)
-            builder.withBackgroundBlurScale(scale)
-            if (lastAppliedBlur == 0 && radius != 0) {
-                Trace.instantForTrack(TRACE_TAG_APP, TRACK_NAME, "notifyRendererForGpuLoadUp")
-                viewRootImpl.notifyRendererForGpuLoadUp("applyBlur")
 
-                if (!earlyWakeupEnabled) {
-                    earlyWakeupStartNextFrame(builder, APPLY_BLUR_TRACE_NAME)
-                }
-            }
-            if (
-                earlyWakeupEnabled &&
-                    lastAppliedBlur != 0 &&
-                    radius == 0 &&
-                    !persistentEarlyWakeupRequired
-            ) {
-                earlyWakeupEndNextFrame(builder, APPLY_BLUR_TRACE_NAME)
-            }
+        if (shouldBlur(radius)) {
+            applyLayeredBlur(viewRootImpl, radius, opaque, scale)
             lastAppliedBlur = radius
+        } else {
+            val builder = SyncRtSurfaceTransactionApplier.SurfaceParams.Builder(viewRootImpl.surfaceControl)
+            builder.withOpaque(opaque)
+            transactionApplier.scheduleApply(builder.build())
         }
+    }
+
+    private fun applyLayeredBlur(viewRootImpl: ViewRootImpl, radius: Int, opaque: Boolean, scale: Float) {
+        val builder = SyncRtSurfaceTransactionApplier.SurfaceParams.Builder(viewRootImpl.surfaceControl)
+
+        val enhancedRadius = (radius * 1.2f).toInt()
+        builder.withBackgroundBlurRadius(enhancedRadius)
+
+        if (shouldScaleWithTransaction()) {
+            builder.withBackgroundBlurScale(scale)
+        }
+
+        if (lastAppliedBlur == 0 && radius != 0) {
+            Trace.instantForTrack(TRACE_TAG_APP, TRACK_NAME, "notifyRendererForGpuLoadUp")
+            viewRootImpl.notifyRendererForGpuLoadUp("applyBlur")
+
+            if (!earlyWakeupEnabled) {
+                earlyWakeupStartNextFrame(builder, APPLY_BLUR_TRACE_NAME)
+            }
+        }
+
+        if (earlyWakeupEnabled && lastAppliedBlur != 0 && radius == 0 && !persistentEarlyWakeupRequired) {
+            earlyWakeupEndNextFrame(builder, APPLY_BLUR_TRACE_NAME)
+        }
+
         builder.withOpaque(opaque)
         transactionApplier.scheduleApply(builder.build())
     }
@@ -244,12 +259,10 @@ constructor(
                 radius == 0)
     }
 
-    /**
-     * If this device can render blurs.
-     *
-     * @return {@code true} when supported.
-     * @see android.view.SurfaceControl.Transaction#setBackgroundBlurRadius(SurfaceControl, int)
-     */
+    private fun shouldScaleWithTransaction(): Boolean {
+        return false // spatialModelAppPushback system flags unsupported in scope
+    }
+
     open fun supportsBlursOnWindows(): Boolean {
         return supportsBlursOnWindowsBase() &&
             crossWindowBlurListeners != null &&
@@ -264,7 +277,7 @@ constructor(
 
     override fun dump(pw: PrintWriter, args: Array<out String>) {
         IndentingPrintWriter(pw, "  ").let {
-            it.println("BlurUtils:")
+            it.println("BlurUtils (OneUI Enhanced):")
             it.increaseIndent()
             it.println("minBlurRadius: $minBlurRadius")
             it.println("maxBlurRadius: $maxBlurRadius")
@@ -274,10 +287,6 @@ constructor(
         }
     }
 
-    /**
-     * Enables/disables the early wakeup flag on surface flinger. Keeps the early wakeup flag on
-     * until it reset by passing false to this method.
-     */
     fun setPersistentEarlyWakeup(persistentWakeup: Boolean, viewRootImpl: ViewRootImpl?) {
         persistentEarlyWakeupRequired = persistentWakeup
         if (viewRootImpl == null || !supportsBlursOnWindows()) return
@@ -293,12 +302,7 @@ constructor(
         } else {
             if (!earlyWakeupEnabled) return
             if (lastAppliedBlur > 0) {
-                Log.w(
-                    TAG,
-                    "resetEarlyWakeup invoked when lastAppliedBlur $lastAppliedBlur is " +
-                        "non-zero, this means that the early wakeup signal was reset while blur" +
-                        " was still active",
-                )
+                Log.w(TAG, "resetEarlyWakeup invoked when lastAppliedBlur $lastAppliedBlur is non-zero")
             }
             Trace.instantForTrack(
                 TRACE_TAG_APP,

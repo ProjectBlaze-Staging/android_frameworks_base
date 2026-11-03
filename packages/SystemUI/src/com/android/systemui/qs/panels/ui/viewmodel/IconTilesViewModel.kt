@@ -18,24 +18,41 @@ package com.android.systemui.qs.panels.ui.viewmodel
 
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.qs.panels.domain.interactor.IconTilesInteractor
+import com.android.systemui.qs.panels.shared.model.TileGridConfig
 import com.android.systemui.qs.pipeline.shared.TileSpec
 import javax.inject.Inject
 import kotlinx.coroutines.flow.StateFlow
 
 interface IconTilesViewModel {
     val largeTiles: StateFlow<Set<TileSpec>>
+    val tileGridConfigs: StateFlow<List<TileGridConfig>>
+    val tileGridConfigsLandscape: StateFlow<List<TileGridConfig>>
 
     fun isIconTile(spec: TileSpec): Boolean
 
     fun resize(spec: TileSpec, toIcon: Boolean)
+    
+    fun setTileSize(spec: TileSpec, spanCols: Int, spanRows: Int, landscape: Boolean = false)
+    
+    fun getTileSize(spec: TileSpec, landscape: Boolean = false): Pair<Int, Int>
 }
 
 @SysUISingleton
 class IconTilesViewModelImpl @Inject constructor(private val interactor: IconTilesInteractor) :
     IconTilesViewModel {
     override val largeTiles = interactor.largeTilesSpecs
+    override val tileGridConfigs = interactor.tileGridConfigs
+    override val tileGridConfigsLandscape = interactor.tileGridConfigsLandscape
 
     override fun isIconTile(spec: TileSpec): Boolean = interactor.isIconTile(spec)
 
     override fun resize(spec: TileSpec, toIcon: Boolean) = interactor.resize(spec, toIcon)
+    
+    override fun setTileSize(spec: TileSpec, spanCols: Int, spanRows: Int, landscape: Boolean) {
+        interactor.setTileSize(spec, spanCols, spanRows, landscape)
+    }
+    
+    override fun getTileSize(spec: TileSpec, landscape: Boolean): Pair<Int, Int> {
+        return interactor.getTileSize(spec, landscape)
+    }
 }
