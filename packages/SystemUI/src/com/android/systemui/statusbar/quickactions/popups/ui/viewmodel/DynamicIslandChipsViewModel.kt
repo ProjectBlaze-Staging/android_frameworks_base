@@ -212,7 +212,11 @@ constructor(
 
         val openApp = if (isOnLockscreen) null else foregroundPackage
         (systemEventChips.chips + candidateChips.filterIsInstance<PopupChipModel.Shown>())
-            .filter { it.ownerPackage == null || it.ownerPackage != openApp }
+            .filter {
+                it.chipId == PopupChipId.MediaControl ||
+                    it.ownerPackage == null ||
+                    it.ownerPackage != openApp
+            }
             .map { chip ->
             chip.copy(
                 isPopupShown = chip.chipId == currentShownPopupChipId,

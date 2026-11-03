@@ -207,11 +207,11 @@ public class TransitionAnimationHelper {
     @Nullable
     private static Animation createLuminousSpringAnimation(int animAttr) {
         final com.android.internal.penguin.luminous.SpringInterpolator springOpen =
-                new com.android.internal.penguin.luminous.SpringInterpolator(350f, 0.86f, 0f);
+                new com.android.internal.penguin.luminous.SpringInterpolator(280f, 0.94f, 0f);
         final com.android.internal.penguin.luminous.SpringInterpolator springClose =
-                new com.android.internal.penguin.luminous.SpringInterpolator(380f, 0.88f, 0f);
+                new com.android.internal.penguin.luminous.SpringInterpolator(290f, 0.94f, 0f);
         final long openDur = Math.min(springOpen.getDurationMillis(), 480L);
-        final long closeDur = Math.min(springClose.getDurationMillis(), 450L);
+        final long closeDur = Math.min(springClose.getDurationMillis(), 460L);
 
         switch (animAttr) {
             case R.styleable.WindowAnimation_activityOpenEnterAnimation: {
@@ -219,7 +219,7 @@ public class TransitionAnimationHelper {
                         new android.view.animation.AnimationSet(false);
                 android.view.animation.TranslateAnimation tr =
                         new android.view.animation.TranslateAnimation(
-                                Animation.RELATIVE_TO_SELF, 0.34f,
+                                Animation.RELATIVE_TO_SELF, 0.28f,
                                 Animation.RELATIVE_TO_SELF, 0f,
                                 Animation.RELATIVE_TO_SELF, 0f,
                                 Animation.RELATIVE_TO_SELF, 0f);
@@ -227,14 +227,14 @@ public class TransitionAnimationHelper {
                 tr.setInterpolator(springOpen);
                 android.view.animation.ScaleAnimation sc =
                         new android.view.animation.ScaleAnimation(
-                                0.92f, 1.0f, 0.92f, 1.0f,
+                                0.94f, 1.0f, 0.94f, 1.0f,
                                 Animation.RELATIVE_TO_SELF, 0.5f,
                                 Animation.RELATIVE_TO_SELF, 0.5f);
                 sc.setDuration(openDur);
                 sc.setInterpolator(springOpen);
                 android.view.animation.AlphaAnimation al =
                         new android.view.animation.AlphaAnimation(0f, 1f);
-                al.setDuration(140L);
+                al.setDuration(150L);
                 set.addAnimation(tr);
                 set.addAnimation(sc);
                 set.addAnimation(al);
@@ -251,20 +251,20 @@ public class TransitionAnimationHelper {
                 android.view.animation.TranslateAnimation tr =
                         new android.view.animation.TranslateAnimation(
                                 Animation.RELATIVE_TO_SELF, 0f,
-                                Animation.RELATIVE_TO_SELF, -0.18f,
+                                Animation.RELATIVE_TO_SELF, -0.15f,
                                 Animation.RELATIVE_TO_SELF, 0f,
                                 Animation.RELATIVE_TO_SELF, 0f);
                 tr.setDuration(openDur);
                 tr.setInterpolator(springOpen);
                 android.view.animation.ScaleAnimation sc =
                         new android.view.animation.ScaleAnimation(
-                                1.0f, 0.92f, 1.0f, 0.92f,
+                                1.0f, 0.94f, 1.0f, 0.94f,
                                 Animation.RELATIVE_TO_SELF, 0.5f,
                                 Animation.RELATIVE_TO_SELF, 0.5f);
                 sc.setDuration(openDur);
                 sc.setInterpolator(springOpen);
                 android.view.animation.AlphaAnimation al =
-                        new android.view.animation.AlphaAnimation(1.0f, 0.76f);
+                        new android.view.animation.AlphaAnimation(1.0f, 0.80f);
                 al.setDuration(openDur);
                 al.setInterpolator(springOpen);
                 set.addAnimation(tr);
@@ -282,7 +282,7 @@ public class TransitionAnimationHelper {
                         new android.view.animation.AnimationSet(false);
                 android.view.animation.TranslateAnimation tr =
                         new android.view.animation.TranslateAnimation(
-                                Animation.RELATIVE_TO_SELF, -0.18f,
+                                Animation.RELATIVE_TO_SELF, -0.15f,
                                 Animation.RELATIVE_TO_SELF, 0f,
                                 Animation.RELATIVE_TO_SELF, 0f,
                                 Animation.RELATIVE_TO_SELF, 0f);
@@ -290,13 +290,13 @@ public class TransitionAnimationHelper {
                 tr.setInterpolator(springClose);
                 android.view.animation.ScaleAnimation sc =
                         new android.view.animation.ScaleAnimation(
-                                0.92f, 1.0f, 0.92f, 1.0f,
+                                0.94f, 1.0f, 0.94f, 1.0f,
                                 Animation.RELATIVE_TO_SELF, 0.5f,
                                 Animation.RELATIVE_TO_SELF, 0.5f);
                 sc.setDuration(closeDur);
                 sc.setInterpolator(springClose);
                 android.view.animation.AlphaAnimation al =
-                        new android.view.animation.AlphaAnimation(0.76f, 1.0f);
+                        new android.view.animation.AlphaAnimation(0.80f, 1.0f);
                 al.setDuration(closeDur);
                 al.setInterpolator(springClose);
                 set.addAnimation(tr);
@@ -315,14 +315,14 @@ public class TransitionAnimationHelper {
                 android.view.animation.TranslateAnimation tr =
                         new android.view.animation.TranslateAnimation(
                                 Animation.RELATIVE_TO_SELF, 0f,
-                                Animation.RELATIVE_TO_SELF, 0.36f,
+                                Animation.RELATIVE_TO_SELF, 0.30f,
                                 Animation.RELATIVE_TO_SELF, 0f,
                                 Animation.RELATIVE_TO_SELF, 0f);
                 tr.setDuration(closeDur);
                 tr.setInterpolator(springClose);
                 android.view.animation.ScaleAnimation sc =
                         new android.view.animation.ScaleAnimation(
-                                1.0f, 0.91f, 1.0f, 0.91f,
+                                1.0f, 0.93f, 1.0f, 0.93f,
                                 Animation.RELATIVE_TO_SELF, 0.5f,
                                 Animation.RELATIVE_TO_SELF, 0.5f);
                 sc.setDuration(closeDur);
@@ -331,137 +331,6 @@ public class TransitionAnimationHelper {
                         new android.view.animation.AlphaAnimation(1.0f, 0f);
                 al.setStartOffset(60L);
                 al.setDuration(Math.max(160L, closeDur - 100L));
-                set.addAnimation(tr);
-                set.addAnimation(sc);
-                set.addAnimation(al);
-                set.setZAdjustment(Animation.ZORDER_TOP);
-                set.setFillEnabled(true);
-                set.setFillBefore(true);
-                set.setFillAfter(true);
-                set.setHasRoundedCorners(true);
-                return set;
-            }
-            case R.styleable.WindowAnimation_taskOpenEnterAnimation:
-            case R.styleable.WindowAnimation_taskToFrontEnterAnimation: {
-                android.view.animation.AnimationSet set =
-                        new android.view.animation.AnimationSet(false);
-                android.view.animation.TranslateAnimation tr =
-                        new android.view.animation.TranslateAnimation(
-                                Animation.RELATIVE_TO_SELF, 0.24f,
-                                Animation.RELATIVE_TO_SELF, 0f,
-                                Animation.RELATIVE_TO_SELF, 0.04f,
-                                Animation.RELATIVE_TO_SELF, 0f);
-                tr.setDuration(openDur);
-                tr.setInterpolator(springOpen);
-                android.view.animation.ScaleAnimation sc =
-                        new android.view.animation.ScaleAnimation(
-                                0.88f, 1.0f, 0.88f, 1.0f,
-                                Animation.RELATIVE_TO_SELF, 0.5f,
-                                Animation.RELATIVE_TO_SELF, 0.5f);
-                sc.setDuration(openDur);
-                sc.setInterpolator(springOpen);
-                android.view.animation.AlphaAnimation al =
-                        new android.view.animation.AlphaAnimation(0f, 1f);
-                al.setDuration(130L);
-                set.addAnimation(tr);
-                set.addAnimation(sc);
-                set.addAnimation(al);
-                set.setZAdjustment(Animation.ZORDER_TOP);
-                set.setFillEnabled(true);
-                set.setFillBefore(true);
-                set.setFillAfter(true);
-                set.setHasRoundedCorners(true);
-                return set;
-            }
-            case R.styleable.WindowAnimation_taskOpenExitAnimation:
-            case R.styleable.WindowAnimation_taskToFrontExitAnimation: {
-                android.view.animation.AnimationSet set =
-                        new android.view.animation.AnimationSet(false);
-                android.view.animation.TranslateAnimation tr =
-                        new android.view.animation.TranslateAnimation(
-                                Animation.RELATIVE_TO_SELF, 0f,
-                                Animation.RELATIVE_TO_SELF, -0.15f,
-                                Animation.RELATIVE_TO_SELF, 0f,
-                                Animation.RELATIVE_TO_SELF, 0f);
-                tr.setDuration(openDur);
-                tr.setInterpolator(springOpen);
-                android.view.animation.ScaleAnimation sc =
-                        new android.view.animation.ScaleAnimation(
-                                1.0f, 0.90f, 1.0f, 0.90f,
-                                Animation.RELATIVE_TO_SELF, 0.5f,
-                                Animation.RELATIVE_TO_SELF, 0.5f);
-                sc.setDuration(openDur);
-                sc.setInterpolator(springOpen);
-                android.view.animation.AlphaAnimation al =
-                        new android.view.animation.AlphaAnimation(1.0f, 0.72f);
-                al.setDuration(openDur);
-                al.setInterpolator(springOpen);
-                set.addAnimation(tr);
-                set.addAnimation(sc);
-                set.addAnimation(al);
-                set.setZAdjustment(Animation.ZORDER_BOTTOM);
-                set.setFillEnabled(true);
-                set.setFillBefore(true);
-                set.setFillAfter(true);
-                set.setHasRoundedCorners(true);
-                return set;
-            }
-            case R.styleable.WindowAnimation_taskCloseEnterAnimation:
-            case R.styleable.WindowAnimation_taskToBackEnterAnimation: {
-                android.view.animation.AnimationSet set =
-                        new android.view.animation.AnimationSet(false);
-                android.view.animation.TranslateAnimation tr =
-                        new android.view.animation.TranslateAnimation(
-                                Animation.RELATIVE_TO_SELF, -0.15f,
-                                Animation.RELATIVE_TO_SELF, 0f,
-                                Animation.RELATIVE_TO_SELF, 0f,
-                                Animation.RELATIVE_TO_SELF, 0f);
-                tr.setDuration(closeDur);
-                tr.setInterpolator(springClose);
-                android.view.animation.ScaleAnimation sc =
-                        new android.view.animation.ScaleAnimation(
-                                0.90f, 1.0f, 0.90f, 1.0f,
-                                Animation.RELATIVE_TO_SELF, 0.5f,
-                                Animation.RELATIVE_TO_SELF, 0.5f);
-                sc.setDuration(closeDur);
-                sc.setInterpolator(springClose);
-                android.view.animation.AlphaAnimation al =
-                        new android.view.animation.AlphaAnimation(0.72f, 1.0f);
-                al.setDuration(closeDur);
-                al.setInterpolator(springClose);
-                set.addAnimation(tr);
-                set.addAnimation(sc);
-                set.addAnimation(al);
-                set.setZAdjustment(Animation.ZORDER_BOTTOM);
-                set.setFillEnabled(true);
-                set.setFillBefore(true);
-                set.setFillAfter(true);
-                set.setHasRoundedCorners(true);
-                return set;
-            }
-            case R.styleable.WindowAnimation_taskCloseExitAnimation:
-            case R.styleable.WindowAnimation_taskToBackExitAnimation: {
-                android.view.animation.AnimationSet set =
-                        new android.view.animation.AnimationSet(false);
-                android.view.animation.TranslateAnimation tr =
-                        new android.view.animation.TranslateAnimation(
-                                Animation.RELATIVE_TO_SELF, 0f,
-                                Animation.RELATIVE_TO_SELF, 0.26f,
-                                Animation.RELATIVE_TO_SELF, 0f,
-                                Animation.RELATIVE_TO_SELF, 0.04f);
-                tr.setDuration(closeDur);
-                tr.setInterpolator(springClose);
-                android.view.animation.ScaleAnimation sc =
-                        new android.view.animation.ScaleAnimation(
-                                1.0f, 0.88f, 1.0f, 0.88f,
-                                Animation.RELATIVE_TO_SELF, 0.5f,
-                                Animation.RELATIVE_TO_SELF, 0.5f);
-                sc.setDuration(closeDur);
-                sc.setInterpolator(springClose);
-                android.view.animation.AlphaAnimation al =
-                        new android.view.animation.AlphaAnimation(1.0f, 0f);
-                al.setStartOffset(50L);
-                al.setDuration(Math.max(150L, closeDur - 90L));
                 set.addAnimation(tr);
                 set.addAnimation(sc);
                 set.addAnimation(al);

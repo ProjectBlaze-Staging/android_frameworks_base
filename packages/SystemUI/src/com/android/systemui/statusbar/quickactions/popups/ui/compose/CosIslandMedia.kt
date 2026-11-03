@@ -8,10 +8,17 @@ package com.android.systemui.statusbar.quickactions.popups.ui.compose
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,16 +26,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.Image
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.core.graphics.drawable.toBitmap
@@ -118,6 +123,51 @@ internal fun CosVoicePrint(playing: Boolean, size: Dp) {
             iterations = LottieConstants.IterateForever,
             modifier = Modifier.size(size),
         )
+    } else if (playing) {
+        val infinite = rememberInfiniteTransition(label = "cos_island_eq")
+        val bar0 by infinite.animateFloat(
+            initialValue = 0.28f, targetValue = 0.90f,
+            animationSpec = infiniteRepeatable(tween(420, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "b0"
+        )
+        val bar1 by infinite.animateFloat(
+            initialValue = 0.85f, targetValue = 0.25f,
+            animationSpec = infiniteRepeatable(tween(340, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "b1"
+        )
+        val bar2 by infinite.animateFloat(
+            initialValue = 0.40f, targetValue = 0.96f,
+            animationSpec = infiniteRepeatable(tween(480, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "b2"
+        )
+        val bar3 by infinite.animateFloat(
+            initialValue = 0.92f, targetValue = 0.32f,
+            animationSpec = infiniteRepeatable(tween(380, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "b3"
+        )
+        val bar4 by infinite.animateFloat(
+            initialValue = 0.35f, targetValue = 0.80f,
+            animationSpec = infiniteRepeatable(tween(450, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "b4"
+        )
+        val bars = floatArrayOf(bar0, bar1, bar2, bar3, bar4)
+        Canvas(Modifier.size(size)) {
+            val w = this.size.width
+            val h = this.size.height
+            val barW = w / 9.5f
+            val gap = (w - barW * 5f) / 6f
+            for (i in 0 until 5) {
+                val barH = (h * bars[i]).coerceAtLeast(barW)
+                val x = gap + i * (barW + gap)
+                val y = (h - barH) / 2f
+                drawRoundRect(
+                    color = Color(0xFF4ADE80),
+                    topLeft = Offset(x, y),
+                    size = Size(barW, barH),
+                    cornerRadius = CornerRadius(barW / 2f, barW / 2f),
+                )
+            }
+        }
     } else {
         Canvas(Modifier.size(size)) {
             val unit = this.size.width / 26f

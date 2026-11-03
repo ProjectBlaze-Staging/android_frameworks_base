@@ -209,7 +209,7 @@ fun StatusBarDynamicIslandChip(
     // COS chips sit centred on the camera; keep their icon and text on either side of it.
     val cosCameraGap =
         cutoutSpec.embeddedGapWidth.takeIf {
-            cos && !isMediaChip && cutoutSpec.cutoutCenterX != null
+            cos && cutoutSpec.cutoutCenterX != null
         }
 
     CameraSplitRow(

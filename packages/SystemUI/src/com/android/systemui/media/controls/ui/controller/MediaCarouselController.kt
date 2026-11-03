@@ -137,6 +137,8 @@ constructor(
     private val globalSettings: GlobalSettings,
     private val secureSettings: SecureSettings,
     private val mediaControlChipInteractor: MediaControlChipInteractor,
+    private val dynamicIslandMediaControlChipInteractor:
+        com.android.systemui.statusbar.quickactions.dynamicisland.media.domain.interactor.MediaControlChipInteractor,
     private val secureLockDeviceInteractor: Lazy<SecureLockDeviceInteractor>,
     @Background private val bgScope: CoroutineScope,
 ) : Dumpable {
@@ -606,9 +608,9 @@ constructor(
             }
         }
         mediaCarouselScrollHandler.onPlayersChanged()
-        mediaControlChipInteractor.updateMediaControlChipModelLegacy(
-            MediaPlayerData.getFirstActiveMediaData()
-        )
+        val firstActiveMedia = MediaPlayerData.getFirstActiveMediaData()
+        mediaControlChipInteractor.updateMediaControlChipModelLegacy(firstActiveMedia)
+        dynamicIslandMediaControlChipInteractor.updateMediaControlChipModelLegacy(firstActiveMedia)
         MediaPlayerData.updateVisibleMediaPlayers()
         if (isRtl && mediaContent.childCount > 0) {
             // In RTL, Scroll to the first player as it is the rightmost player in media carousel.
@@ -644,8 +646,12 @@ constructor(
                         setupNewPlayer(key, data, mediaViewHolder)
                         updatePageIndicator()
                         mediaCarouselScrollHandler.onPlayersChanged()
+                        val firstActiveMedia = MediaPlayerData.getFirstActiveMediaData()
                         mediaControlChipInteractor.updateMediaControlChipModelLegacy(
-                            MediaPlayerData.getFirstActiveMediaData()
+                            firstActiveMedia
+                        )
+                        dynamicIslandMediaControlChipInteractor.updateMediaControlChipModelLegacy(
+                            firstActiveMedia
                         )
                         mediaFrame.requiresRemeasuring = true
                         onUiExecutionEnd.run()
@@ -655,8 +661,10 @@ constructor(
                 updatePlayer(key, data, existingPlayer)
                 updatePageIndicator()
                 mediaCarouselScrollHandler.onPlayersChanged()
-                mediaControlChipInteractor.updateMediaControlChipModelLegacy(
-                    MediaPlayerData.getFirstActiveMediaData()
+                val firstActiveMedia = MediaPlayerData.getFirstActiveMediaData()
+                mediaControlChipInteractor.updateMediaControlChipModelLegacy(firstActiveMedia)
+                dynamicIslandMediaControlChipInteractor.updateMediaControlChipModelLegacy(
+                    firstActiveMedia
                 )
                 mediaFrame.requiresRemeasuring = true
                 onUiExecutionEnd.run()
@@ -712,8 +720,10 @@ constructor(
             mediaContent.removeView(removed.mediaViewHolder?.player)
             removed.onDestroy()
             mediaCarouselScrollHandler.onPlayersChanged()
-            mediaControlChipInteractor.updateMediaControlChipModelLegacy(
-                MediaPlayerData.getFirstActiveMediaData()
+            val firstActiveMedia = MediaPlayerData.getFirstActiveMediaData()
+            mediaControlChipInteractor.updateMediaControlChipModelLegacy(firstActiveMedia)
+            dynamicIslandMediaControlChipInteractor.updateMediaControlChipModelLegacy(
+                firstActiveMedia
             )
             updatePageIndicator()
 

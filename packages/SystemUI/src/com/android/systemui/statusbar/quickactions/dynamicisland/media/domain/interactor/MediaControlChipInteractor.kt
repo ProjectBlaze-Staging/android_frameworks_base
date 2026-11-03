@@ -19,10 +19,12 @@ package com.android.systemui.statusbar.quickactions.dynamicisland.media.domain.i
 import android.app.PendingIntent
 import android.content.Context
 import android.database.ContentObserver
+import android.graphics.drawable.BitmapDrawable
 import android.provider.Settings
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSession
+import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
@@ -36,6 +38,7 @@ import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.media.NotificationMediaManager
+import com.android.systemui.media.controls.domain.pipeline.MediaDataManager
 import com.android.systemui.media.controls.shared.model.MediaAction
 import com.android.systemui.media.controls.shared.model.MediaData
 import com.android.systemui.media.remedia.data.model.MediaDataModel
@@ -88,11 +91,13 @@ constructor(
     @Application private val context: Context,
     @Background private val backgroundScope: CoroutineScope,
     private val mediaRepository: MediaRepositoryImpl,
+    private val mediaDataManager: MediaDataManager,
     private val activityStarter: ActivityStarter,
     private val activityIntentHelper: ActivityIntentHelper,
     private val lockscreenUserManager: NotificationLockscreenUserManager,
     private val keyguardStateController: KeyguardStateController,
 ) {
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val isEnabled = MutableStateFlow(false)
     private val isDynamicIslandEnabled = MutableStateFlow(false)
     private var isInitialized = false
@@ -100,8 +105,11 @@ constructor(
     private val currentSyncedLyrics = MutableStateFlow<String?>(null)
     private var lastFetchedSong: String? = null
     private var lastFetchedArtist: String? = null
+    private val activeMediaDataMap = LinkedHashMap<String, MediaData>()
+    private val sessionFallbackState = MutableStateFlow(MediaControlState.Hidden)
+    private val registeredSessionControllers = mutableListOf<Pair<MediaController, MediaController.Callback>>()
     private val dynamicIslandObserver =
-        object : ContentObserver(Handler(Looper.getMainLooper())) {
+        object : ContentObserver(mainHandler) {
             override fun onChange(selfChange: Boolean) {
                 updateDynamicIslandState()
             }
@@ -138,11 +146,22 @@ constructor(
         }
     }
 
-    private val mediaControlState: Flow<MediaControlState> =
+    private val primaryMediaControlState: Flow<MediaControlState> =
         if (MediaControlsInComposeFlag.isEnabled) {
             mediaControlChipModelForScene
         } else {
             mediaControlChipModelLegacy
+        }
+
+    private val mediaControlState: Flow<MediaControlState> =
+        combine(primaryMediaControlState, sessionFallbackState) { primary, fallback ->
+            if (primary.model != null && !primary.model.songName.isNullOrEmpty()) {
+                primary
+            } else if (fallback.model != null) {
+                fallback
+            } else {
+                primary
+            }
         }
 
     private val livePlaybackInfo: Flow<PlaybackInfo?> =
@@ -219,7 +238,113 @@ constructor(
         )
         updateDynamicIslandState()
         isEnabled.value = true
+        setupDirectMediaListeners()
         setupLyricsWorker()
+    }
+
+    private fun setupDirectMediaListeners() {
+        mainHandler.post {
+            runCatching {
+                mediaDataManager.addListener(
+                    object : MediaDataManager.Listener {
+                        override fun onMediaDataLoaded(
+                            key: String,
+                            oldKey: String?,
+                            data: MediaData,
+                            immediately: Boolean,
+                        ) {
+                            if (oldKey != null && oldKey != key) {
+                                activeMediaDataMap.remove(oldKey)
+                            }
+                            if (data.active || data.isPlaying == true) {
+                                activeMediaDataMap[key] = data
+                            } else {
+                                activeMediaDataMap.remove(key)
+                            }
+                            refreshFromMediaDataMap()
+                        }
+
+                        override fun onMediaDataRemoved(key: String, userInitiated: Boolean) {
+                            activeMediaDataMap.remove(key)
+                            refreshFromMediaDataMap()
+                        }
+                    }
+                )
+            }
+            runCatching {
+                val msm = context.getSystemService(MediaSessionManager::class.java)
+                if (msm != null) {
+                    val listener =
+                        MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
+                            bindActiveSessionControllers(controllers ?: emptyList())
+                        }
+                    msm.addOnActiveSessionsChangedListener(
+                        null,
+                        UserHandle.ALL,
+                        context.mainExecutor,
+                        listener,
+                    )
+                    bindActiveSessionControllers(
+                        msm.getActiveSessionsForUser(null, UserHandle.ALL)
+                    )
+                }
+            }
+        }
+    }
+
+    private fun refreshFromMediaDataMap() {
+        val chosen =
+            activeMediaDataMap.values.firstOrNull { it.isPlaying == true }
+                ?: activeMediaDataMap.values.firstOrNull { it.active }
+        if (chosen != null) {
+            updateMediaControlChipModelLegacy(chosen)
+        } else if (activeMediaDataMap.isEmpty()) {
+            updateMediaControlChipModelLegacy(null)
+        }
+    }
+
+    private fun bindActiveSessionControllers(controllers: List<MediaController>) {
+        registeredSessionControllers.forEach { (ctrl, cb) ->
+            runCatching { ctrl.unregisterCallback(cb) }
+        }
+        registeredSessionControllers.clear()
+        for (ctrl in controllers) {
+            val cb =
+                object : MediaController.Callback() {
+                    override fun onPlaybackStateChanged(state: PlaybackState?) {
+                        refreshFromSessionControllers(controllers)
+                    }
+
+                    override fun onMetadataChanged(metadata: MediaMetadata?) {
+                        refreshFromSessionControllers(controllers)
+                    }
+
+                    override fun onSessionDestroyed() {
+                        refreshFromSessionControllers(controllers)
+                    }
+                }
+            runCatching {
+                ctrl.registerCallback(cb, mainHandler)
+                registeredSessionControllers.add(ctrl to cb)
+            }
+        }
+        refreshFromSessionControllers(controllers)
+    }
+
+    private fun refreshFromSessionControllers(controllers: List<MediaController>) {
+        val playingCtrl =
+            controllers.firstOrNull { it.playbackState?.isActivePlaybackState() == true }
+                ?: controllers.firstOrNull {
+                    it.playbackState?.state == PlaybackState.STATE_PAUSED && it.metadata != null
+                }
+        sessionFallbackState.value =
+            playingCtrl?.toMediaControlState(
+                context = context,
+                activityStarter = activityStarter,
+                activityIntentHelper = activityIntentHelper,
+                lockscreenUserManager = lockscreenUserManager,
+                keyguardStateController = keyguardStateController,
+            ) ?: MediaControlState.Hidden
     }
 
     private fun updateDynamicIslandState() {
@@ -354,15 +479,25 @@ private fun MediaData.toMediaControlState(
     keyguardStateController: KeyguardStateController,
 ): MediaControlState {
     val contentDescription = app?.let { ContentDescription.Loaded(it) }
+    val loadedAppIcon =
+        appIcon.loadUiIcon(context, contentDescription)
+            ?: runCatching {
+                UiIcon.Loaded(
+                    context.packageManager.getApplicationIcon(packageName),
+                    contentDescription,
+                )
+            }.getOrNull()
+    val loadedArtwork = artwork.loadUiIcon(context, contentDescription) ?: loadedAppIcon
+    val resolvedSong = song?.takeIf { it.isNotBlank() } ?: app ?: packageName
     return MediaControlState(
         model =
             MediaControlChipModel(
                 packageName = packageName,
-                appIcon = appIcon.loadUiIcon(context, contentDescription),
-                artworkIcon = artwork.loadUiIcon(context, contentDescription),
+                appIcon = loadedAppIcon,
+                artworkIcon = loadedArtwork,
                 appName = app,
                 artistName = artist,
-                songName = song,
+                songName = resolvedSong,
                 playOrPause = semanticActions?.getActionById(R.id.actionPlayPause),
                 nextAction = semanticActions?.getActionById(R.id.actionNext),
                 previousAction = semanticActions?.getActionById(R.id.actionPrev),
@@ -372,7 +507,7 @@ private fun MediaData.toMediaControlState(
                         activityIntentHelper = activityIntentHelper,
                         lockscreenUserManager = lockscreenUserManager,
                         keyguardStateController = keyguardStateController,
-                    ),
+                    ) ?: launchPackageAction(context, packageName, activityStarter),
                 seekTo = token.toSeekAction(context),
                 durationMs = 0L,
                 positionMs = 0L,
@@ -380,6 +515,114 @@ private fun MediaData.toMediaControlState(
                 isPlaying = isPlaying ?: playOrPauseLooksPlaying(),
             ),
         token = token,
+    )
+}
+
+private fun MediaController.toMediaControlState(
+    context: Context,
+    activityStarter: ActivityStarter,
+    activityIntentHelper: ActivityIntentHelper,
+    lockscreenUserManager: NotificationLockscreenUserManager,
+    keyguardStateController: KeyguardStateController,
+): MediaControlState {
+    val pkg = packageName
+    val pm = context.packageManager
+    val resolvedAppName =
+        runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrNull()
+    val contentDescription = resolvedAppName?.let { ContentDescription.Loaded(it) }
+    val loadedAppIcon =
+        runCatching { UiIcon.Loaded(pm.getApplicationIcon(pkg), contentDescription) }.getOrNull()
+    val meta = metadata
+    val artBitmap =
+        meta?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+            ?: meta?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            ?: meta?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+    val loadedArtwork =
+        artBitmap?.let {
+            UiIcon.Loaded(BitmapDrawable(context.resources, it), contentDescription)
+        } ?: loadedAppIcon
+    val title =
+        meta?.getText(MediaMetadata.METADATA_KEY_TITLE)?.takeIf { it.isNotBlank() }
+            ?: meta?.getText(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)?.takeIf { it.isNotBlank() }
+            ?: resolvedAppName
+            ?: pkg
+    val artist =
+        meta?.getText(MediaMetadata.METADATA_KEY_ARTIST)?.takeIf { it.isNotBlank() }
+            ?: meta?.getText(MediaMetadata.METADATA_KEY_ALBUM)?.takeIf { it.isNotBlank() }
+            ?: resolvedAppName
+    val pb = playbackState
+    val duration = meta?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.coerceAtLeast(0L) ?: 0L
+    val position = pb?.computeActualPosition(duration) ?: 0L
+    return MediaControlState(
+        model =
+            MediaControlChipModel(
+                packageName = pkg,
+                appIcon = loadedAppIcon,
+                artworkIcon = loadedArtwork,
+                appName = resolvedAppName,
+                artistName = artist,
+                songName = title,
+                playOrPause = pb?.toPlayPauseAction(context, this),
+                nextAction = pb?.toSkipNextAction(context, this),
+                previousAction = pb?.toSkipPrevAction(context, this),
+                openApp =
+                    sessionActivity.toAction(
+                        activityStarter = activityStarter,
+                        activityIntentHelper = activityIntentHelper,
+                        lockscreenUserManager = lockscreenUserManager,
+                        keyguardStateController = keyguardStateController,
+                    ) ?: launchPackageAction(context, pkg, activityStarter),
+                seekTo = sessionToken.toSeekAction(context),
+                durationMs = duration,
+                positionMs = position,
+                canBeScrubbed =
+                    pb?.actions?.and(PlaybackState.ACTION_SEEK_TO) != 0L && duration > 0L,
+                isPlaying = pb?.isActivePlaybackState() == true,
+            ),
+        token = sessionToken,
+    )
+}
+
+private fun launchPackageAction(
+    context: Context,
+    packageName: String?,
+    activityStarter: ActivityStarter,
+): (() -> Unit)? {
+    if (packageName.isNullOrBlank()) return null
+    return {
+        runCatching {
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
+            if (launchIntent != null) {
+                launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                activityStarter.postStartActivityDismissingKeyguard(launchIntent, 0)
+            }
+        }
+    }
+}
+
+private fun PlaybackState.toSkipNextAction(
+    context: Context,
+    controller: MediaController,
+): MediaAction? {
+    val tc = controller.transportControls
+    return MediaAction(
+        icon = context.getDrawable(R.drawable.ic_skip_next_filled),
+        action = Runnable { runCatching { tc.skipToNext() } },
+        contentDescription = "Next",
+        background = null,
+    )
+}
+
+private fun PlaybackState.toSkipPrevAction(
+    context: Context,
+    controller: MediaController,
+): MediaAction? {
+    val tc = controller.transportControls
+    return MediaAction(
+        icon = context.getDrawable(R.drawable.ic_skip_previous_filled),
+        action = Runnable { runCatching { tc.skipToPrevious() } },
+        contentDescription = "Previous",
+        background = null,
     )
 }
 

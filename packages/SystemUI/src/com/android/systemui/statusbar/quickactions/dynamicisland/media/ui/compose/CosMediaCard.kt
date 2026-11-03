@@ -9,10 +9,17 @@ import android.content.Context
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.shape.CircleShape
+import com.android.systemui.res.R as SysUiR
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -190,26 +197,32 @@ fun CosMediaCard(model: MediaControlChipModel, modifier: Modifier = Modifier) {
             CosCardVoicePrint(model.isPlaying)
         }
 
-        if (model.durationMs > 0L) {
-            CosSeekBar(
-                model = model,
-                glow = rememberAlbumArtAccent(artwork, fallback = Color.White).toArgb(),
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .padding(horizontal = CosMediaCard.Margin)
-                        .padding(top = 6.dp),
-            )
-        }
+        CosSeekBar(
+            model = model,
+            glow = rememberAlbumArtAccent(artwork, fallback = Color.White).toArgb(),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = CosMediaCard.Margin)
+                    .padding(top = 8.dp),
+        )
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             horizontalArrangement =
                 Arrangement.spacedBy(CosMediaCard.ButtonSpacing, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CosLottieButton(model.previousAction, "previous_anim.json")
+            CosLottieButton(
+                model.previousAction,
+                "previous_anim.json",
+                SysUiR.drawable.ic_skip_previous_filled,
+            )
             CosPlayPause(model)
-            CosLottieButton(model.nextAction, "next_anim.json")
+            CosLottieButton(
+                model.nextAction,
+                "next_anim.json",
+                SysUiR.drawable.ic_skip_next_filled,
+            )
         }
     }
 }
@@ -270,6 +283,28 @@ private fun CosCardVoicePrint(playing: Boolean) {
                 iterations = LottieConstants.IterateForever,
                 modifier = Modifier.size(24.dp),
             )
+        } else if (playing) {
+            val transition = rememberInfiniteTransition(label = "cos_card_voiceprint")
+            val p0 by transition.animateFloat(0.28f, 0.92f, infiniteRepeatable(tween(420, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "cb0")
+            val p1 by transition.animateFloat(0.88f, 0.24f, infiniteRepeatable(tween(360, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "cb1")
+            val p2 by transition.animateFloat(0.35f, 1.0f, infiniteRepeatable(tween(480, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "cb2")
+            val p3 by transition.animateFloat(0.95f, 0.30f, infiniteRepeatable(tween(390, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "cb3")
+            val p4 by transition.animateFloat(0.25f, 0.82f, infiniteRepeatable(tween(450, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "cb4")
+            val heights = floatArrayOf(p0, p1, p2, p3, p4)
+            Canvas(Modifier.size(24.dp)) {
+                val unit = this.size.width / 22f
+                val maxBarH = this.size.height * 0.78f
+                for (i in 0 until 5) {
+                    val bh = (maxBarH * heights[i]).coerceAtLeast(2.5f * unit)
+                    val top = (this.size.height - bh) / 2f
+                    drawRoundRect(
+                        Color(0xFF5EEAD4),
+                        topLeft = Offset((1.2f + 4.3f * i) * unit, top),
+                        size = Size(2.4f * unit, bh),
+                        cornerRadius = CornerRadius(1.2f * unit),
+                    )
+                }
+            }
         } else {
             Canvas(Modifier.size(24.dp)) {
                 val unit = this.size.width / 26f
@@ -368,14 +403,16 @@ private fun Modifier.cosPress(enabled: Boolean, onClick: () -> Unit): Modifier {
 }
 
 @Composable
-private fun CosLottieButton(action: MediaAction?, animation: String) {
+private fun CosLottieButton(action: MediaAction?, animation: String, fallbackResId: Int) {
     val composition = rememberCosLottie(animation)
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val enabled = action?.action != null
     Box(
         Modifier.size(CosMediaCard.ButtonArea)
-            .graphicsLayer { alpha = if (enabled) 1f else 0.3f }
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.10f))
+            .graphicsLayer { alpha = if (enabled) 1f else 0.35f }
             .cosPress(enabled) {
                 action?.action?.run()
                 val playing = composition ?: return@cosPress
@@ -392,6 +429,15 @@ private fun CosLottieButton(action: MediaAction?, animation: String) {
                 composition,
                 progress = { progress.value },
                 modifier = Modifier.size(CosMediaCard.ButtonSize),
+            )
+        } else {
+            val iconModel =
+                action?.icon?.let { UiIcon.Loaded(it, null) }
+                    ?: UiIcon.Resource(fallbackResId, null)
+            UiIconView(
+                icon = iconModel,
+                modifier = Modifier.size(24.dp),
+                tint = Color.White,
             )
         }
     }
@@ -413,9 +459,12 @@ private fun CosPlayPause(model: MediaControlChipModel) {
     val composition = if (shownPlaying) toPause else toPlay
     val action = model.playOrPause
     Box(
-        Modifier.size(CosMediaCard.ButtonArea).cosPress(action?.action != null) {
-            action?.action?.run()
-        },
+        Modifier.size(50.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.20f))
+            .cosPress(action?.action != null) {
+                action?.action?.run()
+            },
         contentAlignment = Alignment.Center,
     ) {
         if (composition != null) {
@@ -423,6 +472,18 @@ private fun CosPlayPause(model: MediaControlChipModel) {
                 composition,
                 progress = { progress.value },
                 modifier = Modifier.size(CosMediaCard.ButtonSize),
+            )
+        } else {
+            val fallbackRes =
+                if (model.isPlaying) SysUiR.drawable.ic_media_pause_button
+                else SysUiR.drawable.ic_media_play_button
+            val iconModel =
+                action?.icon?.let { UiIcon.Loaded(it, null) }
+                    ?: UiIcon.Resource(fallbackRes, null)
+            UiIconView(
+                icon = iconModel,
+                modifier = Modifier.size(26.dp),
+                tint = Color.White,
             )
         }
     }
