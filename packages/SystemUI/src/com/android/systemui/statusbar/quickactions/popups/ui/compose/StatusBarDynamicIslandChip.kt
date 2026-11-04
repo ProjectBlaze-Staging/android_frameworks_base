@@ -436,8 +436,9 @@ private fun UtilityStatusIslandChip(
     val eventTextWidth = if (isSystemEvent) {
         val measured = textMeasurer.measure(liveChipText,
             style = MaterialTheme.typography.labelLarge, maxLines = 1)
-        with(density) { measured.size.width.toDp() } +
-            6.dp * widthScale + textEndPadding + deviceImageSpace
+        (with(density) { measured.size.width.toDp() } +
+            6.dp * widthScale + textEndPadding + deviceImageSpace)
+            .coerceAtMost(92.dp * widthScale)
     } else 0.dp
     val rightSegmentWidth =
         (when (viewModel.popupContent) {
@@ -520,8 +521,16 @@ private fun UtilityStatusIslandChip(
                         modifier = Modifier.size(18.dp * widthScale),
                     )
                 } else {
-                    Icon(icon = chipIcon.icon, modifier = Modifier.size(18.dp * widthScale),
-                        tint = if (chipIcon.tint) chipContentColor else Color.Unspecified)
+                    Icon(
+                        icon = chipIcon.icon,
+                        modifier = Modifier.size(18.dp * widthScale)
+                            .then(
+                                if (event.kind == SystemEventKind.Notification && !chipIcon.tint)
+                                    Modifier.clip(CircleShape)
+                                else Modifier
+                            ),
+                        tint = if (chipIcon.tint) chipContentColor else Color.Unspecified,
+                    )
                 }
             } else {
                 CollapsedGlyphBadge(
@@ -1005,14 +1014,14 @@ internal fun rememberDynamicIslandSizeScale(): Pair<Float, Float> {
     return widthScale to heightScale
 }
 
-private data class DynamicIslandCollapseState(
+internal data class DynamicIslandCollapseState(
     val scaleX: Float,
     val scaleY: Float,
     val contentAlpha: Float,
 )
 
 @Composable
-private fun rememberDynamicIslandCollapseState(isOpen: Boolean): DynamicIslandCollapseState {
+internal fun rememberDynamicIslandCollapseState(isOpen: Boolean): DynamicIslandCollapseState {
     val progress = remember { Animatable(if (isOpen) 1f else 0f, visibilityThreshold = 0.0005f) }
     val currentIsOpen by rememberUpdatedState(isOpen)
 

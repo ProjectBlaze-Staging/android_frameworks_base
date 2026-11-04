@@ -299,17 +299,23 @@ fun StatusBarDynamicIslandContainer(
             if (chip != null && (selectedChip != null || present)) {
                 val slopPx = with(LocalDensity.current) { 30.dp.toPx() }
                 var dragged by remember { mutableFloatStateOf(0f) }
+                val collapseState = rememberDynamicIslandCollapseState(chip.isPopupShown)
                 CosIslandShell(
                     key = chip.chipId,
-                    visible = selectedChip != null,
+                    visible = selectedChip != null && !chip.isPopupShown,
                     hole = cutoutSpec.holeSize,
-                    moons = chips.size > 1,
+                    moons = false,
                     onGone = {
                         present = false
                         leaving[0] = null
                     },
                     modifier =
-                        Modifier.pointerInput(chips.size) {
+                        Modifier.graphicsLayer {
+                                scaleX = collapseState.scaleX
+                                scaleY = collapseState.scaleY
+                                alpha = collapseState.contentAlpha
+                            }
+                            .pointerInput(chips.size) {
                             detectHorizontalDragGestures(
                                 onDragStart = { dragged = 0f },
                                 onDragEnd = {

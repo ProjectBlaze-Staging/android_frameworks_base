@@ -110,13 +110,13 @@ fun SystemEventPopup(model: PopupContentModel.SystemEvent, modifier: Modifier = 
                         Text(
                             text = model.text,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = LocalContentColor.current.copy(alpha = 0.85f),
+                            color = LocalContentColor.current.copy(alpha = 0.90f),
+                            maxLines = if (isMessage) 3 else 5,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.fillMaxWidth()
-                                .heightIn(max = 180.dp)
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(LocalContentColor.current.copy(alpha = 0.06f))
-                                .verticalScroll(rememberScrollState())
-                                .padding(14.dp),
+                                .background(LocalContentColor.current.copy(alpha = 0.08f))
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
                         )
                     }
                 }
@@ -124,7 +124,7 @@ fun SystemEventPopup(model: PopupContentModel.SystemEvent, modifier: Modifier = 
                     StatusBarIcon(
                         icon = image,
                         tint = Color.Unspecified,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 160.dp)
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 90.dp, max = 140.dp)
                             .clip(RoundedCornerShape(16.dp)),
                     )
                 }

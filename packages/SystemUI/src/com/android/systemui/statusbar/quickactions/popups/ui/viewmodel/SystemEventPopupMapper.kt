@@ -103,6 +103,7 @@ class SystemEventPopupMapper @Inject constructor(
         setRinger: (Int) -> Unit,
         notificationCount: Int = 1,
         chargingDetails: List<ChargingDetailModel> = emptyList(),
+        dismissNotification: (IslandEvent.Notification) -> Unit = {},
     ): PopupChipModel.Shown? {
         val kind = when (event) {
             is IslandEvent.Charging -> SystemEventKind.Charging
@@ -141,10 +142,14 @@ class SystemEventPopupMapper @Inject constructor(
                 }
             }
         }
-        fun open(intent: PendingIntent?) {
+        fun open(intent: PendingIntent?, label: String? = null, emphasized: Boolean = false) {
             intent.toActivityLaunchAction(activityStarter, activityIntentHelper,
                 lockscreenUserManager, keyguardStateController)?.let {
-                actions += PopupActionModel(context.getString(PenguinR.string.dynamic_island_event_open), it)
+                actions += PopupActionModel(
+                    label ?: context.getString(PenguinR.string.dynamic_island_event_open),
+                    it,
+                    emphasized = emphasized,
+                )
             }
         }
         val (title, text) = when (event) {
@@ -236,16 +241,41 @@ class SystemEventPopupMapper @Inject constructor(
                     (event.sbn.notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString().orEmpty())
             }
             is IslandEvent.Notification -> {
-                appName = event.appName
-                chipDrawable = loadAppIcon(event.sbn)
+                appName = event.conversationTitle?.takeIf {
+                    it.isNotBlank() && !it.equals(event.title, ignoreCase = true)
+                }?.let { "${event.appName} • $it" } ?: event.appName
+                val appDrawable = loadAppIcon(event.sbn) ?: event.appIcon
+                chipDrawable = event.senderIcon ?: appDrawable
                 iconRes = PenguinR.drawable.dynamic_island_notification
                 image = event.notificationImage?.let { Icon.Loaded(it, null) }
                 indeterminate = event.isProgressIndeterminate
-                icon = event.senderIcon ?: event.appIcon
+                icon = event.senderIcon ?: appDrawable
+                val openLabel = if (event.replyAction != null) {
+                    event.replyAction.label.toString().ifBlank {
+                        context.getString(PenguinR.string.dynamic_island_event_open)
+                    }
+                } else {
+                    context.getString(PenguinR.string.dynamic_island_event_open)
+                }
+                event.sbn.notification.contentIntent.toActivityLaunchAction(
+                    activityStarter, activityIntentHelper, lockscreenUserManager, keyguardStateController
+                )?.let { launchAction ->
+                    actions += PopupActionModel(
+                        openLabel,
+                        {
+                            launchAction()
+                            dismissNotification(event)
+                        },
+                        emphasized = true,
+                    )
+                }
                 notificationActions(event.actions)
-                open(event.sbn.notification.contentIntent)
+                actions += PopupActionModel(
+                    context.getString(android.R.string.cancel),
+                    { dismissNotification(event) },
+                )
                 if (event.progress >= 0 && event.progressMax > 0) progress = event.progress.toFloat() / event.progressMax
-                (event.title ?: event.appName) to event.text.orEmpty()
+                (event.senderName ?: event.title ?: event.appName) to event.text.orEmpty()
             }
             is IslandEvent.PromotedOngoing -> {
                 iconRes = PenguinR.drawable.dynamic_island_notification
@@ -259,8 +289,10 @@ class SystemEventPopupMapper @Inject constructor(
                 event.title.ifBlank { event.appName } to event.text
             }
             is IslandEvent.Timer -> {
+                iconRes = PenguinR.drawable.ic_dynamic_island_alarm
                 icon = event.appIcon
                 notificationActions(event.actions)
+                open(event.sbn?.notification?.contentIntent)
                 timerEndTimeMs = event.endTimeMs.takeIf { it > 0L }
                 timerPaused = event.isPaused
                 context.getString(PenguinR.string.dynamic_island_event_timer) to event.label
@@ -298,11 +330,17 @@ class SystemEventPopupMapper @Inject constructor(
             is IslandEvent.BiometricUnlock, is IslandEvent.Call,
             is IslandEvent.Hotspot, is IslandEvent.RingerMode, is IslandEvent.AppSwitch ->
                 Icon.Resource(iconRes, null)
-            is IslandEvent.Notification -> if (progress == null && !indeterminate)
-                Icon.Resource(PenguinR.drawable.dynamic_island_notification, null)
-                else (chipDrawable ?: icon)?.let { Icon.Loaded(it, null) } ?: Icon.Resource(iconRes, null)
+            is IslandEvent.Timer -> Icon.Resource(PenguinR.drawable.ic_dynamic_island_alarm, null)
+            is IslandEvent.Notification -> (chipDrawable ?: icon)?.let { Icon.Loaded(it, null) }
+                ?: Icon.Resource(PenguinR.drawable.dynamic_island_notification, null)
             else -> (chipDrawable ?: icon)?.let { Icon.Loaded(it, null) } ?: Icon.Resource(iconRes, null)
         }
+        val compactNotificationsOnly = android.provider.Settings.Secure.getIntForUser(
+            context.contentResolver,
+            "ax_dynamic_bar_compact_notifications",
+            1,
+            UserHandle.USER_CURRENT,
+        ) == 1
         val description = listOfNotNull(title, text, prominentText).distinct().filter { it.isNotBlank() }.joinToString(": ")
         return PopupChipModel.Shown(
             chipId = PopupChipId.SystemEvent(event.id),
@@ -317,7 +355,17 @@ class SystemEventPopupMapper @Inject constructor(
                 is IslandEvent.Notification -> when {
                     indeterminate -> null
                     progress != null -> "${(progress.coerceIn(0f, 1f) * 100).toInt()}%"
-                    else -> notificationCount.toString()
+                    else -> {
+                        val sender = (event.senderName ?: event.title ?: event.appName).trim()
+                        val body = event.text.orEmpty().trim().replace('\n', ' ')
+                        val combined = if (body.isNotEmpty() && !body.equals(sender, ignoreCase = true)) {
+                            "$sender: $body"
+                        } else {
+                            sender.ifEmpty { body }
+                        }
+                        if (combined.length > 18) combined.take(17).trimEnd() + "…"
+                        else combined.ifEmpty { notificationCount.toString() }
+                    }
                 }
                 is IslandEvent.PromotedOngoing -> if (indeterminate) null
                     else progress?.let { "${(it.coerceIn(0f, 1f) * 100).toInt()}%" }
@@ -331,7 +379,7 @@ class SystemEventPopupMapper @Inject constructor(
             autoPopupRequest = when (event) {
                 is IslandEvent.Call -> event.callStartTimeMs.takeIf { event.callType == "Phone:incoming" }
                 is IslandEvent.BiometricUnlock -> event.createdAt
-                is IslandEvent.Notification -> event.createdAt
+                is IslandEvent.Notification -> event.createdAt.takeIf { !compactNotificationsOnly }
                 else -> null
             },
             autoPopupDurationMs = when (event) {
@@ -356,7 +404,8 @@ class SystemEventPopupMapper @Inject constructor(
                 timerPaused = timerPaused,
                 indeterminate = indeterminate,
                 icon = if (event is IslandEvent.RingerMode) Icon.Resource(iconRes, null)
-                    else icon?.let { Icon.Loaded(it, null) },
+                    else icon?.let { Icon.Loaded(it, null) }
+                        ?: if (event is IslandEvent.Timer) Icon.Resource(iconRes, null) else null,
                 appName = appName,
                 prominentText = prominentText.takeIf { bluetoothBatteries.isEmpty() },
                 pulse = pulse,

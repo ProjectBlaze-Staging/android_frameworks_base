@@ -184,7 +184,7 @@ class SystemEventPopupChipsViewModel @AssistedInject constructor(
                 notifications.coalesceNotification(update)
             }
             if (event.progress < 0 && !event.isProgressIndeterminate) {
-                expire(event, 8_000L) { notifications.dismissNotification(event) }
+                expire(event, 12_000L) { notifications.dismissNotification(event) }
             } else {
                 launch { expiryJobs.remove(event.id)?.cancel() }
             }
@@ -226,7 +226,8 @@ class SystemEventPopupChipsViewModel @AssistedInject constructor(
                         mapper.toChip(event, connectivity::disconnectBluetooth,
                             appTracking::switchToApp, system::setRingerMode,
                             notificationCount = events.count { it is IslandEvent.Notification },
-                            chargingDetails = details)?.let { chip ->
+                            chargingDetails = details,
+                            dismissNotification = notifications::dismissNotification)?.let { chip ->
                             fun expireNotification() {
                                 if (event is IslandEvent.Notification && event.progress < 0 &&
                                     !event.isProgressIndeterminate) {

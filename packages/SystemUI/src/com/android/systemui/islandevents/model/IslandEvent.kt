@@ -193,7 +193,8 @@ sealed class IslandEvent(open val priority: Int, val id: String) : Comparable<Is
         val appIcon: Drawable? = null,
         val isPaused: Boolean = false,
         val actions: List<NotificationAction> = emptyList(),
-    ) : IslandEvent(priority = 45, id = "timer") {
+        val sbn: StatusBarNotification? = null,
+    ) : IslandEvent(priority = 85, id = "timer") {
         override fun withoutDrawables() = copy(appIcon = null)
     }
 

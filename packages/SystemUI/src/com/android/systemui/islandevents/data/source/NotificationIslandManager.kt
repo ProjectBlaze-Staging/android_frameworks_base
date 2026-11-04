@@ -36,6 +36,7 @@ open class NotificationIslandManager
 constructor(
     @Application private val context: Context,
     @Application private val applicationScope: CoroutineScope,
+    private val notifCollection: com.android.systemui.statusbar.notification.collection.notifcollection.CommonNotifCollection,
 ) {
     companion object {
         private const val TAG = "NotificationIslandManager"
@@ -79,6 +80,9 @@ constructor(
             addAll(CLOCK_PACKAGES)
             addAll(ALARM_PACKAGES)
             addAll(RECORDER_PACKAGES)
+            add("android")
+            add("com.android.systemui")
+            add("com.android.dynsystem")
         }
     }
 
@@ -197,8 +201,10 @@ constructor(
 
             override fun onNotificationPosted(sbn: StatusBarNotification) {
                 if (!acceptNotification(sbn)) return
+                val notif = sbn.notification ?: return
+                if ((notif.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
                 val pkg = sbn.packageName ?: return
-                val extras = sbn.notification?.extras ?: return
+                val extras = notif.extras ?: return
 
                 if (pkg in CLOCK_PACKAGES) {
                     val channelId = sbn.notification?.channelId?.lowercase() ?: ""
@@ -231,7 +237,10 @@ constructor(
                             channelId.contains("timer") ||
                             channelId.contains("firing") ||
                             isCountDown ||
-                            actionLabels.any { it.contains("+1") || it.contains("add") }
+                            actionLabels.any {
+                                it.contains("+1") || it.contains("add") ||
+                                    it.contains("sıfırla") || it.contains("reset")
+                            }
                     )
 
                     if (isStopwatch && "stopwatch" !in disabledTypes) {
@@ -547,6 +556,13 @@ constructor(
                                 null
                             }
                     }
+                } else if (notif != null) {
+                    senderIcon =
+                        try {
+                            notif.getLargeIcon()?.loadDrawable(context)
+                        } catch (_: Exception) {
+                            null
+                        }
                 }
 
                 val notificationImage = extractNotificationImage(extras, sbn)
@@ -554,7 +570,7 @@ constructor(
                 val event =
                     IslandEvent.Notification(
                         sbn = sbn,
-                        title = title,
+                        title = senderName ?: title,
                         text = latestMessageText ?: text,
                         appIcon = icon,
                         appName = appName,
@@ -567,7 +583,7 @@ constructor(
                         isGroupConversation = isGroupConversation,
                         conversationTitle = conversationTitle,
                         senderIcon = senderIcon,
-                        senderName = senderName,
+                        senderName = senderName ?: title,
                         groupKey = groupKey,
                         notificationImage = notificationImage,
                     )
@@ -580,6 +596,13 @@ constructor(
         if (listening) return
         listening = true
         ScrimUtils.get().addListener(scrimListener)
+        runCatching {
+            notifCollection.allNotifs.forEach { entry ->
+                if (entry.sbn.isOngoing) {
+                    scrimListener.onNotificationPosted(entry.sbn)
+                }
+            }
+        }
     }
 
     fun stopListening() {
@@ -661,10 +684,10 @@ constructor(
             hasStartIntent -> true
             hasPauseIntent -> false
             else -> {
-                val hasPauseLabel = actionLabels.any { it.contains("pause") }
+                val hasPauseLabel = actionLabels.any { it.contains("pause") || it.contains("duraklat") }
                 val hasResumeLabel = actionLabels.any {
-                    it.contains("resume") || it.contains("play") ||
-                        (it.contains("start") && !it.contains("stop"))
+                    it.contains("resume") || it.contains("devam") || it.contains("play") ||
+                        ((it.contains("start") || it.contains("başlat")) && !it.contains("stop"))
                 }
                 hasResumeLabel && !hasPauseLabel
             }
@@ -677,7 +700,7 @@ constructor(
         val endElapsed = chronoBase.takeIf { it > 0L }
             ?: sbn.notification.`when`.takeIf { it > nowWall }?.let { nowElapsed + it - nowWall }
             ?: previous?.endElapsedRealtimeMs
-        val remaining = if (isPaused && previous?.isPaused == true) previous.remainingMs
+        val remaining = if (isPaused && chronoBase <= 0L && previous?.isPaused == true) previous.remainingMs
             else endElapsed?.let { (it - nowElapsed).coerceAtLeast(0L) }
         val endTimeMs = endElapsed?.let { nowWall + it - nowElapsed } ?: 0L
 
@@ -696,6 +719,7 @@ constructor(
                 appIcon = icon,
                 isPaused = isPaused,
                 actions = actions,
+                sbn = sbn,
             )
         timerNotificationKey = sbn.key
         _timerEvent.value = event

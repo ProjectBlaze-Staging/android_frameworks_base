@@ -126,7 +126,10 @@ constructor(
     }
 
     private fun toPopupChipModel(state: AlarmPopupState): PopupChipModel {
-        val alarm = state.nextAlarm?.takeIf { it.triggerTime > 0L }
+        val now = System.currentTimeMillis()
+        val alarm = state.nextAlarm?.takeIf {
+            it.triggerTime > now && (it.triggerTime - now) <= 15 * 60 * 1000L
+        }
         val activeNotification = state.activeNotification
         if (alarm == null && activeNotification == null) {
             return PopupChipModel.Hidden(PopupChipId.Alarm)
@@ -237,16 +240,31 @@ private data class AlarmPopupState(
 )
 
 private fun NotificationEntry.isAlarmCandidate(): Boolean {
+    if (isStopwatchCandidate()) return false
     val notification = sbn.notification
+    val channelId = notification.channelId.orEmpty()
+    if (channelId.contains("timer", ignoreCase = true) ||
+        channelId.contains("stopwatch", ignoreCase = true)
+    ) {
+        return false
+    }
+    val hasTimerAction =
+        notification.actions.orEmpty().any { action ->
+            val t = action.title?.toString().orEmpty().lowercase()
+            t.contains("+1") || t.contains("add 1") || t.contains("reset") || t.contains("sıfırla") ||
+                t.contains("lap") || t.contains("tur")
+        }
+    if (hasTimerAction) return false
+    val hasSnooze =
+        notification.actions.orEmpty().any { action ->
+            val t = action.title?.toString().orEmpty().lowercase()
+            t.contains("snooze") || t.contains("ertele")
+        }
     return notification.contentIntent != null &&
-        (
-            isStopwatchCandidate() ||
-                notification.category == Notification.CATEGORY_ALARM ||
-                sbn.packageName.contains("clock", ignoreCase = true) ||
-                notification.actions.orEmpty().any { action ->
-                    action.title?.toString()?.contains("snooze", ignoreCase = true) == true
-                }
-        )
+        (hasSnooze ||
+            (notification.category == Notification.CATEGORY_ALARM &&
+                channelId.contains("alarm", ignoreCase = true)) ||
+            channelId.contains("firing", ignoreCase = true))
 }
 
 private fun NotificationEntry.notificationTitle(): String? {

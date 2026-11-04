@@ -355,13 +355,17 @@ final class ComposeTabBar {
             int w = Math.max(1, Math.round(mCapsule.width()));
             int h = Math.max(1, Math.round(mCapsule.height()));
             int style = LiquidGlass.getEffectiveStyle(mView.getContext());
-            int key = ((w * 31 + h) * 2 + (dark ? 1 : 0)) * 4 + style;
+            int key = ((w * 31 + h) * 2 + (dark ? 1 : 0)) * 8 + style;
             if (key != mGlassKey) {
                 mGlassKey = key;
+                boolean darkCrystal = (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL);
+                int tint = darkCrystal
+                        ? LiquidGlass.TINT_DARK_CRYSTAL
+                        : (dark ? LiquidGlass.TINT_DARK : LiquidGlass.TINT_LIGHT);
                 mGlass.setShape(0f, 0f, w, h, h / 2f)
-                        .setLens(dp(24f), dp(24f), 0f)
-                        .setLook(dp(20f), 1.5f, dark ? 0.35f : 0.5f,
-                                dark ? LiquidGlass.TINT_DARK : LiquidGlass.TINT_LIGHT);
+                        .setLens(dp(darkCrystal ? 28f : 24f), dp(darkCrystal ? 28f : 24f), 0f)
+                        .setLook(dp(20f), darkCrystal ? 1.65f : 1.5f,
+                                darkCrystal ? 0.55f : (dark ? 0.35f : 0.5f), tint);
                 mGlassNode.setBackdropRenderEffect(mGlass.build());
             }
             mGlassNode.setPosition(left, top, left + w, top + h);
@@ -404,6 +408,8 @@ final class ComposeTabBar {
 
         private final RectF mPill = new RectF();
         private final Paint mPillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint mInnerPillRim = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private int mRimStyle = -1;
 
         private void drawPill(Canvas canvas, boolean dark) {
             float v = mMotion.value();
@@ -419,21 +425,49 @@ final class ComposeTabBar {
             float cx = mCapsule.left + inner + (v + 0.5f) * tab;
             mPill.set(cx - w / 2f, mCapsule.centerY() - h / 2f, cx + w / 2f,
                     mCapsule.centerY() + h / 2f);
+            float r = h / 2f;
+            int style = LiquidGlass.getEffectiveStyle(mView.getContext());
+            if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) {
+                mPillPaint.setColor(0xDC06080D);
+                canvas.drawRoundRect(mPill, r, r, mPillPaint);
+                mInnerPillRim.setStyle(Paint.Style.STROKE);
+                float stroke = dp(1.15f);
+                mInnerPillRim.setStrokeWidth(stroke);
+                mInnerPillRim.setShader(new LinearGradient(
+                        mPill.left, mPill.top, mPill.right, mPill.bottom,
+                        new int[] {0xB0FFFFFF, 0x22FFFFFF, 0x7866B8FF},
+                        new float[] {0f, 0.5f, 1f},
+                        Shader.TileMode.CLAMP));
+                float half = stroke / 2f;
+                canvas.drawRoundRect(mPill.left + half, mPill.top + half,
+                        mPill.right - half, mPill.bottom - half, r - half, r - half, mInnerPillRim);
+                return;
+            }
             float press = mMotion.press();
             int alpha = Math.round(255 * (0.10f + 0.06f * press));
             mPillPaint.setColor((alpha << 24) | (dark ? 0xFFFFFF : 0x000000));
-            canvas.drawRoundRect(mPill, h / 2f, h / 2f, mPillPaint);
+            canvas.drawRoundRect(mPill, r, r, mPillPaint);
         }
 
         private void drawRim(Canvas canvas, float r, boolean dark) {
-            float width = dp(1f);
+            int style = LiquidGlass.getEffectiveStyle(mView.getContext());
+            float width = dp(style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL ? 1.45f : 1f);
             mRim.setStrokeWidth(width);
-            if (mRimTop != mCapsule.top || mRimDark != dark) {
+            if (mRimTop != mCapsule.top || mRimDark != dark || mRimStyle != style) {
                 mRimTop = mCapsule.top;
                 mRimDark = dark;
-                mRim.setShader(new LinearGradient(0f, mCapsule.top, 0f, mCapsule.bottom,
-                        dark ? 0x59FFFFFF : 0x80FFFFFF, dark ? 0x14FFFFFF : 0x1A000000,
-                        Shader.TileMode.CLAMP));
+                mRimStyle = style;
+                if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) {
+                    mRim.setShader(new LinearGradient(
+                            mCapsule.left, mCapsule.top, mCapsule.right, mCapsule.bottom,
+                            new int[] {0xDEFFFFFF, 0x26FFFFFF, 0x8C70C4FF},
+                            new float[] {0f, 0.52f, 1f},
+                            Shader.TileMode.CLAMP));
+                } else {
+                    mRim.setShader(new LinearGradient(0f, mCapsule.top, 0f, mCapsule.bottom,
+                            dark ? 0x59FFFFFF : 0x80FFFFFF, dark ? 0x14FFFFFF : 0x1A000000,
+                            Shader.TileMode.CLAMP));
+                }
             }
             float half = width / 2f;
             canvas.drawRoundRect(mCapsule.left + half, mCapsule.top + half,

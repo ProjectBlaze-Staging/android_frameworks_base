@@ -169,11 +169,16 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
                 + (int) mCapsule.bottom) * 8 + (mDark ? 4 : 0) + style;
         if (key != mLastGlassKey) {
             mLastGlassKey = key;
+            boolean darkCrystal = (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL);
+            int tint = darkCrystal
+                    ? LiquidGlass.TINT_DARK_CRYSTAL
+                    : (mDark ? LiquidGlass.TINT_DARK : LiquidGlass.TINT_LIGHT);
+            float rimAlpha = darkCrystal ? 0.55f : (mDark ? 0.35f : 0.5f);
+            float lensSize = dp(darkCrystal ? 28f : LENS_DP);
             mGlass.setShape(mCapsule.left, mCapsule.top, mCapsule.right, mCapsule.bottom,
                             height / 2f)
-                    .setLens(dp(LENS_DP), dp(LENS_DP), 0f)
-                    .setLook(dp(BLUR_DP), 1.5f, mDark ? 0.35f : 0.5f,
-                            mDark ? LiquidGlass.TINT_DARK : LiquidGlass.TINT_LIGHT)
+                    .setLens(lensSize, lensSize, 0f)
+                    .setLook(dp(BLUR_DP), darkCrystal ? 1.65f : 1.5f, rimAlpha, tint)
                     .applyTo(mBar);
         }
         mItems = findItems(mBar);
@@ -524,8 +529,12 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
         private boolean mRimDark;
         private int mRimStyle = -1;
 
+        private final Paint mInnerPillRim = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint mInnerGlow = new Paint(Paint.ANTI_ALIAS_FLAG);
+
         Pill() {
             mRim.setStyle(Paint.Style.STROKE);
+            mInnerPillRim.setStyle(Paint.Style.STROKE);
         }
 
         private void drawShadow(Canvas canvas) {
@@ -546,7 +555,9 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
                 c.drawRoundRect(pad, pad, pad + mShadowW, pad + mShadowH, r, r, mShadow);
                 mShadow.setMaskFilter(null);
             }
-            mShadow.setColor(mDark ? 0x55000000 : 0x26000000);
+            int style = LiquidGlass.getEffectiveStyle(mBar.getContext());
+            boolean darkCrystal = (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL);
+            mShadow.setColor(darkCrystal ? 0x80000000 : (mDark ? 0x55000000 : 0x26000000));
             canvas.drawBitmap(mShadowBitmap, mCapsule.left - pad, mCapsule.top - pad, mShadow);
         }
 
@@ -554,7 +565,9 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             int style = LiquidGlass.getEffectiveStyle(mBar.getContext());
             float r = mCapsule.height() / 2f;
             // Translucent glass capsule base so it stands out even over solid backgrounds
-            if (style == LiquidGlass.STYLE_IOS_LIQUID_GLASS) {
+            if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) {
+                mPaint.setColor(mDark ? 0xB810131C : 0xCC181C26);
+            } else if (style == LiquidGlass.STYLE_IOS_LIQUID_GLASS) {
                 mPaint.setColor(mDark ? 0x521C1E26 : 0x66F0F4FA);
             } else {
                 mPaint.setColor(mDark ? 0x6622242C : 0x7AF2F4F8);
@@ -562,19 +575,31 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             canvas.drawRoundRect(mCapsule, r, r, mPaint);
 
             // Specular 3D rim border around the floating capsule
-            float stroke = dp(style == LiquidGlass.STYLE_IOS_LIQUID_GLASS ? 1.35f : 1.0f);
+            boolean isLens = LiquidGlass.isLiquidLensStyle(style);
+            float stroke = dp(style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL ? 1.5f
+                    : (isLens ? 1.35f : 1.0f));
             mRim.setStrokeWidth(stroke);
             if (mRimTop != mCapsule.top || mRimDark != mDark || mRimStyle != style) {
                 mRimTop = mCapsule.top;
                 mRimDark = mDark;
                 mRimStyle = style;
-                if (style == LiquidGlass.STYLE_IOS_LIQUID_GLASS) {
+                if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) {
                     mRim.setShader(new android.graphics.LinearGradient(
                             mCapsule.left, mCapsule.top, mCapsule.right, mCapsule.bottom,
                             new int[] {
-                                    mDark ? 0x99FFFFFF : 0xCCFFFFFF,
-                                    mDark ? 0x28FFFFFF : 0x44FFFFFF,
-                                    mDark ? 0x6666B2FF : 0x660088FF
+                                    0xDEFFFFFF,
+                                    0x26FFFFFF,
+                                    0x8C70C4FF
+                            },
+                            new float[] {0f, 0.52f, 1f},
+                            android.graphics.Shader.TileMode.CLAMP));
+                } else if (style == LiquidGlass.STYLE_IOS_LIQUID_GLASS) {
+                    mRim.setShader(new android.graphics.LinearGradient(
+                            mCapsule.left, mCapsule.top, mCapsule.right, mCapsule.bottom,
+                            new int[] {
+                                     mDark ? 0x99FFFFFF : 0xCCFFFFFF,
+                                     mDark ? 0x28FFFFFF : 0x44FFFFFF,
+                                     mDark ? 0x6666B2FF : 0x660088FF
                             },
                             new float[] {0f, 0.55f, 1f},
                             android.graphics.Shader.TileMode.CLAMP));
@@ -600,18 +625,50 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             drawCapsuleSurfaceAndRim(canvas);
 
             if (!pillRect(mRect)) return;
+            int style = LiquidGlass.getEffectiveStyle(mBar.getContext());
             float press = mMotion.press();
             float h = mRect.height();
+            float r = h / 2f;
+
+            if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) {
+                // Apple iOS 27 Native Recessed Dark Smoked Crystal Active Lens Pill
+                mPaint.setColor(0xDC06080D);
+                canvas.drawRoundRect(mRect, r, r, mPaint);
+
+                // Subtle top optical refraction sheen inside active pill
+                mInnerGlow.setShader(new android.graphics.LinearGradient(
+                        mRect.left, mRect.top, mRect.left, mRect.bottom,
+                        new int[] {0x2EFFFFFF, 0x06FFFFFF, 0x1A4EA8FF},
+                        new float[] {0f, 0.55f, 1f},
+                        android.graphics.Shader.TileMode.CLAMP));
+                canvas.drawRoundRect(mRect, r, r, mInnerGlow);
+
+                // Crisp 3D inner lens Fresnel specular rim around active tab capsule
+                float innerStroke = dp(1.15f);
+                mInnerPillRim.setStrokeWidth(innerStroke);
+                mInnerPillRim.setShader(new android.graphics.LinearGradient(
+                        mRect.left, mRect.top, mRect.right, mRect.bottom,
+                        new int[] {0xB0FFFFFF, 0x22FFFFFF, 0x7866B8FF},
+                        new float[] {0f, 0.5f, 1f},
+                        android.graphics.Shader.TileMode.CLAMP));
+                float half = innerStroke / 2f;
+                canvas.drawRoundRect(
+                        mRect.left + half, mRect.top + half,
+                        mRect.right - half, mRect.bottom - half,
+                        r - half, r - half, mInnerPillRim);
+                return;
+            }
+
             int base = mDark ? 0xFFFFFF : 0x0088FF;
             int alpha = Math.round(255 * (mDark ? 0.18f : 0.15f) * (1f - press * 0.35f));
             if (alpha > 0) {
                 mPaint.setColor((alpha << 24) | base);
-                canvas.drawRoundRect(mRect, h / 2f, h / 2f, mPaint);
+                canvas.drawRoundRect(mRect, r, r, mPaint);
             }
             int shade = Math.round(255 * 0.06f * press);
             if (shade > 0) {
                 mPaint.setColor((shade << 24) | (mDark ? 0x66B2FF : 0x0088FF));
-                canvas.drawRoundRect(mRect, h / 2f, h / 2f, mPaint);
+                canvas.drawRoundRect(mRect, r, r, mPaint);
             }
         }
 
@@ -635,8 +692,8 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
 
         @Override
         public void draw(Canvas canvas) {
-            if (LiquidGlass.getEffectiveStyle(mBar.getContext())
-                    != LiquidGlass.STYLE_IOS_LIQUID_GLASS) {
+            if (!LiquidGlass.isLiquidLensStyle(
+                    LiquidGlass.getEffectiveStyle(mBar.getContext()))) {
                 return;
             }
             float press = mMotion.press();

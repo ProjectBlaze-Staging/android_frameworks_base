@@ -146,21 +146,9 @@ fun StatusBarPopup(
             val root = popupView.rootView
             val lp = root.layoutParams as? WindowManager.LayoutParams
             if (lp != null) {
-                val style = com.android.internal.penguin.glass.LiquidGlass.getEffectiveStyle(root.context)
                 lp.layoutInDisplayCutoutMode = LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-                if (style == com.android.internal.penguin.glass.LiquidGlass.STYLE_MATERIAL3_LITE) {
-                    lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
-                    lp.blurBehindRadius = 0
-                } else {
-                    lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-                    val blurDp =
-                        if (style == com.android.internal.penguin.glass.LiquidGlass.STYLE_IOS_LIQUID_GLASS) {
-                            44.dp
-                        } else {
-                            28.dp
-                        }
-                    lp.blurBehindRadius = with(density) { blurDp.roundToPx() }
-                }
+                lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
+                lp.blurBehindRadius = 0
                 root.context.getSystemService(WindowManager::class.java)?.updateViewLayout(root, lp)
             }
             onDispose {}

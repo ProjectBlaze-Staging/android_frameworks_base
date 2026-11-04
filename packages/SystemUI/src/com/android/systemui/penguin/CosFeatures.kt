@@ -28,7 +28,7 @@ enum class CosFeature(val key: String, val defaultOn: Boolean = false) {
     LockscreenGlass("penguin_cos_lockscreen_glass", defaultOn = true),
     Clock("penguin_cos_clock", defaultOn = true),
     Volume("penguin_cos_volume", defaultOn = true),
-    Island("penguin_cos_island", defaultOn = true);
+    Island("penguin_cos_island", defaultOn = false);
 
     companion object {
         const val ALL = "penguin_cos_experience"
@@ -42,7 +42,7 @@ object CosFeatures {
     fun isOn(context: Context, feature: CosFeature): Boolean {
         val resolver = context.contentResolver
         if (feature == CosFeature.Island) {
-            return Settings.Secure.getInt(resolver, feature.key, 1) == 1
+            return Settings.Secure.getInt(resolver, feature.key, 0) == 1
         }
         val all = Settings.Secure.getInt(resolver, CosFeature.ALL, if (feature.defaultOn) 1 else 0)
         return Settings.Secure.getInt(resolver, feature.key, all) == 1

@@ -30,9 +30,14 @@ public final class LiquidGlass {
     public static final int STYLE_IOS_LIQUID_GLASS = 0;
     public static final int STYLE_COLOROS_FROSTED = 1;
     public static final int STYLE_MATERIAL3_LITE = 2;
+    public static final int STYLE_IOS27_DARK_CRYSTAL = 3;
+
+    public static boolean isLiquidLensStyle(int style) {
+        return style == STYLE_IOS_LIQUID_GLASS || style == STYLE_IOS27_DARK_CRYSTAL;
+    }
 
     private static long sLastCheckMs;
-    private static int sEffectiveStyle = STYLE_IOS_LIQUID_GLASS;
+    private static int sEffectiveStyle = STYLE_IOS27_DARK_CRYSTAL;
     private static volatile boolean sShaderFailed = false;
 
     public static int getEffectiveStyle(Context context) {
@@ -51,7 +56,7 @@ public final class LiquidGlass {
         sLastCheckMs = now;
         try {
             int style = Settings.Secure.getInt(
-                    context.getContentResolver(), SETTING_GLASS_STYLE, STYLE_IOS_LIQUID_GLASS);
+                    context.getContentResolver(), SETTING_GLASS_STYLE, STYLE_IOS27_DARK_CRYSTAL);
             boolean autoLite = Settings.Secure.getInt(
                     context.getContentResolver(), SETTING_AUTO_LITE_BATTERY_SAVER, 1) != 0;
             if (autoLite) {
@@ -67,7 +72,7 @@ public final class LiquidGlass {
                         return sEffectiveStyle;
                     }
                     if (thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE
-                            && style == STYLE_IOS_LIQUID_GLASS) {
+                            && isLiquidLensStyle(style)) {
                         sEffectiveStyle = STYLE_COLOROS_FROSTED;
                         return sEffectiveStyle;
                     }
@@ -169,6 +174,7 @@ public final class LiquidGlass {
 
     public static final @ColorInt int TINT_LIGHT = 0x99F2F2F7;
     public static final @ColorInt int TINT_DARK = 0x991C1C1E;
+    public static final @ColorInt int TINT_DARK_CRYSTAL = 0xB80E1016;
 
     public LiquidGlass setShape(float left, float top, float right, float bottom, float radius) {
         if (mShader != null) {

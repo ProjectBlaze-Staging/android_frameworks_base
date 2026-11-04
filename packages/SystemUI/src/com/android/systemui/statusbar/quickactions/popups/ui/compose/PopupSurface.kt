@@ -47,13 +47,14 @@ import com.android.systemui.statusbar.quickactions.popups.shared.DynamicIslandFe
 
 @Composable
 private fun Modifier.liquidGlassSurface(shape: Shape, style: Int): Modifier {
+    val isLens = style == LiquidGlass.STYLE_IOS_LIQUID_GLASS || style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL
     val rimBrush = remember(style) {
-        if (style == LiquidGlass.STYLE_IOS_LIQUID_GLASS) {
+        if (isLens) {
             Brush.linearGradient(
                 colors = listOf(
-                    Color(0x99FFFFFF),
+                    Color(0xAAFFFFFF),
                     Color(0x28FFFFFF),
-                    Color(0x6670B8FF),
+                    Color(0x7070B8FF),
                 )
             )
         } else {
@@ -66,12 +67,14 @@ private fun Modifier.liquidGlassSurface(shape: Shape, style: Int): Modifier {
         }
     }
     val fillColor =
-        if (style == LiquidGlass.STYLE_IOS_LIQUID_GLASS) {
-            Color(0x9E101218)
+        if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) {
+            Color(0xF2080A11)
+        } else if (isLens) {
+            Color(0xEE0B0E16)
         } else {
-            Color(0xBA1A1C22)
+            Color(0xEE12141B)
         }
-    val strokeWidth = if (style == LiquidGlass.STYLE_IOS_LIQUID_GLASS) 1.4.dp else 1.dp
+    val strokeWidth = if (isLens) 1.4.dp else 1.dp
     return drawBehind {
         drawOutline(
             shape.createOutline(size, layoutDirection, this),
@@ -87,7 +90,10 @@ fun rememberPopupColorMode(): Int {
     val flow = remember(context) { observeDynamicIslandPopupColorMode(context) }
     val mode by flow.collectAsState(initial = initial)
     val style = LiquidGlass.getEffectiveStyle(context)
-    if (style == LiquidGlass.STYLE_IOS_LIQUID_GLASS || style == LiquidGlass.STYLE_COLOROS_FROSTED) {
+    if (style == LiquidGlass.STYLE_IOS_LIQUID_GLASS ||
+        style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL ||
+        style == LiquidGlass.STYLE_COLOROS_FROSTED
+    ) {
         return POPUP_COLOR_MODE_BLUR
     }
     return mode

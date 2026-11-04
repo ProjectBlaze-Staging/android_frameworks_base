@@ -19,9 +19,15 @@ package com.android.systemui.statusbar.quickactions.popups.ui.compose
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupChipModel
+import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupContentModel
+import com.android.systemui.statusbar.quickactions.popups.ui.model.SystemEventKind
 
 @Composable
 internal fun rememberChipText(model: PopupChipModel.Shown): String? {
+    val content = model.popupContent
+    if (content is PopupContentModel.SystemEvent && content.kind == SystemEventKind.Timer) {
+        return rememberTimerText(content)
+    }
     val start = model.callStartTimeMs ?: return model.chipText
     return rememberCallDurationText(start)
 }

@@ -129,19 +129,24 @@ fun CosMediaCard(model: MediaControlChipModel, modifier: Modifier = Modifier) {
     val artwork = remember(model.artworkIcon) { (model.artworkIcon as? UiIcon.Loaded)?.drawable }
     val tint = rememberCosArtTint(artwork)
     val shape = RoundedCornerShape(CosMediaCard.Corner)
+    val isLens =
+        glassStyle == com.android.internal.penguin.glass.LiquidGlass.STYLE_IOS_LIQUID_GLASS ||
+            glassStyle == com.android.internal.penguin.glass.LiquidGlass.STYLE_IOS27_DARK_CRYSTAL
     val baseFill =
-        when (glassStyle) {
-            com.android.internal.penguin.glass.LiquidGlass.STYLE_IOS_LIQUID_GLASS ->
-                Color(0x9E101218)
-            com.android.internal.penguin.glass.LiquidGlass.STYLE_COLOROS_FROSTED ->
-                Color(0xBA181A20)
+        when {
+            glassStyle == com.android.internal.penguin.glass.LiquidGlass.STYLE_IOS27_DARK_CRYSTAL ->
+                Color(0xF2080A11)
+            isLens ->
+                Color(0xEE0B0E16)
+            glassStyle == com.android.internal.penguin.glass.LiquidGlass.STYLE_COLOROS_FROSTED ->
+                Color(0xEE12141B)
             else -> CosMediaCard.Fill
         }
     val borderBrush =
         remember(glassStyle) {
-            if (glassStyle == com.android.internal.penguin.glass.LiquidGlass.STYLE_IOS_LIQUID_GLASS) {
+            if (isLens) {
                 androidx.compose.ui.graphics.Brush.linearGradient(
-                    colors = listOf(Color(0x99FFFFFF), Color(0x28FFFFFF), Color(0x6670B8FF))
+                    colors = listOf(Color(0xAAFFFFFF), Color(0x28FFFFFF), Color(0x7070B8FF))
                 )
             } else {
                 androidx.compose.ui.graphics.Brush.linearGradient(
@@ -150,7 +155,7 @@ fun CosMediaCard(model: MediaControlChipModel, modifier: Modifier = Modifier) {
             }
         }
     val strokeW =
-        if (glassStyle == com.android.internal.penguin.glass.LiquidGlass.STYLE_IOS_LIQUID_GLASS) {
+        if (isLens) {
             1.4.dp
         } else {
             1.dp

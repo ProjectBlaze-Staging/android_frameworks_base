@@ -303,9 +303,6 @@ internal fun CosIslandShell(
                 }
                 .drawWithContent {
                     drawContent()
-                    if (moonAlpha.value > 0f && size.width > 0f) {
-                        drawMoons(this, moonAlpha.value)
-                    }
                 }
     ) {
         Layout(
