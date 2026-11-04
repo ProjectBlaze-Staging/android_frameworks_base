@@ -139,9 +139,10 @@ fun AudioReactiveBars(
 
     var lastCaptureUptimeMs by remember { mutableStateOf(0L) }
     var reactiveActive by remember { mutableStateOf(false) }
+    val activePlaying = isPlaying && rememberScreenInteractive()
 
-    DisposableEffect(isPlaying) {
-        if (!isPlaying) {
+    DisposableEffect(activePlaying) {
+        if (!activePlaying) {
             PausedRestLevels.forEachIndexed { i, v -> rawLevels[i] = v }
             onDispose {}
         } else {
@@ -209,7 +210,7 @@ fun AudioReactiveBars(
     }
 
     LaunchedEffect(Unit) {
-        snapshotFlow { rawLevels.toList() to isPlaying }
+        snapshotFlow { rawLevels.toList() to activePlaying }
             .distinctUntilChanged()
             .collect { (targets, playing) ->
                 val spec = if (playing && reactiveActive) BeatSpring else SettleSpring
@@ -223,8 +224,8 @@ fun AudioReactiveBars(
             }
     }
 
-    LaunchedEffect(isPlaying, reactiveActive) {
-        if (!isPlaying) {
+    LaunchedEffect(activePlaying, reactiveActive) {
+        if (!activePlaying) {
             PausedRestLevels.forEachIndexed { i, v -> rawLevels[i] = v }
             return@LaunchedEffect
         }
@@ -241,8 +242,8 @@ fun AudioReactiveBars(
         }
     }
 
-    LaunchedEffect(isPlaying) {
-        if (!isPlaying) {
+    LaunchedEffect(activePlaying) {
+        if (!activePlaying) {
             reactiveActive = false
             return@LaunchedEffect
         }

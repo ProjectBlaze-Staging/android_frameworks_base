@@ -3586,13 +3586,28 @@ public class DeviceIdleController extends SystemService
     /** Calls to {@link #updateQuickDozeFlagLocked(boolean)} by considering appropriate signals. */
     @GuardedBy("this")
     private void updateQuickDozeFlagLocked() {
-        boolean enableQuickDoze = mBatterySaverEnabled || mIsDesktopClosedState;
+        boolean enableQuickDoze = mBatterySaverEnabled || mIsDesktopClosedState
+                || isBlazeAggressiveDozeActive();
         if (mConstants.USE_MODE_MANAGER) {
             // Only disable the quick doze flag when mode manager request is false,
             // battery saver is off and the desktop lid is not in CLOSED state.
             updateQuickDozeFlagLocked(mModeManagerRequestedQuickDoze || enableQuickDoze);
         } else {
             updateQuickDozeFlagLocked(enableQuickDoze);
+        }
+    }
+
+    private boolean isBlazeAggressiveDozeActive() {
+        try {
+            final ContentResolver cr = getContext().getContentResolver();
+            final boolean aggressiveDoze =
+                    Settings.Global.getInt(cr, "aggressive_doze", 1) == 1;
+            if (!aggressiveDoze) return false;
+            final boolean mediaPlaying =
+                    Settings.Global.getInt(cr, "blaze_island_media_playing", 0) == 1;
+            return !mediaPlaying;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -3742,6 +3757,9 @@ public class DeviceIdleController extends SystemService
             return;
         }
         // Become inactive and determine if we will ultimately go idle.
+        mQuickDozeActivated = mBatterySaverEnabled || mIsDesktopClosedState
+                || (mConstants.USE_MODE_MANAGER && mModeManagerRequestedQuickDoze)
+                || isBlazeAggressiveDozeActive();
         if (mDeepEnabled) {
             if (mQuickDozeActivated) {
                 if (mState == STATE_QUICK_DOZE_DELAY || mState == STATE_IDLE
@@ -3785,7 +3803,10 @@ public class DeviceIdleController extends SystemService
         if (mLightState == LIGHT_STATE_ACTIVE && mLightEnabled) {
             moveToLightStateLocked(LIGHT_STATE_INACTIVE, "no activity");
             resetLightIdleManagementLocked();
-            scheduleLightAlarmLocked(mConstants.LIGHT_IDLE_AFTER_INACTIVE_TIMEOUT,
+            long lightTimeout = mQuickDozeActivated
+                    ? Math.min(15_000L, mConstants.LIGHT_IDLE_AFTER_INACTIVE_TIMEOUT)
+                    : mConstants.LIGHT_IDLE_AFTER_INACTIVE_TIMEOUT;
+            scheduleLightAlarmLocked(lightTimeout,
                     mConstants.FLEX_TIME_SHORT, true);
         }
     }

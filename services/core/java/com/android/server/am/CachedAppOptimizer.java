@@ -1264,6 +1264,8 @@ public class CachedAppOptimizer {
         if (mFreezerDebounceTimeout < 0) {
             mFreezerDebounceTimeout = mDefaultFreezerDebounceTimeout;
         }
+        // BlazeAOSP Smart Freezer: prevent GMS Phenotype from inflating freeze delay to 10 minutes
+        mFreezerDebounceTimeout = Math.min(mFreezerDebounceTimeout, 15_000L);
         Slog.d(TAG_AM, "Freezer timeout set to " + mFreezerDebounceTimeout);
     }
 

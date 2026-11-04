@@ -5,7 +5,12 @@
 
 package com.android.systemui.statusbar.quickactions.popups.ui.compose
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.drawable.Drawable
+import android.os.PowerManager
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -20,6 +25,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -112,18 +118,43 @@ internal fun rememberCosArtTint(artwork: Drawable?): Color {
 }
 
 @Composable
+internal fun rememberScreenInteractive(): Boolean {
+    val context = LocalContext.current
+    val pm = remember(context) { context.getSystemService(PowerManager::class.java) }
+    var interactive by remember { mutableStateOf(pm?.isInteractive != false) }
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    Intent.ACTION_SCREEN_ON -> interactive = true
+                    Intent.ACTION_SCREEN_OFF -> interactive = false
+                }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        runCatching { context.registerReceiver(receiver, filter) }
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+    }
+    return interactive
+}
+
+@Composable
 internal fun CosVoicePrint(playing: Boolean, size: Dp) {
     val context = LocalContext.current
+    val activePlaying = playing && rememberScreenInteractive()
     var composition by remember { mutableStateOf<LottieComposition?>(null) }
     LaunchedEffect(Unit) { composition = CosIslandMedia.voiceprint(context) }
     val loaded = composition
-    if (playing && loaded != null) {
+    if (activePlaying && loaded != null) {
         LottieAnimation(
             composition = loaded,
             iterations = LottieConstants.IterateForever,
             modifier = Modifier.size(size),
         )
-    } else if (playing) {
+    } else if (activePlaying) {
         val infinite = rememberInfiniteTransition(label = "cos_island_eq")
         val bar0 by infinite.animateFloat(
             initialValue = 0.28f, targetValue = 0.90f,

@@ -56,9 +56,21 @@ public final class LiquidGlass {
                     context.getContentResolver(), SETTING_AUTO_LITE_BATTERY_SAVER, 1) != 0;
             if (autoLite) {
                 PowerManager pm = context.getSystemService(PowerManager.class);
-                if (pm != null && pm.isPowerSaveMode()) {
-                    sEffectiveStyle = STYLE_MATERIAL3_LITE;
-                    return sEffectiveStyle;
+                if (pm != null) {
+                    if (pm.isPowerSaveMode()) {
+                        sEffectiveStyle = STYLE_MATERIAL3_LITE;
+                        return sEffectiveStyle;
+                    }
+                    int thermalStatus = pm.getCurrentThermalStatus();
+                    if (thermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) {
+                        sEffectiveStyle = STYLE_MATERIAL3_LITE;
+                        return sEffectiveStyle;
+                    }
+                    if (thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE
+                            && style == STYLE_IOS_LIQUID_GLASS) {
+                        sEffectiveStyle = STYLE_COLOROS_FROSTED;
+                        return sEffectiveStyle;
+                    }
                 }
             }
             sEffectiveStyle = style;
