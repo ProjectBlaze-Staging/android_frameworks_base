@@ -429,9 +429,8 @@ constructor(
                         it.isNotEmpty()
                     } ?: extras.getString("android.text")
 
-                val notif = sbn.notification
                 val isMessagingStyle =
-                    notif != null && notif.isStyle(Notification.MessagingStyle::class.java)
+                    notif.isStyle(Notification.MessagingStyle::class.java)
                 val latestMessageTime: Long =
                     if (isMessagingStyle) {
                         val msgs =
