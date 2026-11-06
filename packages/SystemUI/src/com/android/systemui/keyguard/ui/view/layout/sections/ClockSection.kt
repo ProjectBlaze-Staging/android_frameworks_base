@@ -249,6 +249,16 @@ constructor(
                 TOP,
                 largeClockTopMargin,
             )
+            val depthEnabled = android.provider.Settings.System.getIntForUser(
+                context.contentResolver,
+                "depth_wallpaper_enabled",
+                0,
+                android.os.UserHandle.USER_CURRENT
+            ) != 0
+            setVerticalBias(
+                ClockViewIds.LOCKSCREEN_CLOCK_VIEW_LARGE,
+                if (depthEnabled) 0.14f else 0.5f
+            )
             constrainWidth(ClockViewIds.LOCKSCREEN_CLOCK_VIEW_LARGE, WRAP_CONTENT)
 
             // The following two lines make LOCKSCREEN_CLOCK_VIEW_LARGE is constrained to available
