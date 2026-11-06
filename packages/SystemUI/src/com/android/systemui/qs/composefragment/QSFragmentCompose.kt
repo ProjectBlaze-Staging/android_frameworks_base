@@ -1248,14 +1248,25 @@ constructor(
                                 )
                                 .padding(horizontal = qsHorizontalMargin())
                     ) {
-                        EditableQuickQuickSettingsLayout(
-                            sectionConfigs = sectionConfigs.filter {
-                                when (it.type) {
-                                    SectionType.BRIGHTNESS -> qqsContentSettings.showBrightness
-                                    SectionType.MEDIA -> qqsContentSettings.showMedia
-                                    else -> true
+                        val blazeQs = com.android.systemui.qs.panels.ui.compose.rememberBlazeQsSettings()
+                        val effectiveQqsSections = remember(sectionConfigs, blazeQs.showBrightnessSlider, qqsContentSettings) {
+                            sectionConfigs.mapNotNull { cfg ->
+                                when (cfg.type) {
+                                    SectionType.BRIGHTNESS -> {
+                                        val showInQqs = when (blazeQs.showBrightnessSlider) {
+                                            0 -> false
+                                            2 -> true
+                                            else -> false
+                                        }
+                                        if (showInQqs) cfg.copy(visible = true) else null
+                                    }
+                                    SectionType.MEDIA -> if (qqsContentSettings.showMedia) cfg else null
+                                    else -> cfg
                                 }
-                            },
+                            }
+                        }
+                        EditableQuickQuickSettingsLayout(
+                            sectionConfigs = effectiveQqsSections,
                             sectionEditModeViewModel = viewModel.sectionEditModeViewModel,
                             nonBrightnessAlpha = contentAlpha,
                             brightness = BrightnessSlider,

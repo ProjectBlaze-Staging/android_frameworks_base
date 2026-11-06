@@ -33,7 +33,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout. width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -50,6 +51,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.PathEffect
@@ -71,6 +73,8 @@ import androidx.compose.ui.layout.onLayoutRectChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
@@ -102,6 +106,12 @@ private fun readCustomBatteryInt(context: Context, key: String, defaultVal: Int)
         if (!s.isNullOrEmpty()) return s.toInt()
     } catch (_: Throwable) {}
     return defaultVal
+}
+
+private fun readBatteryPercentMode(context: Context): Int {
+    val mode = readCustomBatteryInt(context, "status_bar_show_battery_percent_mode", -999)
+    if (mode != -999) return mode
+    return readCustomBatteryInt(context, "status_bar_show_battery_percent", -1)
 }
 
 /**
@@ -215,7 +225,7 @@ fun UnifiedBattery(
         mutableIntStateOf(readCustomBatteryInt(context, "status_bar_battery_style", 0))
     }
     var percentMode by remember {
-        mutableIntStateOf(readCustomBatteryInt(context, "status_bar_show_battery_percent", -1))
+        mutableIntStateOf(readBatteryPercentMode(context))
     }
 
     DisposableEffect(context) {
@@ -223,7 +233,7 @@ fun UnifiedBattery(
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
                 batteryStyle = readCustomBatteryInt(context, "status_bar_battery_style", 0)
-                percentMode = readCustomBatteryInt(context, "status_bar_show_battery_percent", -1)
+                percentMode = readBatteryPercentMode(context)
             }
         }
         try {
@@ -235,6 +245,12 @@ fun UnifiedBattery(
             )
             cr.registerContentObserver(
                 Settings.System.getUriFor("status_bar_show_battery_percent"),
+                false,
+                observer,
+                UserHandle.USER_ALL
+            )
+            cr.registerContentObserver(
+                Settings.System.getUriFor("status_bar_show_battery_percent_mode"),
                 false,
                 observer,
                 UserHandle.USER_ALL
@@ -276,6 +292,14 @@ fun UnifiedBattery(
         }
     }
     val showTextNext = (percentMode == 2) && (batteryStyle != 4) && (batteryStyle != 5)
+    val batteryTextStyle = remember {
+        TextStyle(
+            fontSize = 11.5.sp,
+            lineHeight = 11.5.sp,
+            fontWeight = FontWeight.Bold,
+            platformStyle = PlatformTextStyle(includeFontPadding = false),
+        )
+    }
 
     Row(
         modifier = modifier
@@ -284,7 +308,7 @@ fun UnifiedBattery(
                 bounds = with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
             },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.5.dp),
     ) {
         when (batteryStyle) {
             5 -> {
@@ -292,15 +316,16 @@ fun UnifiedBattery(
                 Spacer(modifier = Modifier.width(0.dp))
             }
             4 -> {
-                // Text-only battery style
+                // Text-only battery style (crisp, unclipped)
                 val colors = colorProvider()
                 val prefix = if (viewModel.isCharging) "⚡" else ""
                 Text(
                     text = "$prefix${currentLevel}%",
                     color = colors.fill,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = batteryTextStyle,
                     maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.wrapContentSize(Alignment.Center, unbounded = true),
                 )
             }
             6 -> {
@@ -311,8 +336,18 @@ fun UnifiedBattery(
                     colorsProvider = colorProvider,
                 )
             }
-            1, 2, 3, 8, 9 -> {
-                // Circle (1/8), Dotted Circle (2/9), Filled Circle (3)
+            7, 8, 9 -> {
+                // 7: iOS 27 Kapsül Pil, 8: ColorOS 17 Canlı Kapsül, 9: One UI 9 Hap Pil
+                FlagshipCapsuleBatteryIcon(
+                    level = currentLevel,
+                    style = batteryStyle,
+                    isCharging = viewModel.isCharging,
+                    showPercentInside = (percentMode != 0 && percentMode != 2),
+                    colorsProvider = colorProvider,
+                )
+            }
+            1, 2, 3 -> {
+                // Circle (1), Dotted Circle (2), Filled Circle (3)
                 CircleBatteryIcon(
                     level = currentLevel,
                     style = batteryStyle,
@@ -339,10 +374,166 @@ fun UnifiedBattery(
             Text(
                 text = "${currentLevel}%",
                 color = colors.fill,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
+                style = batteryTextStyle,
                 maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.wrapContentSize(Alignment.Center, unbounded = true),
             )
+        }
+    }
+}
+
+@Composable
+private fun FlagshipCapsuleBatteryIcon(
+    level: Int,
+    style: Int,
+    isCharging: Boolean,
+    showPercentInside: Boolean,
+    colorsProvider: () -> BatteryColors,
+) {
+    val widthDp = if (style == 9) 24.dp else 25.dp
+    Canvas(modifier = Modifier.fillMaxHeight().width(widthDp)) {
+        val colors = colorsProvider()
+        val w = size.width
+        val h = size.height
+        val clamped = level.coerceIn(0, 100) / 100f
+
+        when (style) {
+            7 -> {
+                // iOS 27 Kapsül Pil: sleek outer rounded rect + positive cap + inner inset fill
+                val nubW = w * 0.07f
+                val nubH = h * 0.36f
+                val bodyW = w - nubW - w * 0.03f
+                val corner = h * 0.34f
+                val strokeW = (h * 0.10f).coerceAtLeast(1.5f)
+
+                // Nub
+                drawRoundRect(
+                    color = if (level >= 98) colors.fill else colors.backgroundOnly,
+                    topLeft = Offset(bodyW + w * 0.03f, (h - nubH) / 2f),
+                    size = Size(nubW, nubH),
+                    cornerRadius = CornerRadius(nubW, nubW),
+                )
+                // Outer frame
+                drawRoundRect(
+                    color = colors.backgroundOnly,
+                    topLeft = Offset(0f, 0f),
+                    size = Size(bodyW, h),
+                    cornerRadius = CornerRadius(corner, corner),
+                )
+                // Inner fill
+                val pad = strokeW * 1.15f
+                val innerW = (bodyW - pad * 2f).coerceAtLeast(0f)
+                val innerH = (h - pad * 2f).coerceAtLeast(0f)
+                val innerCorner = (corner - pad * 0.6f).coerceAtLeast(2f)
+                val fillColor = when {
+                    isCharging -> Color(0xFF34C759)
+                    level <= 20 -> Color(0xFFFF3B30)
+                    else -> colors.fill
+                }
+                if (clamped > 0f) {
+                    clipRect(left = pad, top = pad, right = pad + innerW * clamped, bottom = pad + innerH) {
+                        drawRoundRect(
+                            color = fillColor,
+                            topLeft = Offset(pad, pad),
+                            size = Size(innerW, innerH),
+                            cornerRadius = CornerRadius(innerCorner, innerCorner),
+                        )
+                    }
+                }
+            }
+            8 -> {
+                // ColorOS 17 Canlı Kapsül: Living Flow glowing capsule with gradient fill
+                val nubW = w * 0.065f
+                val nubH = h * 0.40f
+                val bodyW = w - nubW - w * 0.03f
+                val corner = h * 0.42f
+                val strokeW = (h * 0.11f).coerceAtLeast(1.6f)
+
+                drawRoundRect(
+                    color = if (isCharging) Color(0xFF00E676) else colors.fill.copy(alpha = 0.7f),
+                    topLeft = Offset(bodyW + w * 0.03f, (h - nubH) / 2f),
+                    size = Size(nubW, nubH),
+                    cornerRadius = CornerRadius(nubW, nubW),
+                )
+                drawRoundRect(
+                    color = colors.backgroundOnly,
+                    topLeft = Offset(0f, 0f),
+                    size = Size(bodyW, h),
+                    cornerRadius = CornerRadius(corner, corner),
+                    style = Stroke(width = strokeW),
+                )
+                val pad = strokeW * 1.25f
+                val innerW = (bodyW - pad * 2f).coerceAtLeast(0f)
+                val innerH = (h - pad * 2f).coerceAtLeast(0f)
+                val innerCorner = (corner - pad * 0.5f).coerceAtLeast(2f)
+                val brush = when {
+                    isCharging -> Brush.horizontalGradient(listOf(Color(0xFF00C853), Color(0xFF69F0AE)))
+                    level <= 20 -> Brush.horizontalGradient(listOf(Color(0xFFFF5252), Color(0xFFFF8A80)))
+                    else -> Brush.horizontalGradient(listOf(colors.fill.copy(alpha = 0.85f), colors.fill))
+                }
+                if (clamped > 0f) {
+                    clipRect(left = pad, top = pad, right = pad + innerW * clamped, bottom = pad + innerH) {
+                        drawRoundRect(
+                            brush = brush,
+                            topLeft = Offset(pad, pad),
+                            size = Size(innerW, innerH),
+                            cornerRadius = CornerRadius(innerCorner, innerCorner),
+                        )
+                    }
+                }
+            }
+            else -> {
+                // 9: One UI 9 Hap Pil: Pure stadium pill (no nub)
+                val corner = h / 2f
+                drawRoundRect(
+                    color = colors.backgroundOnly,
+                    topLeft = Offset(0f, 0f),
+                    size = Size(w, h),
+                    cornerRadius = CornerRadius(corner, corner),
+                )
+                val fillColor = when {
+                    isCharging -> Color(0xFF2EE59D)
+                    level <= 15 -> Color(0xFFFF453A)
+                    else -> colors.fill
+                }
+                if (clamped > 0f) {
+                    clipRect(left = 0f, top = 0f, right = w * clamped, bottom = h) {
+                        drawRoundRect(
+                            color = fillColor,
+                            topLeft = Offset(0f, 0f),
+                            size = Size(w, h),
+                            cornerRadius = CornerRadius(corner, corner),
+                        )
+                    }
+                }
+            }
+        }
+
+        val bodyCenterW = if (style == 9) w else w * 0.90f
+        if (showPercentInside && level < 100) {
+            val glyphs = level.glyphRepresentation()
+            val totalW = glyphs.fold(0f) { acc, g -> acc + g.width } + (glyphs.size - 1).coerceAtLeast(0) * 0.65f
+            val maxH = glyphs.maxOfOrNull { it.height } ?: 1f
+            val s = (h * 0.56f) / maxH
+            var xOff = (bodyCenterW - (totalW * s)) / 2f
+            for (g in glyphs) {
+                val yOff = (h - (g.height * s)) / 2f
+                inset(xOff, yOff) {
+                    scale(s, pivot = Offset.Zero) {
+                        drawPath(g.path, color = colors.attribution)
+                    }
+                }
+                xOff += (g.width + 0.65f) * s
+            }
+        } else if (isCharging) {
+            val bolt = BatteryGlyph.Bolt
+            val s = (h * 0.62f) / bolt.height
+            inset((bodyCenterW - bolt.width * s) / 2f, (h - bolt.height * s) / 2f) {
+                scale(s, pivot = Offset.Zero) {
+                    drawPath(bolt.path, color = colors.attribution)
+                }
+            }
         }
     }
 }

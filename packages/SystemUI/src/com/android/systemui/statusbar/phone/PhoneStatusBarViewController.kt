@@ -388,9 +388,47 @@ private constructor(
         private val displayManager by lazy {
             mView.context.getSystemService(DisplayManager::class.java)
         }
+        private val powerManager by lazy {
+            mView.context.getSystemService(android.os.PowerManager::class.java)
+        }
+        private val doubleTapSleepDetector =
+            GestureDetector(
+                mView.context,
+                object : GestureDetector.SimpleOnGestureListener() {
+                    override fun onDoubleTap(e: MotionEvent): Boolean {
+                        val enabledSys =
+                            Settings.System.getIntForUser(
+                                mView.context.contentResolver,
+                                "double_tap_sleep_gesture",
+                                0,
+                                UserHandle.USER_CURRENT,
+                            ) != 0
+                        val enabledLin =
+                            try {
+                                lineageos.providers.LineageSettings.System.getIntForUser(
+                                    mView.context.contentResolver,
+                                    "double_tap_sleep_gesture",
+                                    0,
+                                    UserHandle.USER_CURRENT,
+                                ) != 0
+                            } catch (t: Throwable) {
+                                false
+                            }
+                        if (enabledSys || enabledLin) {
+                            powerManager?.goToSleep(android.os.SystemClock.uptimeMillis())
+                            return true
+                        }
+                        return false
+                    }
+                },
+            )
 
         override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
             StatusBarEventForwardingModernization.assertInLegacyMode()
+
+            if (panelExpansionInteractor.isFullyCollapsed) {
+                doubleTapSleepDetector.onTouchEvent(event)
+            }
 
             if (event.action == MotionEvent.ACTION_DOWN) {
                 dispatchEventToShadeDisplayPolicy(event)

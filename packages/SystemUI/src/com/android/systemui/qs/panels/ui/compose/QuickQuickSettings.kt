@@ -55,13 +55,13 @@ fun ContentScope.QuickQuickSettings(
     val squishiness by viewModel.squishinessViewModel.squishiness.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val maxTiles = if (isLandscape) QQS_EDIT_GRID_COLUMNS else QQS_EDIT_GRID_MAX_TILES
+    val blazeQs = rememberBlazeQsSettings()
+    val qqsColumns = blazeQs.qsColumns
+    val maxTiles = (qqsColumns * blazeQs.qqsRows).coerceAtLeast(qqsColumns)
+    val qqsTileShape = if (blazeQs.tileShape == 0) CircleShape else blazeQs.resolveTileShape()
 
     val qqsTiles = remember(sizedTiles, maxTiles) { sizedTiles.take(maxTiles) }
     val spans by remember(qqsTiles) { derivedStateOf { List(qqsTiles.size) { 1 } } }
-
-    val qqsColumns = QQS_EDIT_GRID_COLUMNS
 
     Box(modifier = modifier) {
         GridAnchor()
@@ -76,12 +76,12 @@ fun ContentScope.QuickQuickSettings(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .clip(CircleShape),
+                    .clip(qqsTileShape),
                 contentAlignment = Alignment.Center
             ) {
                 Tile(
                     tile = it.tile,
-                    iconOnly = true,
+                    iconOnly = blazeQs.hideLabels || qqsColumns >= 4,
                     squishiness = { squishiness },
                     coroutineScope = scope,
                     tileHapticsViewModelFactory = viewModel.tileHapticsViewModelFactory,

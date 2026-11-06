@@ -856,8 +856,20 @@ fun EditableQuickSettingsLayout(
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            val allSegmentsForRender = localSegments.filter {
+            val blazeQs = rememberBlazeQsSettings()
+            val baseSegmentsForRender = localSegments.filter {
                 !(it is Segment.Header && !it.item.type.isRenderedInQs())
+            }
+            val allSegmentsForRender = if (!isEditMode && blazeQs.brightnessSliderAtBottom) {
+                val brightnessGroups = baseSegmentsForRender.filter { seg ->
+                    seg is Segment.TileGroup && seg.tiles.any { it.spec.spec == "brightness" }
+                }
+                val otherSegments = baseSegmentsForRender.filterNot { seg ->
+                    seg is Segment.TileGroup && seg.tiles.any { it.spec.spec == "brightness" }
+                }
+                otherSegments + brightnessGroups
+            } else {
+                baseSegmentsForRender
             }
 
             val visibleSegIds = localSegments
@@ -1332,18 +1344,23 @@ private fun TileGroupArea(
     tileBrightness: @Composable (isVertical: Boolean) -> Unit,
     layoutRootCoordinates: LayoutCoordinates?
 ) {
+    val blazeQs = rememberBlazeQsSettings()
     val draggingFromHere = FloatingTileDragState.isDragging &&
             tiles.any { it.spec == FloatingTileDragState.draggingTileSpec }
 
-    val effectiveTiles = tiles
+    val effectiveTiles = if (!isEditMode && blazeQs.showBrightnessSlider == 0) {
+        tiles.filter { it.spec.spec != "brightness" }
+    } else {
+        tiles
+    }
     if (effectiveTiles.isEmpty() && !isEditMode && !isDropTarget && !draggingFromHere) return
 
     DraggableGrid(
-        tiles        = tiles,
+        tiles        = effectiveTiles,
         allTilesMap  = allTilesMap,
         isEditMode   = isEditMode,
         sectionType  = SectionType.TILES,
-        columns      = 4,
+        columns      = blazeQs.qsColumns,
         isDropTarget = isDropTarget,
         onTileClick  = { tile, expandable -> if (!isEditMode) onTileClick(tile.spec, expandable) },
         onResize     = { tileId, newCols, newRows ->
@@ -1387,6 +1404,7 @@ private fun FloatingTilesArea(
     tileBrightness: @Composable (isVertical: Boolean) -> Unit,
     layoutRootCoordinates: LayoutCoordinates?
 ) {
+    val blazeQs = rememberBlazeQsSettings()
     if (tiles.isEmpty() && !isEditMode && !isDropTarget) return
 
     DraggableGrid(
@@ -1394,7 +1412,7 @@ private fun FloatingTilesArea(
         allTilesMap  = allTilesMap,
         isEditMode   = isEditMode,
         sectionType  = sectionType,
-        columns      = 4,
+        columns      = blazeQs.qsColumns,
         isDropTarget = isDropTarget,
         onTileClick  = { tile, _ -> if (!isEditMode) onTileClick(tile.spec) },
         onResize     = { tileId, newCols, newRows ->
@@ -1963,10 +1981,15 @@ fun DraggableTile(
         else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
     }
 
+    val blazeQs = rememberBlazeQsSettings()
+    val view = androidx.compose.ui.platform.LocalView.current
+    val customAospShape = blazeQs.resolveTileShape(InactiveCornerRadius)
+    val customFloatingShape = if (blazeQs.tileShape == 0) RoundedCornerShape(percent = 50) else blazeQs.resolveTileShape()
+
     val expandableShape = if (useAospStyle) {
-        RoundedCornerShape(InactiveCornerRadius)
+        customAospShape
     } else {
-        RoundedCornerShape(percent = 50) 
+        customFloatingShape
     }
     val expandableColor = if (useAospStyle) {
         if (isActive) MaterialTheme.colorScheme.primary else EditModeTileDefaults.editTileColors().background
@@ -2076,26 +2099,32 @@ fun DraggableTile(
                         if (showBorder) Modifier.border(
                             width = 2.dp,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(InactiveCornerRadius),
+                            shape = customAospShape,
                         ) else Modifier
                     ),
-                shape = RoundedCornerShape(InactiveCornerRadius),
+                shape = customAospShape,
                 color = aospBackground,
                 shadowElevation = if (isResizing) 0.dp else elevation,
             ) {
+                val showAospLabel = !blazeQs.hideLabels && (!isOneUi || blazeQs.qsColumns <= 4)
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .combinedClickable(
                             enabled = !isEditMode && interactionsEnabled,
-                            onClick = { onClick(expandable) },
+                            onClick = {
+                                if (blazeQs.tileHaptic) {
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                                }
+                                onClick(expandable)
+                            },
                             onLongClick = if (!isEditMode && interactionsEnabled && qsTile != null) {{ qsTile.longClick(expandable) }} else null,
                         )
-                        .padding(12.dp),
+                        .padding(horizontal = 6.dp, vertical = if (showAospLabel) 6.dp else 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    val iconSize = 28.dp
+                    val iconSize = if (showAospLabel) 22.dp else 28.dp
                     val currentTileState = state
                     if (currentTileState?.icon != null) {
                         val iconDrawable = remember(currentTileState.icon, currentTileState.state) {
@@ -2135,15 +2164,17 @@ fun DraggableTile(
                             modifier = Modifier.size(iconSize)
                         )
                     }
-                    if (!isOneUi) {
-                        Spacer(Modifier.height(4.dp))
+                    if (showAospLabel) {
+                        Spacer(Modifier.height(3.dp))
                         @OptIn(ExperimentalFoundationApi::class)
                         Text(
                             label.toString(),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
                             color = aospLabelColor,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
                             modifier = Modifier.basicMarquee(),
                         )
                     }
@@ -2155,7 +2186,7 @@ fun DraggableTile(
                 Modifier.border(
                     width = 2.dp,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(percent = 50)
+                    shape = customFloatingShape
                 )
             } else Modifier
 
@@ -2168,7 +2199,7 @@ fun DraggableTile(
                 modifier        = Modifier
                     .fillMaxSize()
                     .then(borderModifier),
-                shape           = RoundedCornerShape(percent = 50),
+                shape           = customFloatingShape,
                 color           = Color.Transparent,
                 shadowElevation = if (isResizing) 0.dp else elevation,
             ) {
@@ -2194,15 +2225,20 @@ fun DraggableTile(
                             val iconSize          = 28.dp
 
                             Box(modifier = Modifier.fillMaxSize()
-                                .background(tileBackgroundColor, RoundedCornerShape(percent = 50))
+                                .background(tileBackgroundColor, customFloatingShape)
                                 .blur(16.dp))
 
                             Row(
                                 modifier = Modifier.fillMaxSize()
-                                    .clip(RoundedCornerShape(percent = 50))
+                                    .clip(customFloatingShape)
                                     .combinedClickable(
                                         enabled     = !isEditMode && interactionsEnabled,
-                                        onClick     = { onClick(expandable) },
+                                        onClick     = {
+                                            if (blazeQs.tileHaptic) {
+                                                view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                                            }
+                                            onClick(expandable)
+                                        },
                                         onLongClick = if (!isEditMode && interactionsEnabled && qsTile != null) {{ qsTile.longClick(expandable) }} else null
                                     ),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -2214,7 +2250,7 @@ fun DraggableTile(
                                 ) {
                                     Box(modifier = Modifier.size(iconContainerSize), contentAlignment = Alignment.Center) {
                                         Box(modifier = Modifier.fillMaxSize()
-                                            .background(iconContainerColor, CircleShape)
+                                            .background(iconContainerColor, customFloatingShape)
                                             .then(if (!isActive) Modifier.blur(4.dp) else Modifier))
 
                                         val currentTileState = state
@@ -2260,7 +2296,7 @@ fun DraggableTile(
                                 }
 
                                 AnimatedVisibility(
-                                    visible = !isOneUi && isPill && !(tile.spanCols == 2 && tile.spanRows == 3),
+                                    visible = !blazeQs.hideLabels && !isOneUi && isPill && !(tile.spanCols == 2 && tile.spanRows == 3),
                                     modifier = Modifier.weight(1f),
                                     enter = fadeIn(tween(150)),
                                     exit = fadeOut(tween(150))
@@ -2649,8 +2685,21 @@ fun EditableQuickQuickSettingsLayout(
     media: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val blazeQs = rememberBlazeQsSettings()
+    val orderedSections = remember(sectionConfigs, blazeQs.brightnessSliderAtBottom) {
+        val sorted = sectionConfigs.sortedBy { it.position }
+        if (blazeQs.brightnessSliderAtBottom) {
+            val nonBrightness = sorted.filter { it.type != SectionType.BRIGHTNESS }
+            val brightnessSec = sorted.filter { it.type == SectionType.BRIGHTNESS }
+            nonBrightness + brightnessSec
+        } else {
+            val brightnessSec = sorted.filter { it.type == SectionType.BRIGHTNESS }
+            val nonBrightness = sorted.filter { it.type != SectionType.BRIGHTNESS }
+            brightnessSec + nonBrightness
+        }
+    }
     Column(modifier = modifier.fillMaxWidth()) {
-        sectionConfigs.sortedBy { it.position }.forEach { section ->
+        orderedSections.forEach { section ->
             if (section.visible) {
                 Box(
                     modifier = Modifier.graphicsLayer {

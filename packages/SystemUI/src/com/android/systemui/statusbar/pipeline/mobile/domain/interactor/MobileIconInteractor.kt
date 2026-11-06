@@ -17,10 +17,18 @@
 package com.android.systemui.statusbar.pipeline.mobile.domain.interactor
 
 import android.content.Context
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.os.UserHandle
+import android.provider.Settings
 import com.android.settingslib.SignalIcon.MobileIconGroup
 import com.android.settingslib.graph.SignalDrawable
 import com.android.settingslib.mobile.MobileIconCarrierIdOverrides
 import com.android.settingslib.mobile.MobileIconCarrierIdOverridesImpl
+import com.android.settingslib.mobile.TelephonyIcons
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.log.table.TableLogBuffer
 import com.android.systemui.log.table.logDiffsForTable
@@ -138,7 +146,7 @@ interface MobileIconInteractor {
 /** Interactor for a single mobile connection. This connection _should_ have one subscription ID */
 @Suppress("EXPERIMENTAL_IS_NOT_ENABLED")
 class MobileIconInteractorImpl(
-    @Background scope: CoroutineScope,
+    @Background private val scope: CoroutineScope,
     defaultSubscriptionHasDataEnabled: StateFlow<Boolean>,
     override val alwaysShowDataRatIcon: StateFlow<Boolean>,
     alwaysUseCdmaLevel: StateFlow<Boolean>,
@@ -153,6 +161,35 @@ class MobileIconInteractorImpl(
     val carrierIdOverrides: MobileIconCarrierIdOverrides = MobileIconCarrierIdOverridesImpl(),
 ) : MobileIconInteractor {
     override val subscriptionId = connectionRepository.subId
+
+    private fun systemBooleanSettingFlow(key: String, defaultVal: Int): StateFlow<Boolean> =
+        callbackFlow {
+            val readVal = {
+                Settings.System.getIntForUser(
+                    context.contentResolver,
+                    key,
+                    defaultVal,
+                    UserHandle.USER_CURRENT,
+                ) != 0
+            }
+            trySend(readVal())
+            val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    trySend(readVal())
+                }
+            }
+            context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor(key),
+                false,
+                observer,
+                UserHandle.USER_ALL,
+            )
+            awaitClose { context.contentResolver.unregisterContentObserver(observer) }
+        }.stateIn(scope, SharingStarted.WhileSubscribed(), defaultVal != 0)
+
+    private val showFourGFlow = systemBooleanSettingFlow("show_fourg_icon", 0)
+    private val showRoamingIndicatorFlow = systemBooleanSettingFlow("roaming_indicator_icon", 1)
+    private val showDataDisabledIconFlow = systemBooleanSettingFlow("data_disabled_icon", 1)
 
     override val tableLogBuffer: TableLogBuffer = connectionRepository.tableLogBuffer
 
@@ -210,13 +247,23 @@ class MobileIconInteractorImpl(
                 connectionRepository.resolvedNetworkType,
                 defaultMobileIconMapping,
                 defaultMobileIconGroup,
-            ) { resolvedNetworkType, mapping, defaultGroup ->
-                when (resolvedNetworkType) {
+                showFourGFlow,
+            ) { resolvedNetworkType, mapping, defaultGroup, showFourG ->
+                val baseGroup = when (resolvedNetworkType) {
                     is ResolvedNetworkType.CarrierMergedNetworkType ->
                         resolvedNetworkType.iconGroupOverride
                     else -> {
                         mapping[resolvedNetworkType.lookupKey] ?: defaultGroup
                     }
+                }
+                if (showFourG) {
+                    when (baseGroup.name) {
+                        TelephonyIcons.LTE.name -> TelephonyIcons.FOUR_G
+                        TelephonyIcons.LTE_PLUS.name -> TelephonyIcons.FOUR_G_PLUS
+                        else -> baseGroup
+                    }
+                } else {
+                    baseGroup
                 }
             }
             .stateIn(scope, SharingStarted.WhileSubscribed(), defaultMobileIconGroup.value)
@@ -268,8 +315,9 @@ class MobileIconInteractorImpl(
                 connectionRepository.isGsm,
                 connectionRepository.isRoaming,
                 connectionRepository.cdmaRoaming,
-            ) { carrierNetworkChangeActive, isGsm, isRoaming, cdmaRoaming ->
-                if (carrierNetworkChangeActive) {
+                showRoamingIndicatorFlow,
+            ) { carrierNetworkChangeActive, isGsm, isRoaming, cdmaRoaming, showRoaming ->
+                if (!showRoaming || carrierNetworkChangeActive) {
                     false
                 } else if (isGsm) {
                     isRoaming
@@ -310,11 +358,19 @@ class MobileIconInteractorImpl(
 
     /** Whether or not to show the error state of [SignalDrawable] for cellular connections */
     private val showExclamationMarkForCellular: StateFlow<Boolean> =
-        combine(defaultSubscriptionHasDataEnabled, isDefaultConnectionFailed, isInService) {
+        combine(
+                defaultSubscriptionHasDataEnabled,
+                isDefaultConnectionFailed,
+                isInService,
+                showDataDisabledIconFlow,
+            ) {
                 isDefaultDataEnabled,
                 isDefaultConnectionFailed,
-                isInService ->
-                !isDefaultDataEnabled || isDefaultConnectionFailed || !isInService
+                isInService,
+                showDataDisabledIcon ->
+                (!isDefaultDataEnabled && showDataDisabledIcon) ||
+                    isDefaultConnectionFailed ||
+                    !isInService
             }
             .stateIn(scope, SharingStarted.WhileSubscribed(), true)
 

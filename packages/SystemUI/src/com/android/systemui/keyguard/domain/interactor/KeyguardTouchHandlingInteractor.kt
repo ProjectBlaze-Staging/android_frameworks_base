@@ -265,7 +265,14 @@ constructor(
 
     /** Notifies that the lockscreen has been double clicked. */
     fun onDoubleClick() {
-        if (isDoubleTapHandlingEnabled.value) {
+        val customDoubleTap =
+            Settings.System.getIntForUser(
+                context.contentResolver,
+                "double_tap_sleep_lockscreen",
+                1,
+                android.os.UserHandle.USER_CURRENT,
+            ) != 0
+        if (isDoubleTapHandlingEnabled.value || customDoubleTap) {
             Log.d(TAG, "going to sleep due to double tap")
             powerManager.goToSleep(systemClock.uptimeMillis())
         } else {
@@ -286,8 +293,7 @@ constructor(
     }
 
     private fun isDoubleTapFeatureEnabled(): Boolean {
-        return doubleTapToSleep() &&
-            context.resources.getBoolean(com.android.internal.R.bool.config_supportDoubleTapSleep)
+        return true
     }
 
     /** Updates application state to ask to show the menu. */

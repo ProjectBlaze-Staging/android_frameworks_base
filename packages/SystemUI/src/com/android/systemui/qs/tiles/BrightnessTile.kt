@@ -177,6 +177,7 @@ fun BrightnessTileContent(
     }
 
     val context = LocalContext.current
+    val blazeQs = com.android.systemui.qs.panels.ui.compose.rememberBlazeQsSettings()
     val autoBrightnessPainter: Painter by produceState<Painter>(
         initialValue = ColorPainter(Color.Transparent),
         key1 = autoIconRes,
@@ -226,29 +227,32 @@ fun BrightnessTileContent(
                     enabled = enabled,
                     painter = sliderPainter,
                     isVertical = true,
+                    hapticEnabled = blazeQs.brightnessSliderHaptic,
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            if (blazeQs.showAutoBrightness) {
+                Spacer(modifier = Modifier.height(10.dp))
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
-                    .then(
-                        if (enabled) Modifier.clickable {
-                            coroutineScope.launch { viewModel.onIconClick() }
-                        } else Modifier
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = autoBrightnessPainter,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(20.dp),
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                        .then(
+                            if (enabled) Modifier.clickable {
+                                coroutineScope.launch { viewModel.onIconClick() }
+                            } else Modifier
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = autoBrightnessPainter,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         }
     } else {
@@ -286,29 +290,32 @@ fun BrightnessTileContent(
                     enabled = enabled,
                     painter = sliderPainter,
                     isVertical = false,
+                    hapticEnabled = blazeQs.brightnessSliderHaptic,
                 )
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            if (blazeQs.showAutoBrightness) {
+                Spacer(modifier = Modifier.width(10.dp))
 
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .aspectRatio(1f)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
-                    .then(
-                        if (enabled) Modifier.clickable {
-                            coroutineScope.launch { viewModel.onIconClick() }
-                        } else Modifier
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = autoBrightnessPainter,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(20.dp),
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .aspectRatio(1f)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                        .then(
+                            if (enabled) Modifier.clickable {
+                                coroutineScope.launch { viewModel.onIconClick() }
+                            } else Modifier
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = autoBrightnessPainter,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         }
     }
@@ -323,9 +330,11 @@ fun TileGlassSliderCore(
     enabled: Boolean,
     painter: Painter,
     isVertical: Boolean,
+    hapticEnabled: Boolean = false,
 ) {
     val view = LocalView.current
     var dragFraction by remember { mutableStateOf<Float?>(null) }
+    var lastHapticStep by remember { mutableStateOf(-1) }
     val rawFraction = ((value - valueRange.start) /
             (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
 
@@ -394,6 +403,13 @@ fun TileGlassSliderCore(
                         }
                         startFraction = (startFraction + delta).coerceIn(0f, 1f)
                         dragFraction = startFraction
+                        if (hapticEnabled) {
+                            val step = (startFraction * 20f).toInt()
+                            if (step != lastHapticStep) {
+                                lastHapticStep = step
+                                view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                            }
+                        }
                         onValueChange(
                             valueRange.start + startFraction *
                                     (valueRange.endInclusive - valueRange.start)

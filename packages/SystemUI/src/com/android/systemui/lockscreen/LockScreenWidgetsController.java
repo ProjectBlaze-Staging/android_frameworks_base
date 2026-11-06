@@ -201,19 +201,27 @@ public class LockScreenWidgetsController implements OmniJawsClient.OmniJawsObser
     private final View mView;
     private final Handler mHandler = new Handler(Looper.getMainLooper());
 
+    private static <T> T safeGetDep(Class<T> cls) {
+        try {
+            return Dependency.get(cls);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     public LockScreenWidgetsController(View view) {
         mView = view;
         mContext = mView.getContext();
-        mAccessPointController = Dependency.get(AccessPointController.class);
-        mBluetoothDetailsContentViewModel = Dependency.get(BluetoothDetailsContentViewModel.class);
-        mConfigurationController = Dependency.get(ConfigurationController.class);
-        mFlashlightController = Dependency.get(FlashlightController.class);
-        mInternetDialogManager = Dependency.get(InternetDialogManager.class);
-        mStatusBarStateController = Dependency.get(StatusBarStateController.class);
-        mBluetoothController = Dependency.get(BluetoothController.class);
-        mNetworkController = Dependency.get(NetworkController.class);
-        mDataController = mNetworkController.getMobileDataController();
-        mHotspotController = Dependency.get(HotspotController.class);
+        mAccessPointController = safeGetDep(AccessPointController.class);
+        mBluetoothDetailsContentViewModel = safeGetDep(BluetoothDetailsContentViewModel.class);
+        mConfigurationController = safeGetDep(ConfigurationController.class);
+        mFlashlightController = safeGetDep(FlashlightController.class);
+        mInternetDialogManager = safeGetDep(InternetDialogManager.class);
+        mStatusBarStateController = safeGetDep(StatusBarStateController.class);
+        mBluetoothController = safeGetDep(BluetoothController.class);
+        mNetworkController = safeGetDep(NetworkController.class);
+        mDataController = mNetworkController != null ? mNetworkController.getMobileDataController() : null;
+        mHotspotController = safeGetDep(HotspotController.class);
         mMediaSessionManagerHelper = MediaSessionManagerHelper.Companion.getInstance(mContext);
 
         mActivityLauncherUtils = new ActivityLauncherUtils(mContext);
@@ -1048,11 +1056,24 @@ public class LockScreenWidgetsController implements OmniJawsClient.OmniJawsObser
         }
         void updateSettings() {
             ContentResolver cr = mContext.getContentResolver();
-            mLockscreenWidgetsEnabled = Settings.System.getInt(cr, LOCKSCREEN_WIDGETS_ENABLED, 0) == 1;
-            mMainLockscreenWidgetsList = Settings.System.getString(cr, LOCKSCREEN_WIDGETS);
-            mSecondaryLockscreenWidgetsList = Settings.System.getString(cr, LOCKSCREEN_WIDGETS_EXTRAS);
-            mThemeStyle = Settings.System.getInt(cr, LOCKSCREEN_WIDGETS_STYLE, 0);
-            mTransparency = Settings.System.getInt(cr, LOCKSCREEN_WIDGETS_TRANSPARENCY, 30) / 100f;
+            mLockscreenWidgetsEnabled = Settings.System.getIntForUser(
+                    cr, LOCKSCREEN_WIDGETS_ENABLED, 0, UserHandle.USER_CURRENT) == 1;
+            mMainLockscreenWidgetsList = Settings.System.getStringForUser(
+                    cr, LOCKSCREEN_WIDGETS, UserHandle.USER_CURRENT);
+            mSecondaryLockscreenWidgetsList = Settings.System.getStringForUser(
+                    cr, LOCKSCREEN_WIDGETS_EXTRAS, UserHandle.USER_CURRENT);
+            if (mLockscreenWidgetsEnabled) {
+                if (mMainLockscreenWidgetsList == null || mMainLockscreenWidgetsList.trim().isEmpty()) {
+                    mMainLockscreenWidgetsList = "wifi,bt";
+                }
+                if (mSecondaryLockscreenWidgetsList == null || mSecondaryLockscreenWidgetsList.trim().isEmpty()) {
+                    mSecondaryLockscreenWidgetsList = "torch,ringer,data,hotspot";
+                }
+            }
+            mThemeStyle = Settings.System.getIntForUser(
+                    cr, LOCKSCREEN_WIDGETS_STYLE, 0, UserHandle.USER_CURRENT);
+            mTransparency = Settings.System.getIntForUser(
+                    cr, LOCKSCREEN_WIDGETS_TRANSPARENCY, 30, UserHandle.USER_CURRENT) / 100f;
             if (mMainLockscreenWidgetsList != null) {
                 mMainWidgetsList = Arrays.asList(mMainLockscreenWidgetsList.split(","));
             }

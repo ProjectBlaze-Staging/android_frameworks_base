@@ -105,6 +105,7 @@ import com.android.systemui.qs.panels.shared.model.SectionType
 import com.android.systemui.qs.panels.ui.compose.DraggableGrid
 import com.android.systemui.qs.panels.ui.compose.DraggableTile
 import com.android.systemui.qs.panels.ui.compose.FloatingTileDragState
+import com.android.systemui.qs.panels.ui.compose.rememberBlazeQsSettings
 import com.android.systemui.qs.panels.ui.compose.solveEvenEdgeGrid
 import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.res.R
@@ -126,10 +127,12 @@ fun OneUITileContainer(
     animateSize: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    val blazeQs = rememberBlazeQsSettings()
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val totalWidth = maxWidth
 
-        val columns = 4
+        val columns = blazeQs.qsColumns
+        val effectiveCollapsedRows = blazeQs.qsRows.coerceIn(1, 5)
         val contentPaddingV = 8.dp
         val contentPaddingH = 16.dp
 
@@ -139,7 +142,7 @@ fun OneUITileContainer(
 
         val expandBarH = 16.dp
         val tilesH =
-            (naturalCellSize * collapsedRows) + (rowGap * (collapsedRows - 1).coerceAtLeast(0))
+            (naturalCellSize * effectiveCollapsedRows) + (rowGap * (effectiveCollapsedRows - 1).coerceAtLeast(0))
 
         val tileAreaH = tilesH + (contentPaddingV * 2) + 4.dp
         val collapsedH = tileAreaH + expandBarH
@@ -147,7 +150,7 @@ fun OneUITileContainer(
         val cornerRadius by animateDpAsState(
             targetValue = when {
                 isExpanded         -> 24.dp
-                collapsedRows == 1 -> 200.dp
+                effectiveCollapsedRows == 1 -> 200.dp
                 else               -> 28.dp
             },
             animationSpec = if (animateSize) {
@@ -392,6 +395,7 @@ fun OneUiInsideTileArea(
 
     var localRootCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
+    val blazeQs = rememberBlazeQsSettings()
     val isFullScreenEdit = containerBounds == Rect.Zero
     val activeDropTarget = isDropTarget && isFullScreenEdit
 
@@ -412,7 +416,7 @@ fun OneUiInsideTileArea(
             allTilesMap = allTilesMap,
             isEditMode = isEditMode,
             sectionType = SectionType.TILES,
-            columns = 4,
+            columns = blazeQs.qsColumns,
             isDropTarget = activeDropTarget,
             onTileClick = { tile, expandable -> if (!isEditMode) onTileClick(tile.spec, expandable) },
             onResize = { _, _, _ ->  },

@@ -86,12 +86,6 @@ public class WallpaperDepthUtils {
     private WallpaperDepthUtils(Context context, ScrimController scrimController) {
         mContext = context.getApplicationContext();
         mScrimController = scrimController;
-        mTunerService = Dependency.get(TunerService.class);
-        mTunerService.addTunable(mTunable, WALLPAPER_DEPTH_KEY, 
-            WALLPAPER_DEPTH_ENABLED_KEY, WALLPAPER_DEPTH_OPACITY_KEY, 
-            WALLPAPER_DEPTH_OFFSET_X_KEY, WALLPAPER_DEPTH_OFFSET_Y_KEY,
-            WALLPAPER_DEPTH_BOTTOM_FADE_KEY, WALLPAPER_DEPTH_FADE_CURVE_KEY,
-            WALLPAPER_DEPTH_BOTTOM_INSET_KEY);
         mLockScreenSubject = new FrameLayout(mContext) {
             @Override
             protected void onDetachedFromWindow() {
@@ -105,6 +99,78 @@ public class WallpaperDepthUtils {
         mLockScreenSubject.setClickable(false);
         mLockScreenSubject.setFocusable(false);
         mLockScreenSubject.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+
+        mTunerService = Dependency.get(TunerService.class);
+        mTunerService.addTunable(mTunable, WALLPAPER_DEPTH_KEY, 
+            WALLPAPER_DEPTH_ENABLED_KEY, WALLPAPER_DEPTH_OPACITY_KEY, 
+            WALLPAPER_DEPTH_OFFSET_X_KEY, WALLPAPER_DEPTH_OFFSET_Y_KEY,
+            WALLPAPER_DEPTH_BOTTOM_FADE_KEY, WALLPAPER_DEPTH_FADE_CURVE_KEY,
+            WALLPAPER_DEPTH_BOTTOM_INSET_KEY);
+
+        android.database.ContentObserver sysObserver = new android.database.ContentObserver(
+                new android.os.Handler(android.os.Looper.getMainLooper())) {
+            @Override
+            public void onChange(boolean selfChange, Uri uri) {
+                reloadFromSystemSettings();
+            }
+        };
+        try {
+            android.content.ContentResolver cr = mContext.getContentResolver();
+            String[] keys = new String[]{
+                "depth_wallpaper_subject_image_uri",
+                "depth_wallpaper_enabled",
+                "depth_wallpaper_opacity",
+                "depth_wallpaper_offset_x",
+                "depth_wallpaper_offset_y",
+                "depth_wallpaper_bottom_fade",
+                "depth_wallpaper_fade_curve",
+                "depth_wallpaper_bottom_inset"
+            };
+            for (String k : keys) {
+                cr.registerContentObserver(Settings.System.getUriFor(k), false, sysObserver,
+                        android.os.UserHandle.USER_ALL);
+            }
+        } catch (Throwable ignored) {}
+        reloadFromSystemSettings();
+    }
+
+    public void reloadFromSystemSettings() {
+        try {
+            android.content.ContentResolver cr = mContext.getContentResolver();
+            mDWallpaperEnabled = Settings.System.getIntForUser(cr, "depth_wallpaper_enabled", 0,
+                    android.os.UserHandle.USER_CURRENT) != 0;
+            String path = Settings.System.getStringForUser(cr, "depth_wallpaper_subject_image_uri",
+                    android.os.UserHandle.USER_CURRENT);
+            if (path == null || path.isEmpty()) {
+                java.io.File pubFallback = new java.io.File("/sdcard/Pictures/blaze_depth_subject.png");
+                if (pubFallback.exists()) {
+                    path = pubFallback.getAbsolutePath();
+                } else {
+                    java.io.File fallback = new java.io.File("/data/system/users/0/blaze_depth_subject.png");
+                    if (fallback.exists()) {
+                        path = fallback.getAbsolutePath();
+                    }
+                }
+            }
+            mPreviousWallpaperPath = mWallpaperSubjectPath;
+            mWallpaperSubjectPath = path;
+            int opacity = Settings.System.getIntForUser(cr, "depth_wallpaper_opacity", 100,
+                    android.os.UserHandle.USER_CURRENT);
+            mDWallOpacity = Math.round(MathUtils.constrain(opacity, 0, 100) * 2.55f);
+            mOffsetX = Settings.System.getIntForUser(cr, "depth_wallpaper_offset_x", 0,
+                    android.os.UserHandle.USER_CURRENT);
+            mOffsetY = Settings.System.getIntForUser(cr, "depth_wallpaper_offset_y", 0,
+                    android.os.UserHandle.USER_CURRENT);
+            mBottomFadeDp = Settings.System.getIntForUser(cr, "depth_wallpaper_bottom_fade",
+                    DEFAULT_BOTTOM_FADE_DP, android.os.UserHandle.USER_CURRENT);
+            mFadeCurvePercent = Settings.System.getIntForUser(cr, "depth_wallpaper_fade_curve",
+                    DEFAULT_FADE_CURVE_PERCENT, android.os.UserHandle.USER_CURRENT);
+            mBottomInsetDp = Settings.System.getIntForUser(cr, "depth_wallpaper_bottom_inset",
+                    DEFAULT_BOTTOM_INSET_DP, android.os.UserHandle.USER_CURRENT);
+            updateDepthWallpaper(true);
+        } catch (Throwable e) {
+            Log.e("WallpaperDepthUtils", "reloadFromSystemSettings failed", e);
+        }
     }
 
     public static WallpaperDepthUtils getInstance(Context context, ScrimController scrimController) {
@@ -275,7 +341,9 @@ public class WallpaperDepthUtils {
     }
 
     private boolean canShowDepthWallpaper() {
-        ScrimState currentState = mScrimController.getState();
+        ScrimState currentState = mScrimController != null ? mScrimController.getState() : ScrimState.KEYGUARD;
+        boolean isKeyguardState = currentState == ScrimState.KEYGUARD
+                || ScrimUtils.get().isKeyguardShowing();
         MediaViewController mediaViewController = MediaViewController.getOrNull();
         boolean albumArtVisible = mediaViewController != null && mediaViewController.albumArtVisible();
         // Only show on KEYGUARD state when bouncer is NOT showing
@@ -286,13 +354,13 @@ public class WallpaperDepthUtils {
                 && !mGlanceableHubShowing
                 && !mDynamicBarExpanded
                 && !mUnlocking
-                && currentState == ScrimState.KEYGUARD
+                && isKeyguardState
                 && mContext.getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE
                 && !albumArtVisible;
     }
 
     public void updateDepthWallpaperVisibility() {
-        if (mLockScreenSubject == null || !isDWallpaperEnabled()) return;
+        if (mLockScreenSubject == null) return;
         int subjectVisibility = canShowDepthWallpaper() ? View.VISIBLE : View.GONE;
         if (mLockScreenSubject.getVisibility() == subjectVisibility) return;
         mLockScreenSubject.post(() -> {
@@ -346,7 +414,11 @@ public class WallpaperDepthUtils {
     }
 
     public void updateDepthWallpaper(boolean forced) {
-        if (mLockScreenSubject == null || !isDWallpaperEnabled()) return;
+        if (mLockScreenSubject == null) return;
+        if (!isDWallpaperEnabled()) {
+            hideDepthWallpaper();
+            return;
+        }
         boolean pathChanged = (mPreviousWallpaperPath != null && !mPreviousWallpaperPath.equals(mWallpaperSubjectPath));
         if (!mWallpaperLoaded || pathChanged || forced) {
             Log.d("WallpaperDepthUtils", "updateDepthWallpaper: " + (mWallpaperLoaded || forced ? "update required" : "first load"));
@@ -362,7 +434,26 @@ public class WallpaperDepthUtils {
         protected Drawable doInBackground(Void... voids) {
             try {
                 Log.d("LoadWallpaperTask", "Wallpaper path: " + mWallpaperSubjectPath);
-                Bitmap bitmap = BitmapFactory.decodeFile(mWallpaperSubjectPath);
+                Bitmap bitmap = null;
+                if (mWallpaperSubjectPath != null && !mWallpaperSubjectPath.isEmpty()) {
+                    if (mWallpaperSubjectPath.startsWith("content://") || mWallpaperSubjectPath.startsWith("file://")) {
+                        try (java.io.InputStream is = mContext.getContentResolver()
+                                .openInputStream(Uri.parse(mWallpaperSubjectPath))) {
+                            if (is != null) {
+                                bitmap = BitmapFactory.decodeStream(is);
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                    if (bitmap == null) {
+                        bitmap = BitmapFactory.decodeFile(mWallpaperSubjectPath);
+                    }
+                }
+                if (bitmap == null) {
+                    java.io.File fallbackFile = new java.io.File("/data/system/users/0/blaze_depth_subject.png");
+                    if (fallbackFile.exists()) {
+                        bitmap = BitmapFactory.decodeFile(fallbackFile.getAbsolutePath());
+                    }
+                }
                 if (bitmap == null) {
                     Log.d("LoadWallpaperTask", "Failed to decode bitmap from file");
                     return null;
@@ -401,6 +492,7 @@ public class WallpaperDepthUtils {
                 mLockScreenSubject.setBackground(drawable);
                 mLockScreenSubject.getBackground().setAlpha(mDWallOpacity);
                 Log.d("LoadWallpaperTask", "Subject Loaded!");
+                updateDepthWallpaperVisibility();
             } else {
                 updateDepthWallpaperVisibility();
             }

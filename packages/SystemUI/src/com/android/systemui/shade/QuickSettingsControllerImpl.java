@@ -612,7 +612,38 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                         MotionEvent.BUTTON_SECONDARY) || event.isButtonPressed(
                         MotionEvent.BUTTON_TERTIARY));
 
-        return twoFingerDrag || stylusButtonClickDrag || mouseButtonClickDrag;
+        boolean quickPulldown = false;
+        if (action == MotionEvent.ACTION_DOWN && pointerCount == 1 && mPanelView != null) {
+            try {
+                android.content.Context ctx = mPanelView.getContext();
+                int mode = android.provider.Settings.System.getIntForUser(
+                        ctx.getContentResolver(), "status_bar_quick_qs_pulldown", -1,
+                        android.os.UserHandle.USER_CURRENT);
+                if (mode == -1) {
+                    mode = lineageos.providers.LineageSettings.System.getIntForUser(
+                            ctx.getContentResolver(),
+                            lineageos.providers.LineageSettings.System.STATUS_BAR_QUICK_QS_PULLDOWN,
+                            0, android.os.UserHandle.USER_CURRENT);
+                }
+                if (mode > 0) {
+                    int w = mPanelView.getWidth();
+                    if (w > 0) {
+                        boolean isRtl = mPanelView.getLayoutDirection()
+                                == android.view.View.LAYOUT_DIRECTION_RTL;
+                        float x = event.getX();
+                        if (mode == 3) {
+                            quickPulldown = true;
+                        } else if (mode == 1) { // Right edge (or Left in RTL)
+                            quickPulldown = isRtl ? (x <= w * 0.35f) : (x >= w * 0.65f);
+                        } else if (mode == 2) { // Left edge (or Right in RTL)
+                            quickPulldown = isRtl ? (x >= w * 0.65f) : (x <= w * 0.35f);
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        return twoFingerDrag || stylusButtonClickDrag || mouseButtonClickDrag || quickPulldown;
     }
 
     @Override

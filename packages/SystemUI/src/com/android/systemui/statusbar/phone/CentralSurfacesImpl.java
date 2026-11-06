@@ -1132,10 +1132,15 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         }
     }
 
+    private com.android.systemui.util.BlazeWallpaperVisualEffectsView mWallpaperEffectsView;
+
     private void onPanelExpansionChanged(ShadeExpansionChangeEvent event) {
         float fraction = event.getFraction();
         boolean tracking = event.getTracking();
         dispatchPanelExpansionForKeyguardDismiss(fraction, tracking);
+        try {
+            com.android.systemui.util.ScrimUtils.get(mContext).setExpandedFraction(fraction);
+        } catch (Throwable ignored) {}
 
         if (fraction == 0 || fraction == 1) {
             if (getNavigationBarView() != null) {
@@ -1217,6 +1222,64 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         mNotificationShadeWindowController.fetchWindowRootView();
         getNotificationShadeWindowViewController().setupExpandedStatusBar();
         getNotificationShadeWindowViewController().setupCommunalHubLayout();
+
+        try {
+            NotificationShadeWindowView shadeWindowView = getNotificationShadeWindowView();
+            com.android.systemui.util.ScrimUtils scrimUtils =
+                    com.android.systemui.util.ScrimUtils.get(mContext);
+            com.android.systemui.util.WallpaperDepthUtils depthUtils =
+                    com.android.systemui.util.WallpaperDepthUtils.getInstance(mContext, mScrimController);
+            scrimUtils.setWallpaperDepthUtils(depthUtils);
+            if (mKeyguardUnlockAnimationController != null) {
+                scrimUtils.setKeyguardUnlockAnimationController(mKeyguardUnlockAnimationController);
+            }
+
+            if (shadeWindowView != null) {
+                View scrimBehind = shadeWindowView.findViewById(R.id.scrim_behind);
+                int scrimBehindIdx = scrimBehind != null
+                        ? shadeWindowView.indexOfChild(scrimBehind) : 0;
+
+                if (mWallpaperEffectsView == null) {
+                    mWallpaperEffectsView =
+                            new com.android.systemui.util.BlazeWallpaperVisualEffectsView(
+                                    mContext, mScrimController);
+                }
+                if (mWallpaperEffectsView.getParent() instanceof android.view.ViewGroup) {
+                    ((android.view.ViewGroup) mWallpaperEffectsView.getParent()).removeView(mWallpaperEffectsView);
+                }
+                shadeWindowView.addView(mWallpaperEffectsView, scrimBehindIdx + 1);
+
+                com.android.systemui.media.MediaViewController mediaCtrl =
+                        com.android.systemui.media.MediaViewController.getOrNull();
+                if (mediaCtrl != null) {
+                    View mediaScrim = mediaCtrl.getMediaArtScrim();
+                    if (mediaScrim != null) {
+                        if (mediaScrim.getParent() instanceof android.view.ViewGroup) {
+                            ((android.view.ViewGroup) mediaScrim.getParent()).removeView(mediaScrim);
+                        }
+                        shadeWindowView.addView(mediaScrim, scrimBehindIdx + 2);
+                    }
+                }
+
+                View depthView = depthUtils.getDepthWallpaperView();
+                if (depthView != null) {
+                    if (depthView.getParent() instanceof android.view.ViewGroup) {
+                        ((android.view.ViewGroup) depthView.getParent()).removeView(depthView);
+                    }
+                    View keyguardRoot = shadeWindowView.findViewById(R.id.keyguard_root_view);
+                    int keyguardIdx = keyguardRoot != null
+                            ? shadeWindowView.indexOfChild(keyguardRoot) : -1;
+                    if (keyguardIdx >= 0) {
+                        shadeWindowView.addView(depthView, keyguardIdx + 1);
+                    } else {
+                        shadeWindowView.addView(depthView);
+                    }
+                }
+                depthUtils.updateDepthWallpaper(true);
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "Failed to attach Blaze shade/depth/effects overlays", e);
+        }
     }
 
     protected NotificationShadeWindowViewController getNotificationShadeWindowViewController() {
@@ -2407,6 +2470,16 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             mScrimController.legacyTransitionTo(ScrimState.UNLOCKED, mUnlockScrimCallback);
         }
 
+        try {
+            com.android.systemui.util.ScrimUtils scrimUtils =
+                    com.android.systemui.util.ScrimUtils.get(mContext);
+            scrimUtils.onPrimaryBouncerShowingChanged(mBouncerShowing);
+            scrimUtils.onScrimDispatched();
+            if (mWallpaperEffectsView != null) {
+                mWallpaperEffectsView.updateVisibilityState();
+            }
+        } catch (Throwable ignored) {}
+
         Trace.endSection();
     }
     @Override
@@ -2617,6 +2690,12 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                 @Override
                 public void onStateChanged(int newState) {
                     mState = newState;
+                    try {
+                        com.android.systemui.util.ScrimUtils.get(mContext).setBarState(newState);
+                        if (mWallpaperEffectsView != null) {
+                            mWallpaperEffectsView.updateVisibilityState();
+                        }
+                    } catch (Throwable ignored) {}
                     updateReportRejectedTouchVisibility();
                     mDozeServiceHost.updateDozing();
                     updateTheme();
@@ -2635,6 +2714,9 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                 public void onDozingChanged(boolean isDozing) {
                     Trace.beginSection("CentralSurfaces#updateDozing");
                     mDozing = isDozing;
+                    try {
+                        com.android.systemui.util.ScrimUtils.get(mContext).onDozingChanged(isDozing);
+                    } catch (Throwable ignored) {}
 
                     boolean dozingAnimated = mDozeServiceHost.getDozingRequested()
                             && mDozeParameters.shouldControlScreenOff();
