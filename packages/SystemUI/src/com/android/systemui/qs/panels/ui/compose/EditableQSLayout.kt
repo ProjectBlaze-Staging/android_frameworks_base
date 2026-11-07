@@ -1801,10 +1801,19 @@ fun DraggableGrid(
                                 }
                             }
                     ) {
+                        val resolvedTile = if (
+                            allTilesMap[tile.spec] == null &&
+                            tile.spec.spec == "custom(com.google.android.gms/.nearby.sharing.SharingTileService)" &&
+                            allTilesMap[TileSpec.create("bt")] != null
+                        ) {
+                            tile.copy(spec = TileSpec.create("bt"))
+                        } else {
+                            tile
+                        }
                         DraggableTile(
-                            tile           = tile,
-                            qsTile         = allTilesMap[tile.spec],
-                            onClick        = { expandable -> onTileClick(tile, expandable) },
+                            tile           = resolvedTile,
+                            qsTile         = allTilesMap[resolvedTile.spec],
+                            onClick        = { expandable -> onTileClick(resolvedTile, expandable) },
                             gridCellSize   = cellSize,
                             gridSpacing    = gridSpacing,
                             isEditMode     = isEditMode,

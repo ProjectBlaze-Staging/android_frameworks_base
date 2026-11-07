@@ -72,8 +72,17 @@ constructor(
 
     private val _mainQSFloatingTiles = MutableStateFlow<List<FloatingTile>>(
         listOf(
-            FloatingTile(TileSpec.create("wifi"), SectionType.TILES, 1, 1),
-            FloatingTile(TileSpec.create("bt"), SectionType.TILES, 1, 1),
+            FloatingTile(TileSpec.create("wifi"), SectionType.TILES, 2, 1),
+            FloatingTile(TileSpec.create("control:media"), SectionType.TILES, 2, 2),
+            FloatingTile(TileSpec.create("control:ringer"), SectionType.TILES, 2, 1),
+            FloatingTile(TileSpec.create("custom(com.google.android.gms/.nearby.sharing.SharingTileService)"), SectionType.TILES, 1, 1),
+            FloatingTile(TileSpec.create("cell"), SectionType.TILES, 1, 1),
+            FloatingTile(TileSpec.create("control:brightness"), SectionType.TILES, 1, 3),
+            FloatingTile(TileSpec.create("control:volume"), SectionType.TILES, 1, 3),
+            FloatingTile(TileSpec.create("cast"), SectionType.TILES, 1, 1),
+            FloatingTile(TileSpec.create("battery"), SectionType.TILES, 1, 1),
+            FloatingTile(TileSpec.create("reduce_brightness"), SectionType.TILES, 1, 1),
+            FloatingTile(TileSpec.create("screenrecord"), SectionType.TILES, 1, 1),
         )
     )
     val mainQSFloatingTiles: Flow<List<FloatingTile>> = _mainQSFloatingTiles

@@ -31,7 +31,7 @@ import kotlinx.coroutines.withContext
 
 class OneUiTileStore(private val prefs: SharedPreferences) {
 
-    private val _insideTiles = MutableStateFlow<List<TileSpec>>(emptyList())
+    private val _insideTiles = MutableStateFlow<List<TileSpec>>(DEFAULT_TILES)
     val insideTiles: StateFlow<List<TileSpec>> = _insideTiles.asStateFlow()
 
     private var mutated = false
@@ -90,11 +90,17 @@ class OneUiTileStore(private val prefs: SharedPreferences) {
         const val KEY_INSIDE_TILES = "inside_tiles"
         val DEFAULT_TILES = listOf(
             TileSpec.create("airplane"),
-            TileSpec.create("nfc"),
             TileSpec.create("hotspot"),
             TileSpec.create("location"),
             TileSpec.create("saver"),
             TileSpec.create("dark"),
+            TileSpec.create("wallet"),
+            TileSpec.create("controls"),
+            TileSpec.create("alarm"),
+            TileSpec.create("night"),
+            TileSpec.create("onehanded"),
+            TileSpec.create("custom(com.google.android.apps.wellbeing/.focusmode.quicksettings.FocusModeTileService)"),
+            TileSpec.create("custom(com.google.android.googlequicksearchbox/com.google.android.apps.search.soundsearch.quicksettings.SoundSearchTileService)"),
         )
     }
 }

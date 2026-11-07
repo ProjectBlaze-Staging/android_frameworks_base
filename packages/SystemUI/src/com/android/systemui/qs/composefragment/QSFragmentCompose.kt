@@ -1302,6 +1302,22 @@ constructor(
         val flatLayout by viewModel.sectionEditModeViewModel.flatLayout
             .collectAsStateWithLifecycle(initialValue = QSLayoutItem.getDefault())
 
+        val syncedDefaultSpecs = remember { mutableSetOf<String>() }
+        LaunchedEffect(flatLayout, insideTiles, insideAllTilesMap.size) {
+            if (insideAllTilesMap.isEmpty()) return@LaunchedEffect
+            val requiredSpecs = buildList {
+                flatLayout.filterIsInstance<QSLayoutItem.TileItem>().forEach { item ->
+                    if (!item.spec.bypassesOneUiContainer()) add(item.spec)
+                }
+                addAll(insideTiles)
+            }
+            requiredSpecs.forEach { spec ->
+                if (!insideAllTilesMap.containsKey(spec) && syncedDefaultSpecs.add(spec.spec)) {
+                    viewModel.containerViewModel.editModeViewModel.addTile(spec)
+                }
+            }
+        }
+
         var isTilesExpanded by rememberSaveable { mutableStateOf(false) }
 
         val isEditingSections by viewModel.sectionEditModeViewModel.isEditingSections.collectAsStateWithLifecycle()

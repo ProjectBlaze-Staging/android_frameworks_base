@@ -82,6 +82,8 @@ public final class LiquidTabBars {
             String pkg = context.getPackageName();
             if (pkg != null && (pkg.startsWith("com.android.systemui")
                     || pkg.startsWith("com.android.launcher")
+                    || pkg.contains("aperture")
+                    || pkg.contains("camera")
                     || pkg.contains("inputmethod")
                     || listed(context, SETTING_EXCLUDED, pkg))) {
                 return null;

@@ -80,12 +80,12 @@
 
     <!-- The default tiles to display in QuickSettings-->
     <string name="quick_settings_tiles_default" translatable="false">
-        internet,bt,dnd,cast,flashlight,airplane,rotation,wallet,alarm,controls,screenrecord,battery
+        wifi,custom(com.google.android.gms/.nearby.sharing.SharingTileService),cell,cast,battery,reduce_brightness,screenrecord,airplane,hotspot,location,saver,dark,wallet,controls,alarm,night,onehanded,custom(com.google.android.apps.wellbeing/.focusmode.quicksettings.FocusModeTileService),custom(com.google.android.googlequicksearchbox/com.google.android.apps.search.soundsearch.quicksettings.SoundSearchTileService),bt,dnd,flashlight,rotation,internet
     </string>
 
     <!-- The default tiles to display in QuickSettings after the internet tile split-->
     <string name="quick_settings_tiles_default_split" translatable="false">
-        wifi,bt,cell,cast,dnd,wallet,airplane,rotation,flashlight,battery,alarm,controls,screenrecord
+        wifi,custom(com.google.android.gms/.nearby.sharing.SharingTileService),cell,cast,battery,reduce_brightness,screenrecord,airplane,hotspot,location,saver,dark,wallet,controls,alarm,night,onehanded,custom(com.google.android.apps.wellbeing/.focusmode.quicksettings.FocusModeTileService),custom(com.google.android.googlequicksearchbox/com.google.android.apps.search.soundsearch.quicksettings.SoundSearchTileService),bt,dnd,flashlight,rotation
     </string>
 
     <!-- The default large tiles in Quick Settings after the internet tile split -->

@@ -85,14 +85,21 @@ sealed class QSLayoutItem {
 
         fun getDefault(): List<QSLayoutItem> =
             listOf(
-                TileItem(TileSpec.create("internet")),
-                TileItem(TileSpec.create("bt")),
-                TileItem(TileSpec.create("dnd")),
-                TileItem(TileSpec.create("flashlight")),
-                TileItem(TileSpec.create("rotation")),
-                TileItem(TileSpec.create("battery")),
-                TileItem(TileSpec.create("cast")),
-                TileItem(TileSpec.create("screenrecord")),
+                TileItem(TileSpec.create("wifi"), spanCols = 2, spanRows = 1),
+                TileItem(TileSpec.create("control:media"), spanCols = 2, spanRows = 2),
+                TileItem(TileSpec.create("control:ringer"), spanCols = 2, spanRows = 1),
+                TileItem(
+                    TileSpec.create("custom(com.google.android.gms/.nearby.sharing.SharingTileService)"),
+                    spanCols = 1,
+                    spanRows = 1,
+                ),
+                TileItem(TileSpec.create("cell"), spanCols = 1, spanRows = 1),
+                TileItem(TileSpec.create("control:brightness"), spanCols = 1, spanRows = 3),
+                TileItem(TileSpec.create("control:volume"), spanCols = 1, spanRows = 3),
+                TileItem(TileSpec.create("cast"), spanCols = 1, spanRows = 1),
+                TileItem(TileSpec.create("battery"), spanCols = 1, spanRows = 1),
+                TileItem(TileSpec.create("reduce_brightness"), spanCols = 1, spanRows = 1),
+                TileItem(TileSpec.create("screenrecord"), spanCols = 1, spanRows = 1),
             ) + SectionType.DEFAULT_ORDER.map { SectionHeader(it) }
 
         fun fromSectionConfigs(configs: List<SectionConfig>): List<QSLayoutItem> {

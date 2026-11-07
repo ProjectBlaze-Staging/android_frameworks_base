@@ -97,7 +97,7 @@ private fun loadBlazeQsSettings(context: Context, isLandscape: Boolean): BlazeQs
     val rows = if (isLandscape) {
         readBlazeInt(cr, "qs_rows_landscape", 2)
     } else {
-        readBlazeInt(cr, "qs_rows_portrait", 2)
+        readBlazeInt(cr, "qs_rows_portrait", 4)
     }.coerceIn(1, 6)
 
     val qqsRows = if (isLandscape) {
@@ -108,11 +108,11 @@ private fun loadBlazeQsSettings(context: Context, isLandscape: Boolean): BlazeQs
 
     val tileShape = readBlazeInt(cr, "qs_tile_shape", 0)
     val hideLabels = readBlazeInt(cr, "qs_tile_label_hide", 0) != 0
-    val tileHaptic = readBlazeInt(cr, "qs_tile_haptic", 0) != 0
+    val tileHaptic = readBlazeInt(cr, "qs_tile_haptic", 1) != 0
     val showSlider = readBlazeInt(cr, "qs_show_brightness_slider", 1)
     val sliderPos = readBlazeInt(cr, "qs_brightness_slider_position", 0)
     val showAuto = readBlazeInt(cr, "qs_show_auto_brightness", 1) != 0
-    val sliderHaptic = readBlazeInt(cr, "qs_brightness_slider_haptic", 0) != 0
+    val sliderHaptic = readBlazeInt(cr, "qs_brightness_slider_haptic", 1) != 0
 
     return BlazeQsSettings(
         qsColumns = cols,
