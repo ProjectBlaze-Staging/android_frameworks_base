@@ -85,11 +85,14 @@ private fun readBlazeInt(cr: ContentResolver, key: String, defaultVal: Int): Int
 
 private fun loadBlazeQsSettings(context: Context, isLandscape: Boolean): BlazeQsSettings {
     val cr = context.contentResolver
-    val cols = if (isLandscape) {
+    val rawCols = if (isLandscape) {
         readBlazeInt(cr, "qs_columns_landscape", 4)
     } else {
         readBlazeInt(cr, "qs_columns_portrait", 4)
-    }.coerceIn(2, 8)
+    }
+    // Map legacy AOSP 2-column pill default to 4 base grid cells so 1x1 circle tiles
+    // and 2x1 pill tiles maintain proper proportions and never expand to half-screen circles.
+    val cols = (if (rawCols <= 2) 4 else rawCols).coerceIn(3, 6)
 
     val rows = if (isLandscape) {
         readBlazeInt(cr, "qs_rows_landscape", 2)

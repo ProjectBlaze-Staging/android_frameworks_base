@@ -6,8 +6,6 @@
 package com.android.systemui.util;
 
 import android.app.WallpaperManager;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -23,41 +21,29 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.RadialGradient;
-import android.graphics.RectF;
 import android.graphics.RenderEffect;
 import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.hardware.camera2.CameraManager;
-import android.media.AudioManager;
 import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemProperties;
 import android.os.UserHandle;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
 import android.provider.Settings;
-import android.text.TextUtils;
 import android.view.Choreographer;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.android.systemui.statusbar.phone.ScrimController;
 import com.android.systemui.statusbar.phone.ScrimState;
-
-import java.util.Calendar;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class BlazeWallpaperVisualEffectsView extends View {
 
@@ -67,21 +53,7 @@ public class BlazeWallpaperVisualEffectsView extends View {
     private final Paint mDimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mVignettePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mFrostPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mGoodLockPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mSignaturePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF mEdgeRect = new RectF();
     private final Matrix mDrawMatrix = new Matrix();
-
-    // Good Lock Make Up & Life Up state (Stage 4 & Stage 5)
-    private String mLockStarSignatureText = "";
-    private int mEdgeLightingStyle = 2;       // 0=Off, 1=Eclipse, 2=Cyber Neon, 3=Aurora, 4=Prism
-    private long mEdgeLightingPulseUntilMs = 0L;
-    private int mWonderlandParticleMode = 2;  // 0=Off, 1=Sakura, 2=Fireflies, 3=Stardust, 4=Snow
-    private boolean mBehavioralAuraEnabled = true;
-
-    private View mSmartSidebarHandleView;
-    private View mSmartSidebarPanelView;
-    private boolean mTorchActive = false;
 
     private int mBlurTarget;   // 0=Off, 1=Lockscreen, 2=Homescreen, 3=Both
     private int mBlurType;     // 0=Gaussian, 1=Frosted, 2=Box, 3=Stack
@@ -127,7 +99,7 @@ public class BlazeWallpaperVisualEffectsView extends View {
                         }
                     } catch (Throwable ignored) {}
                     mFpsHudView.setText(String.format(java.util.Locale.US,
-                            "⚡ %d FPS  •  %.1f ms  •  %.1f°C", fps, frameMs, tempC));
+                            "%d FPS  •  %.1f ms  •  %.1f°C", fps, frameMs, tempC));
                     mFrameCount = 0;
                     mLastFpsSampleNs = frameTimeNanos;
                 }
@@ -169,27 +141,6 @@ public class BlazeWallpaperVisualEffectsView extends View {
             mContext.getContentResolver().registerContentObserver(
                     Settings.System.getUriFor("gamespace_show_fps"),
                     false, mObserver, UserHandle.USER_ALL);
-            mContext.getContentResolver().registerContentObserver(
-                    Settings.Secure.getUriFor("blaze_lockstar_signature_text"),
-                    false, mObserver, UserHandle.USER_ALL);
-            mContext.getContentResolver().registerContentObserver(
-                    Settings.Secure.getUriFor("blaze_edgelighting_style"),
-                    false, mObserver, UserHandle.USER_ALL);
-            mContext.getContentResolver().registerContentObserver(
-                    Settings.Secure.getUriFor("blaze_edgelighting_preview_pulse"),
-                    false, mObserver, UserHandle.USER_ALL);
-            mContext.getContentResolver().registerContentObserver(
-                    Settings.Secure.getUriFor("blaze_wonderland_particle_mode"),
-                    false, mObserver, UserHandle.USER_ALL);
-            mContext.getContentResolver().registerContentObserver(
-                    Settings.Secure.getUriFor("blaze_behavioral_wallpaper_aura"),
-                    false, mObserver, UserHandle.USER_ALL);
-            mContext.getContentResolver().registerContentObserver(
-                    Settings.Secure.getUriFor("blaze_smart_sidebar_enabled"),
-                    false, mObserver, UserHandle.USER_ALL);
-            mContext.getContentResolver().registerContentObserver(
-                    Settings.Secure.getUriFor("blaze_oho_enabled"),
-                    false, mObserver, UserHandle.USER_ALL);
         } catch (Throwable ignored) {}
 
         reloadSettings(true);
@@ -203,8 +154,6 @@ public class BlazeWallpaperVisualEffectsView extends View {
         // 1. Smart Pixels Overlay
         boolean smartPixelsEnabled = Settings.Secure.getIntForUser(
                 mContext.getContentResolver(), "smart_pixel_filter_enabled", 0, UserHandle.USER_CURRENT) != 0;
-        int smartPixelsPercent = Settings.Secure.getIntForUser(
-                mContext.getContentResolver(), "smart_pixel_filter_percent", 25, UserHandle.USER_CURRENT);
         if (smartPixelsEnabled) {
             if (mSmartPixelsView == null) {
                 mSmartPixelsView = new View(mContext) {
@@ -254,16 +203,16 @@ public class BlazeWallpaperVisualEffectsView extends View {
             if (mFpsHudView == null) {
                 float d = mContext.getResources().getDisplayMetrics().density;
                 mFpsHudView = new TextView(mContext);
-                mFpsHudView.setTextColor(0xFFE2E8F0);
+                mFpsHudView.setTextColor(0xFFF1F5F9);
                 mFpsHudView.setTextSize(11.5f);
                 mFpsHudView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
                 mFpsHudView.setPadding(Math.round(12 * d), Math.round(6 * d), Math.round(12 * d), Math.round(6 * d));
                 GradientDrawable bg = new GradientDrawable();
-                bg.setColor(0xD80F172A);
+                bg.setColor(0xD81C1B1F);
                 bg.setCornerRadius(999f);
-                bg.setStroke(Math.max(1, Math.round(1.2f * d)), 0x6638BDF8);
+                bg.setStroke(Math.max(1, Math.round(1f * d)), 0x44FFFFFF);
                 mFpsHudView.setBackground(bg);
-                mFpsHudView.setText("⚡ 120 FPS  •  8.3 ms  •  32.0°C");
+                mFpsHudView.setText("120 FPS  •  8.3 ms  •  32.0°C");
 
                 mFpsHudParams = new WindowManager.LayoutParams(
                         WindowManager.LayoutParams.WRAP_CONTENT,
@@ -320,319 +269,6 @@ public class BlazeWallpaperVisualEffectsView extends View {
                 mFpsHudView = null;
             }
         }
-
-        // 3. ColorOS 17 Smart Sidebar / File Dock + One Hand Operation+ Edge Handle (Stage 5)
-        updateSmartSidebarOverlay(wm);
-    }
-
-    private void updateSmartSidebarOverlay(final WindowManager wm) {
-        boolean sidebarEnabled = Settings.Secure.getIntForUser(
-                mContext.getContentResolver(), "blaze_smart_sidebar_enabled", 1, UserHandle.USER_CURRENT) != 0;
-        boolean ohoEnabled = Settings.Secure.getIntForUser(
-                mContext.getContentResolver(), "blaze_oho_enabled", 1, UserHandle.USER_CURRENT) != 0;
-
-        if (sidebarEnabled || ohoEnabled) {
-            if (mSmartSidebarHandleView == null) {
-                final float d = mContext.getResources().getDisplayMetrics().density;
-                mSmartSidebarHandleView = new View(mContext);
-                GradientDrawable handleBg = new GradientDrawable(
-                        GradientDrawable.Orientation.TOP_BOTTOM,
-                        new int[]{0x9938BDF8, 0x99A855F7});
-                handleBg.setCornerRadius(99f);
-                handleBg.setStroke(Math.max(1, Math.round(1f * d)), 0x66FFFFFF);
-                mSmartSidebarHandleView.setBackground(handleBg);
-
-                final WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                        Math.round(5.5f * d),
-                        Math.round(78f * d),
-                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                                | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                        PixelFormat.TRANSLUCENT);
-                lp.gravity = Gravity.TOP | Gravity.END;
-                lp.x = Math.round(1.5f * d);
-                lp.y = Math.round(230f * d);
-                lp.setTitle("BlazeSmartSidebarHandle");
-
-                mSmartSidebarHandleView.setOnTouchListener(new OnTouchListener() {
-                    private float startX, startY;
-                    private boolean triggered;
-
-                    @Override
-                    public boolean onTouch(View v, MotionEvent ev) {
-                        switch (ev.getActionMasked()) {
-                            case MotionEvent.ACTION_DOWN:
-                                startX = ev.getRawX();
-                                startY = ev.getRawY();
-                                triggered = false;
-                                return true;
-                            case MotionEvent.ACTION_MOVE:
-                                if (triggered) return true;
-                                float dx = ev.getRawX() - startX;
-                                float dy = ev.getRawY() - startY;
-                                float dist = (float) Math.hypot(dx, dy);
-                                if (dist > 24f * d) {
-                                    triggered = true;
-                                    vibrateTick();
-                                    boolean oho = Settings.Secure.getIntForUser(
-                                            mContext.getContentResolver(), "blaze_oho_enabled", 1, UserHandle.USER_CURRENT) != 0;
-                                    if (oho && dy < -20f * d) {
-                                        // Upward Diagonal Swipe (↗)
-                                        int act = Settings.Secure.getIntForUser(
-                                                mContext.getContentResolver(), "blaze_oho_diagonal_up_action", 0, UserHandle.USER_CURRENT);
-                                        executeOhoAction(act, wm);
-                                    } else if (oho && dy > 20f * d) {
-                                        // Downward Diagonal Swipe (↘)
-                                        int act = Settings.Secure.getIntForUser(
-                                                mContext.getContentResolver(), "blaze_oho_diagonal_down_action", 1, UserHandle.USER_CURRENT);
-                                        executeOhoAction(act, wm);
-                                    } else {
-                                        // Horizontal Pull: Open Smart Sidebar & File Dock
-                                        toggleSmartSidebarPanel(wm);
-                                    }
-                                }
-                                return true;
-                            case MotionEvent.ACTION_UP:
-                                if (!triggered) {
-                                    vibrateTick();
-                                    toggleSmartSidebarPanel(wm);
-                                }
-                                return true;
-                        }
-                        return false;
-                    }
-                });
-
-                try {
-                    wm.addView(mSmartSidebarHandleView, lp);
-                } catch (Throwable ignored) {}
-            }
-        } else {
-            if (mSmartSidebarHandleView != null) {
-                try {
-                    wm.removeView(mSmartSidebarHandleView);
-                } catch (Throwable ignored) {}
-                mSmartSidebarHandleView = null;
-            }
-            dismissSmartSidebarPanel(wm);
-        }
-    }
-
-    private void executeOhoAction(int actionCode, WindowManager wm) {
-        switch (actionCode) {
-            case 0: // Smart Sidebar & File Dock
-                toggleSmartSidebarPanel(wm);
-                break;
-            case 1: // Expand Notifications
-            case 2: // Expand Quick Settings
-                try {
-                    Object sbService = mContext.getSystemService("statusbar");
-                    if (sbService != null) {
-                        java.lang.reflect.Method m = sbService.getClass().getMethod(
-                                actionCode == 2 ? "expandSettingsPanel" : "expandNotificationsPanel");
-                        m.invoke(sbService);
-                    }
-                } catch (Throwable ignored) {}
-                break;
-            case 3: // Toggle Flashlight (Torch)
-                toggleTorch();
-                break;
-            case 4: // Volume UI / Quick Action
-            default:
-                toggleSmartSidebarPanel(wm);
-                break;
-        }
-    }
-
-    private void toggleTorch() {
-        try {
-            CameraManager cm = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
-            if (cm != null && cm.getCameraIdList().length > 0) {
-                mTorchActive = !mTorchActive;
-                cm.setTorchMode(cm.getCameraIdList()[0], mTorchActive);
-                Toast.makeText(mContext, mTorchActive ? "🔦 El Feneri Açıldı" : "🔦 El Feneri Kapatıldı", Toast.LENGTH_SHORT).show();
-            }
-        } catch (Throwable ignored) {}
-    }
-
-    private void dismissSmartSidebarPanel(WindowManager wm) {
-        if (mSmartSidebarPanelView != null && wm != null) {
-            try {
-                wm.removeView(mSmartSidebarPanelView);
-            } catch (Throwable ignored) {}
-            mSmartSidebarPanelView = null;
-        }
-    }
-
-    private void toggleSmartSidebarPanel(final WindowManager wm) {
-        if (mSmartSidebarPanelView != null) {
-            dismissSmartSidebarPanel(wm);
-            return;
-        }
-        final float d = mContext.getResources().getDisplayMetrics().density;
-        LinearLayout panel = new LinearLayout(mContext);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable bg = new GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                new int[]{0xF00F172A, 0xF01E1B4B});
-        bg.setCornerRadius(24f * d);
-        bg.setStroke(Math.max(1, Math.round(1.2f * d)), 0x6638BDF8);
-        panel.setBackground(bg);
-        int pad = Math.round(14f * d);
-        panel.setPadding(pad, pad, pad, pad);
-
-        TextView header = new TextView(mContext);
-        header.setText("🗂️ Smart Sidebar & File Dock");
-        header.setTextColor(Color.WHITE);
-        header.setTextSize(13f);
-        header.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        panel.addView(header);
-
-        // Clipboard & Smart OTP Detector
-        String clipText = "";
-        try {
-            ClipboardManager cm = (ClipboardManager) mContext.getSystemService(Context.CLIPBOARD_SERVICE);
-            if (cm != null && cm.hasPrimaryClip()) {
-                ClipData cd = cm.getPrimaryClip();
-                if (cd != null && cd.getItemCount() > 0 && cd.getItemAt(0).getText() != null) {
-                    clipText = cd.getItemAt(0).getText().toString().trim();
-                }
-            }
-        } catch (Throwable ignored) {}
-
-        String otpCode = null;
-        if (!TextUtils.isEmpty(clipText)) {
-            Matcher m = Pattern.compile("\\b(\\d{4,8})\\b").matcher(clipText);
-            if (m.find()) {
-                otpCode = m.group(1);
-            }
-        }
-
-        if (otpCode != null) {
-            final String foundOtp = otpCode;
-            TextView otpChip = createSidebarPill("🔑 OTP Kodu: " + foundOtp + " (Kopyala)", 0xFF10B981, d);
-            otpChip.setOnClickListener(v -> {
-                vibrateTick();
-                ClipboardManager cm = (ClipboardManager) mContext.getSystemService(Context.CLIPBOARD_SERVICE);
-                if (cm != null) {
-                    cm.setPrimaryClip(ClipData.newPlainText("OTP", foundOtp));
-                    Toast.makeText(mContext, "OTP Kodu kopyalandı: " + foundOtp, Toast.LENGTH_SHORT).show();
-                }
-                dismissSmartSidebarPanel(wm);
-            });
-            panel.addView(otpChip);
-        }
-
-        TextView clipBox = new TextView(mContext);
-        clipBox.setText(TextUtils.isEmpty(clipText)
-                ? "📌 File Dock Pano: Boş"
-                : ("📌 Pano: " + (clipText.length() > 42 ? clipText.substring(0, 42) + "…" : clipText)));
-        clipBox.setTextColor(0xFFCBD5E1);
-        clipBox.setTextSize(11f);
-        clipBox.setPadding(0, Math.round(6 * d), 0, Math.round(8 * d));
-        panel.addView(clipBox);
-
-        // Quick Action Buttons
-        TextView btnGoodLock = createSidebarPill("✨ Good Lock Studio", 0xFFA855F7, d);
-        btnGoodLock.setOnClickListener(v -> {
-            vibrateTick();
-            dismissSmartSidebarPanel(wm);
-            launchSettingsSubFragment("com.blaze.house.fragments.BlazeGoodLockStudioFragment", "Blaze Good Lock Studio");
-        });
-        panel.addView(btnGoodLock);
-
-        TextView btnBattery = createSidebarPill("🔋 Pil Sağlığı & Termal Stüdyo", 0xFF38BDF8, d);
-        btnBattery.setOnClickListener(v -> {
-            vibrateTick();
-            dismissSmartSidebarPanel(wm);
-            launchSettingsSubFragment("com.blaze.house.fragments.BlazeBatteryHealthStudioFragment", "Pil Sağlığı & Termal Stüdyo");
-        });
-        panel.addView(btnBattery);
-
-        TextView btnTorch = createSidebarPill("🔦 El Feneri Aç / Kapat", 0xFFF59E0B, d);
-        btnTorch.setOnClickListener(v -> {
-            vibrateTick();
-            toggleTorch();
-        });
-        panel.addView(btnTorch);
-
-        TextView btnVol = createSidebarPill("🔊 Ses Mikseri Panelini Aç", 0xFFEC4899, d);
-        btnVol.setOnClickListener(v -> {
-            vibrateTick();
-            dismissSmartSidebarPanel(wm);
-            AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
-            if (am != null) {
-                am.adjustVolume(AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI);
-            }
-        });
-        panel.addView(btnVol);
-
-        TextView btnClose = createSidebarPill("✕ Rıhtımı Kapat", 0xFF64748B, d);
-        btnClose.setOnClickListener(v -> {
-            vibrateTick();
-            dismissSmartSidebarPanel(wm);
-        });
-        panel.addView(btnClose);
-
-        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                Math.round(235f * d),
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT);
-        lp.gravity = Gravity.TOP | Gravity.END;
-        lp.x = Math.round(12f * d);
-        lp.y = Math.round(170f * d);
-        lp.setTitle("BlazeSmartSidebarPanel");
-
-        mSmartSidebarPanelView = panel;
-        try {
-            wm.addView(mSmartSidebarPanelView, lp);
-        } catch (Throwable ignored) {
-            mSmartSidebarPanelView = null;
-        }
-    }
-
-    private TextView createSidebarPill(String text, int strokeColor, float d) {
-        TextView tv = new TextView(mContext);
-        tv.setText(text);
-        tv.setTextColor(Color.WHITE);
-        tv.setTextSize(11.5f);
-        tv.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0x331E293B);
-        bg.setCornerRadius(12f * d);
-        bg.setStroke(Math.max(1, Math.round(1f * d)), strokeColor);
-        tv.setBackground(bg);
-        int ph = Math.round(10f * d);
-        int pv = Math.round(7f * d);
-        tv.setPadding(ph, pv, ph, pv);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = Math.round(5f * d);
-        tv.setLayoutParams(lp);
-        return tv;
-    }
-
-    private void launchSettingsSubFragment(String fragmentClass, String title) {
-        try {
-            Intent intent = new Intent(Intent.ACTION_MAIN);
-            intent.setClassName("com.android.settings", "com.android.settings.SubSettings");
-            intent.putExtra(":settings:show_fragment", fragmentClass);
-            intent.putExtra(":settings:show_fragment_title", title);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            mContext.startActivityAsUser(intent, UserHandle.CURRENT);
-        } catch (Throwable ignored) {}
-    }
-
-    private void vibrateTick() {
-        try {
-            Vibrator vib = mContext.getSystemService(Vibrator.class);
-            if (vib != null && vib.hasVibrator()) {
-                vib.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK));
-            }
-        } catch (Throwable ignored) {}
     }
 
     public void reloadSettings(boolean rebuildBitmap) {
@@ -646,21 +282,6 @@ public class BlazeWallpaperVisualEffectsView extends View {
         mPosterizeLevels = SystemProperties.getInt("persist.sys.wallpaper.posterize_levels", 8);
         mDimTarget = SystemProperties.getInt("persist.sys.wallpaper.dim_enabled", 0);
         mDimLevel = SystemProperties.getInt("persist.sys.wallpaper.dim_level", 15);
-
-        String sig = Settings.Secure.getStringForUser(
-                mContext.getContentResolver(), "blaze_lockstar_signature_text", UserHandle.USER_CURRENT);
-        mLockStarSignatureText = sig != null ? sig : "PROJECT BLAZE 17 • BEYOND INFINITY";
-        mEdgeLightingStyle = Settings.Secure.getIntForUser(
-                mContext.getContentResolver(), "blaze_edgelighting_style", 2, UserHandle.USER_CURRENT);
-        long pulseTs = Settings.Secure.getLongForUser(
-                mContext.getContentResolver(), "blaze_edgelighting_preview_pulse", 0L, UserHandle.USER_CURRENT);
-        if (System.currentTimeMillis() - pulseTs < 5000L) {
-            mEdgeLightingPulseUntilMs = System.currentTimeMillis() + 3500L;
-        }
-        mWonderlandParticleMode = Settings.Secure.getIntForUser(
-                mContext.getContentResolver(), "blaze_wonderland_particle_mode", 2, UserHandle.USER_CURRENT);
-        mBehavioralAuraEnabled = Settings.Secure.getIntForUser(
-                mContext.getContentResolver(), "blaze_behavioral_wallpaper_aura", 1, UserHandle.USER_CURRENT) != 0;
 
         if (rebuildBitmap) {
             mProcessedBitmap = null;
@@ -743,15 +364,13 @@ public class BlazeWallpaperVisualEffectsView extends View {
             mBitmapPaint.setColorFilter(null);
         }
 
-        // OriginOS 6 Unified Blur Arbitrator: suppress secondary wallpaper RenderEffect blur
-        // when SystemUI Shade/QS blur is already active or device is dozing (0% GPU double-blur overdraw).
         boolean shadeBlurActive = !ScrimUtils.get().isPanelFullyCollapsed() || ScrimUtils.get().isDozing();
         if (mBlurTarget > 0 && !shadeBlurActive) {
             float radiusPx = switch (mBlurType) {
                 case 1 -> 32f;
                 case 2 -> 42f;
                 case 3 -> 55f;
-                case 4 -> 38f; // HyperOS 4 Soft Light Glass
+                case 4 -> 38f;
                 default -> 24f;
             };
             RenderEffect blur = RenderEffect.createBlurEffect(radiusPx, radiusPx, Shader.TileMode.MIRROR);
@@ -815,13 +434,8 @@ public class BlazeWallpaperVisualEffectsView extends View {
         boolean activeBlur = matchesTarget(mBlurTarget, isKeyguard);
         boolean activeEffect = mEffectType > 0 && matchesTarget(mEffectTarget, isKeyguard);
         boolean activeDim = matchesTarget(mDimTarget, isKeyguard);
-        boolean activeGoodLockKg = isKeyguard && (!TextUtils.isEmpty(mLockStarSignatureText)
-                || mWonderlandParticleMode > 0
-                || mBehavioralAuraEnabled
-                || mEdgeLightingStyle > 0);
-        boolean activeEdgePulse = System.currentTimeMillis() < mEdgeLightingPulseUntilMs && mEdgeLightingStyle > 0;
 
-        boolean shouldShow = activeBlur || activeEffect || activeDim || activeGoodLockKg || activeEdgePulse;
+        boolean shouldShow = activeBlur || activeEffect || activeDim;
         int targetVis = shouldShow ? VISIBLE : GONE;
         if (getVisibility() != targetVis) {
             setVisibility(targetVis);
@@ -859,10 +473,9 @@ public class BlazeWallpaperVisualEffectsView extends View {
             }
 
             if (activeBlur && (mBlurType == 1 || mBlurType == 4)) {
-                // HyperOS 4 Soft Light Glass & Frosted Glass real-time light field refraction tint
                 LinearGradient softLightGrad = new LinearGradient(
                         0f, 0f, vw, vh,
-                        new int[]{0x2EFFFFFF, 0x1838BDF8, 0x22A855F7},
+                        new int[]{0x24FFFFFF, 0x12FFFFFF, 0x1AFFFFFF},
                         new float[]{0f, 0.5f, 1f},
                         Shader.TileMode.CLAMP);
                 mFrostPaint.setShader(softLightGrad);
@@ -888,126 +501,5 @@ public class BlazeWallpaperVisualEffectsView extends View {
             mDimPaint.setColor(Color.argb(dimAlpha, 0, 0, 0));
             canvas.drawRect(0, 0, vw, vh, mDimPaint);
         }
-
-        if (isKeyguard) {
-            drawGoodLockKeyguardLayers(canvas, vw, vh);
-        }
-
-        if ((isKeyguard || System.currentTimeMillis() < mEdgeLightingPulseUntilMs) && mEdgeLightingStyle > 0) {
-            drawEdgeLightingFrame(canvas, vw, vh);
-        }
-    }
-
-    private void drawGoodLockKeyguardLayers(Canvas canvas, int vw, int vh) {
-        final float d = mContext.getResources().getDisplayMetrics().density;
-
-        // 1. OriginOS 6 Behavioral Telemetry Crystal Aura
-        if (mBehavioralAuraEnabled) {
-            int battPct = 75;
-            boolean charging = false;
-            try {
-                Intent bi = mContext.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-                if (bi != null) {
-                    int lvl = bi.getIntExtra(BatteryManager.EXTRA_LEVEL, 75);
-                    int scl = Math.max(1, bi.getIntExtra(BatteryManager.EXTRA_SCALE, 100));
-                    battPct = (lvl * 100) / scl;
-                    int st = bi.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-                    charging = (st == BatteryManager.BATTERY_STATUS_CHARGING || st == BatteryManager.BATTERY_STATUS_FULL);
-                }
-            } catch (Throwable ignored) {}
-
-            int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
-            int coreColor;
-            if (charging) {
-                coreColor = 0x3010B981; // Emerald SuperVooc Bloom
-            } else if (hour >= 6 && hour < 11) {
-                coreColor = 0x2AF59E0B; // Dawn Amber Bloom
-            } else if (hour >= 11 && hour < 18) {
-                coreColor = 0x2A38BDF8; // Daylight Polar Cyan
-            } else {
-                coreColor = 0x2DA855F7; // Twilight Nebula Violet
-            }
-            float auraRadius = Math.max(vw, vh) * (0.20f + 0.25f * (battPct / 100f));
-            RadialGradient auraGrad = new RadialGradient(
-                    vw * 0.5f, vh * 0.28f, Math.max(10f, auraRadius),
-                    new int[]{coreColor, Color.TRANSPARENT},
-                    new float[]{0f, 1f},
-                    Shader.TileMode.CLAMP);
-            mGoodLockPaint.setStyle(Paint.Style.FILL);
-            mGoodLockPaint.setShader(auraGrad);
-            canvas.drawCircle(vw * 0.5f, vh * 0.28f, auraRadius, mGoodLockPaint);
-            mGoodLockPaint.setShader(null);
-        }
-
-        // 2. Wonderland 3D Particle Layer (1=Sakura, 2=Fireflies, 3=Stardust, 4=Crystal Snow)
-        if (mWonderlandParticleMode > 0) {
-            mGoodLockPaint.setStyle(Paint.Style.FILL);
-            mGoodLockPaint.setShader(null);
-            for (int i = 0; i < 18; i++) {
-                float px = ((i * 137 + 43) % 100) / 100f * vw;
-                float py = ((i * 263 + 19) % 100) / 100f * vh;
-                float size = (2.2f + (i % 4) * 1.35f) * d;
-                if (mWonderlandParticleMode == 1) {
-                    // Sakura Petals
-                    mGoodLockPaint.setColor(0x55F472B6);
-                    canvas.drawOval(px - size * 1.3f, py - size * 0.7f, px + size * 1.3f, py + size * 0.7f, mGoodLockPaint);
-                } else if (mWonderlandParticleMode == 2) {
-                    // Fireflies
-                    mGoodLockPaint.setColor(i % 2 == 0 ? 0x58FACC15 : 0x5034D399);
-                    canvas.drawCircle(px, py, size * 1.15f, mGoodLockPaint);
-                } else if (mWonderlandParticleMode == 3) {
-                    // Cosmic Stardust
-                    mGoodLockPaint.setColor(i % 2 == 0 ? 0x6038BDF8 : 0x60C084FC);
-                    canvas.drawCircle(px, py, size * 0.9f, mGoodLockPaint);
-                } else {
-                    // Crystal Snow
-                    mGoodLockPaint.setColor(0x66FFFFFF);
-                    canvas.drawCircle(px, py, size, mGoodLockPaint);
-                }
-            }
-        }
-
-        // 3. LockStar & HyperOS 4 Magazine Signature Header
-        if (!TextUtils.isEmpty(mLockStarSignatureText)) {
-            mSignaturePaint.setColor(0xCCFFFFFF);
-            mSignaturePaint.setTextSize(10.5f * d);
-            mSignaturePaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-            mSignaturePaint.setTextAlign(Paint.Align.CENTER);
-            mSignaturePaint.setLetterSpacing(0.16f);
-            mSignaturePaint.setShadowLayer(4f * d, 0f, 1.5f * d, 0x88000000);
-            String formatted = "✦  " + mLockStarSignatureText.toUpperCase() + "  ✦";
-            canvas.drawText(formatted, vw * 0.5f, vh * 0.068f, mSignaturePaint);
-        }
-    }
-
-    private void drawEdgeLightingFrame(Canvas canvas, int vw, int vh) {
-        final float d = mContext.getResources().getDisplayMetrics().density;
-        int[] colors;
-        switch (mEdgeLightingStyle) {
-            case 1: // Eclipse
-                colors = new int[]{0x55FFFFFF, 0x5538BDF8, 0x55FFFFFF};
-                break;
-            case 3: // Aurora Wave
-                colors = new int[]{0x6610B981, 0x6638BDF8, 0x66A855F7};
-                break;
-            case 4: // Prism Pulse
-                colors = new int[]{0x66F59E0B, 0x66EC4899, 0x6638BDF8};
-                break;
-            case 2: // Cyber Neon
-            default:
-                colors = new int[]{0x6638BDF8, 0x66A855F7, 0x66EC4899};
-                break;
-        }
-        float strokeW = 3.2f * d;
-        float pad = strokeW * 0.6f;
-        mEdgeRect.set(pad, pad, vw - pad, vh - pad);
-        LinearGradient grad = new LinearGradient(
-                0f, 0f, vw, vh, colors, new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
-        mGoodLockPaint.setStyle(Paint.Style.STROKE);
-        mGoodLockPaint.setStrokeWidth(strokeW);
-        mGoodLockPaint.setShader(grad);
-        float cornerR = 34f * d;
-        canvas.drawRoundRect(mEdgeRect, cornerR, cornerR, mGoodLockPaint);
-        mGoodLockPaint.setShader(null);
     }
 }
