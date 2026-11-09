@@ -25,9 +25,15 @@ import android.hardware.biometrics.common.SensorStrength;
 import android.hardware.biometrics.fingerprint.FingerprintSensorType;
 import android.hardware.biometrics.fingerprint.SensorLocation;
 import android.hardware.biometrics.fingerprint.SensorProps;
+import android.os.Build;
+import android.os.SystemProperties;
+import android.util.DisplayMetrics;
 
 import com.android.internal.R;
 import com.android.internal.util.ArrayUtils;
+
+import java.io.File;
+import java.util.Locale;
 
 /**
  * Parse HIDL fingerprint sensor config and map it to SensorProps.aidl to match AIDL.
@@ -72,13 +78,45 @@ public final class HidlFingerprintSensorConfig extends SensorProps {
 
         final int[] udfpsProps = context.getResources().getIntArray(
                 com.android.internal.R.array.config_udfps_sensor_props);
-        final boolean isUdfps = !ArrayUtils.isEmpty(udfpsProps);
+        final String vendorBrand = SystemProperties.get("ro.product.vendor.brand",
+                Build.BRAND != null ? Build.BRAND : "").toLowerCase(Locale.ROOT);
+        final String vendorDevice = SystemProperties.get("ro.product.vendor.device",
+                Build.DEVICE != null ? Build.DEVICE : "").toLowerCase(Locale.ROOT);
+        final boolean isSamsung = vendorBrand.contains("samsung");
+        final boolean isSamsungUltrasonicDevice = isSamsung && (
+                vendorDevice.startsWith("o1") || vendorDevice.startsWith("t2")
+                || vendorDevice.startsWith("p3") || vendorDevice.startsWith("x1")
+                || vendorDevice.startsWith("y2") || vendorDevice.startsWith("z3")
+                || vendorDevice.startsWith("c1") || vendorDevice.startsWith("c2")
+                || vendorDevice.startsWith("r0") || vendorDevice.startsWith("g0")
+                || vendorDevice.startsWith("b0") || vendorDevice.startsWith("beyond1")
+                || vendorDevice.startsWith("beyond2") || vendorDevice.startsWith("d1")
+                || vendorDevice.startsWith("d2"));
+        final boolean isSamsungOpticalDevice = isSamsung && (
+                vendorDevice.startsWith("r8") || vendorDevice.startsWith("r9")
+                || vendorDevice.startsWith("a5") || vendorDevice.startsWith("a7")
+                || vendorDevice.startsWith("a3") || vendorDevice.startsWith("m5"));
+        final boolean hasSamsungUdfpsSysfs = new File("/sys/class/fingerprint/fingerprint/position").exists();
+        final boolean isUdfps = !ArrayUtils.isEmpty(udfpsProps)
+                || isSamsungUltrasonicDevice
+                || isSamsungOpticalDevice
+                || hasSamsungUdfpsSysfs
+                || SystemProperties.getBoolean("persist.sys.phh.fod", false);
         // config_is_powerbutton_fps indicates whether device has a power button fingerprint sensor.
         final boolean isPowerbuttonFps = context.getResources().getBoolean(
-                R.bool.config_is_powerbutton_fps);
+                R.bool.config_is_powerbutton_fps)
+                || vendorDevice.startsWith("spes")
+                || vendorDevice.startsWith("sweet")
+                || vendorDevice.startsWith("alioth")
+                || vendorDevice.startsWith("munch")
+                || vendorDevice.startsWith("surya")
+                || vendorDevice.startsWith("mojito");
 
         if (isUdfps) {
-            sensorType = FingerprintSensorType.UNKNOWN;
+            sensorType = isSamsungUltrasonicDevice
+                    ? FingerprintSensorType.UNDER_DISPLAY_ULTRASONIC
+                    : FingerprintSensorType.UNDER_DISPLAY_OPTICAL;
+            halControlsIllumination = (sensorType == FingerprintSensorType.UNDER_DISPLAY_OPTICAL);
         } else if (isPowerbuttonFps) {
             sensorType = FingerprintSensorType.POWER_BUTTON;
         } else {
@@ -88,8 +126,10 @@ public final class HidlFingerprintSensorConfig extends SensorProps {
         if (isUdfps && udfpsProps.length == 3) {
             setSensorLocation(udfpsProps[0], udfpsProps[1], udfpsProps[2]);
         } else {
-            setSensorLocation(540 /* sensorLocationX */, 1636 /* sensorLocationY */,
-                    130 /* sensorRadius */);
+            final DisplayMetrics dm = context.getResources().getDisplayMetrics();
+            final int w = (dm != null && dm.widthPixels > 0) ? dm.widthPixels : 1080;
+            final int h = (dm != null && dm.heightPixels > 0) ? dm.heightPixels : 2400;
+            setSensorLocation(w / 2, (int) (h * 0.815f), (int) (w * 0.105f));
         }
 
     }

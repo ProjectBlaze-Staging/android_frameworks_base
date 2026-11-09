@@ -105,7 +105,7 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
 
         bar.setBackground(mPill);
         bar.setForeground(mLens);
-        bar.setElevation(0f);
+        bar.setElevation(Math.max(mOriginalElevation, dp(8f)));
         bar.setOutlineProvider(null);
         bar.addOnLayoutChangeListener(this);
         bar.getViewTreeObserver().addOnPreDrawListener(this);
@@ -232,19 +232,27 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
     }
 
     private void recolorTabs() {
-        int accent = isDark() ? ACCENT_DARK : ACCENT_LIGHT;
-        int label = isDark() ? LABEL_DARK : LABEL_LIGHT;
+        boolean darkSurface = isDarkSurface();
+        int accent = darkSurface ? ACCENT_DARK : ACCENT_LIGHT;
+        int label = darkSurface ? LABEL_DARK : LABEL_LIGHT;
         for (int i = 0; i < mTabParts.size(); i++) {
             View[] parts = mTabParts.get(i);
             int color = i == mSelected ? accent : label;
-            if (parts[0] != null && parts[0].getBackground() != null) parts[0].setBackground(null);
+            if (parts[0] != null && parts[0] != parts[1] && parts[0] != parts[4]
+                    && !(parts[0] instanceof ViewGroup) && parts[0].getBackground() != null) {
+                parts[0].setBackground(null);
+            }
             for (int j = 4; j < 6; j++) {
                 if (parts[j] != null
                         && parts[j].getBackground() instanceof android.graphics.drawable.RippleDrawable) {
                     parts[j].setBackground(null);
                 }
             }
-            if (parts[1] instanceof ImageView icon) {
+            if (parts[1] instanceof ImageView icon && icon.getDrawable() != null) {
+                icon.setImageAlpha(255);
+                if (icon.getAlpha() < 0.85f) {
+                    icon.setAlpha(1f);
+                }
                 ColorStateList tint = icon.getImageTintList();
                 if (tint == null || tint.getDefaultColor() != color || tint.isStateful()) {
                     icon.setImageTintList(ColorStateList.valueOf(color));
@@ -357,7 +365,8 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             mLastGlassKey = 0;
             relayout();
         }
-        if (mBar.getElevation() != 0f) mBar.setElevation(0f);
+        float minElevation = Math.max(mOriginalElevation, dp(8f));
+        if (mBar.getElevation() < minElevation) mBar.setElevation(minElevation);
         if (mItems != null && !mDragging) updateSelection(true);
         recolorTabs();
         return true;
@@ -472,8 +481,9 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
     }
 
     private void restyleMaterialItems() {
-        int accent = isDark() ? ACCENT_DARK : ACCENT_LIGHT;
-        int label = isDark() ? LABEL_DARK : LABEL_LIGHT;
+        boolean darkSurface = isDarkSurface();
+        int accent = darkSurface ? ACCENT_DARK : ACCENT_LIGHT;
+        int label = darkSurface ? LABEL_DARK : LABEL_LIGHT;
         ColorStateList colors = new ColorStateList(
                 new int[][] {{android.R.attr.state_checked}, {android.R.attr.state_selected}, {}},
                 new int[] {accent, accent, label});
@@ -483,14 +493,15 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
         invoke("setItemRippleColor", ColorStateList.class, null);
     }
 
-    private boolean isDark() {
-        if (mLabelLuminance < 0f) {
-            TextView label = findLabel(mBar);
-            if (label != null) {
-                mLabelLuminance = android.graphics.Color.luminance(label.getCurrentTextColor());
-            }
+    private boolean isDarkSurface() {
+        int style = LiquidGlass.getEffectiveStyle(mBar.getContext());
+        if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) {
+            return true;
         }
-        if (mLabelLuminance >= 0f) return mLabelLuminance > 0.25f;
+        return isDark();
+    }
+
+    private boolean isDark() {
         return (mBar.getResources().getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
     }

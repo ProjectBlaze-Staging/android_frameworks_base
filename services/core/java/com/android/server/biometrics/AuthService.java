@@ -133,7 +133,22 @@ public class AuthService extends SystemService {
          */
         @VisibleForTesting
         public String[] getConfiguration(Context context) {
-            return context.getResources().getStringArray(R.array.config_biometric_sensors);
+            String[] configs = context.getResources().getStringArray(
+                    R.array.config_biometric_sensors);
+            if ((configs == null || configs.length == 0)
+                    && !isHidlDisabled(context)) {
+                String[] aidlFp = getFingerprintAidlInstances();
+                if ((aidlFp == null || aidlFp.length == 0)
+                        && context.getPackageManager().hasSystemFeature(
+                                PackageManager.FEATURE_FINGERPRINT)) {
+                    configs = new String[] {
+                        "0:" + BiometricAuthenticator.TYPE_FINGERPRINT + ":"
+                                + Authenticators.BIOMETRIC_STRONG
+                    };
+                    Slog.i(TAG, "Auto-synthesized HIDL fingerprint sensor config: 0:2:15");
+                }
+            }
+            return configs;
         }
 
         /**

@@ -223,6 +223,8 @@ public class HidlToAidlSensorAdapter extends Sensor implements IHwBinder.DeathRe
         }
 
         mDaemon.asBinder().linkToDeath(this, 0 /* flags */);
+        com.android.server.biometrics.sensors.fingerprint.UdfpsHelper.sendSamsungSehRequest(
+                mDaemon, 6 /* GET_SENSOR_STATUS */, 0);
         scheduleLoadAuthenticatorIds();
         mInternalCleanupRunnable.run();
         return mDaemon;

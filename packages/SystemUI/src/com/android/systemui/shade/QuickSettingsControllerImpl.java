@@ -623,7 +623,11 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                     mode = lineageos.providers.LineageSettings.System.getIntForUser(
                             ctx.getContentResolver(),
                             lineageos.providers.LineageSettings.System.STATUS_BAR_QUICK_QS_PULLDOWN,
-                            0, android.os.UserHandle.USER_CURRENT);
+                            1, android.os.UserHandle.USER_CURRENT);
+                }
+                if (mode == 0) {
+                    // Default to Dual-Shade (Left = Notifications, Right = Quick Settings)
+                    mode = 1;
                 }
                 if (mode > 0) {
                     int w = mPanelView.getWidth();
@@ -633,10 +637,10 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                         float x = event.getX();
                         if (mode == 3) {
                             quickPulldown = true;
-                        } else if (mode == 1) { // Right edge (or Left in RTL)
-                            quickPulldown = isRtl ? (x <= w * 0.35f) : (x >= w * 0.65f);
-                        } else if (mode == 2) { // Left edge (or Right in RTL)
-                            quickPulldown = isRtl ? (x >= w * 0.65f) : (x <= w * 0.35f);
+                        } else if (mode == 1) { // Right half (or Left in RTL) -> Quick Settings
+                            quickPulldown = isRtl ? (x < w * 0.5f) : (x >= w * 0.5f);
+                        } else if (mode == 2) { // Left half (or Right in RTL) -> Quick Settings
+                            quickPulldown = isRtl ? (x >= w * 0.5f) : (x < w * 0.5f);
                         }
                     }
                 }
@@ -758,7 +762,9 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         if (getExpanded()) {
             return onHeader || (yDiff < 0 && isTouchInQsArea(x, y));
         } else {
-            return onHeader;
+            int w = mPanelView != null ? mPanelView.getWidth() : 0;
+            boolean isRightHalf = w <= 0 || x >= w * 0.5f;
+            return onHeader && isRightHalf;
         }
     }
 
@@ -1706,10 +1712,13 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             mShadeLog.logQsExpansionNotEnabled(mExpansionEnabledPolicy, mExpansionEnabledAmbient,
                     mRemoteInputManager.isRemoteInputActive());
         }
+        boolean isRightHalfTouch = mPanelView != null
+                && event.getX() >= mPanelView.getWidth() * 0.5f
+                && event.getY() <= Math.max(mStatusBarMinHeight * 2, getHeaderHeight());
         boolean expandedShadeCollapsedQs = mShadeExpandedFraction == 1f
-                && mBarState != KEYGUARD && collapsedQs && expansionEnabled;
+                && mBarState != KEYGUARD && collapsedQs && expansionEnabled && isRightHalfTouch;
         if (action == MotionEvent.ACTION_DOWN && expandedShadeCollapsedQs) {
-            // Down in the empty area while fully expanded - go to QS.
+            // Down in the top-right header area while shade is expanded - go to QS.
             mShadeLog.logMotionEvent(event, "handleQsTouch: down action, QS tracking enabled");
             setTracking(true);
             traceQsJank(true, false);
@@ -1741,7 +1750,11 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         if (action == MotionEvent.ACTION_DOWN && isFullyCollapsed && isExpansionEnabled()) {
             mTwoFingerExpandPossible = true;
         }
-        if (mTwoFingerExpandPossible && isOpenQsEvent(event) && isInStatusBar) {
+        int topPullZoneHeight = Math.max(mStatusBarMinHeight * 2,
+                (int) (72 * mResources.getDisplayMetrics().density));
+        boolean isInTopPullZone = isInStatusBar
+                || event.getY(event.getActionIndex()) < topPullZoneHeight;
+        if (mTwoFingerExpandPossible && isOpenQsEvent(event) && isInTopPullZone) {
             mMetricsLogger.count(COUNTER_PANEL_OPEN_QS, 1);
             setExpandImmediate(true);
             mNotificationStackScrollLayoutController.setShouldShowShelfOnly(!mSplitShadeEnabled);

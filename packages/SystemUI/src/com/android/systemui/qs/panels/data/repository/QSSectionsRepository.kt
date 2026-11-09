@@ -57,8 +57,8 @@ constructor(
 ) {
 
     companion object {
-        private const val SECTION_CONFIGS_KEY = "section_configs"
-        private const val PREF_KEY_FLAT_LAYOUT = "qs_flat_layout_v1"
+        private const val SECTION_CONFIGS_KEY = "section_configs_v2"
+        private const val PREF_KEY_FLAT_LAYOUT = "qs_flat_layout_v2"
         private const val FILE_NAME = "qs_sections_prefs"
     }
 
@@ -74,14 +74,17 @@ constructor(
         listOf(
             FloatingTile(TileSpec.create("wifi"), SectionType.TILES, 2, 1),
             FloatingTile(TileSpec.create("control:media"), SectionType.TILES, 2, 2),
+            FloatingTile(TileSpec.create("bt"), SectionType.TILES, 2, 1),
             FloatingTile(TileSpec.create("control:ringer"), SectionType.TILES, 2, 1),
-            FloatingTile(TileSpec.create("custom(com.google.android.gms/.nearby.sharing.SharingTileService)"), SectionType.TILES, 1, 1),
-            FloatingTile(TileSpec.create("cell"), SectionType.TILES, 1, 1),
             FloatingTile(TileSpec.create("control:brightness"), SectionType.TILES, 1, 3),
             FloatingTile(TileSpec.create("control:volume"), SectionType.TILES, 1, 3),
-            FloatingTile(TileSpec.create("cast"), SectionType.TILES, 1, 1),
+            FloatingTile(TileSpec.create("flashlight"), SectionType.TILES, 1, 1),
+            FloatingTile(TileSpec.create("cell"), SectionType.TILES, 1, 1),
+            FloatingTile(TileSpec.create("dnd"), SectionType.TILES, 1, 1),
+            FloatingTile(TileSpec.create("rotation"), SectionType.TILES, 1, 1),
+            FloatingTile(TileSpec.create("custom(com.google.android.gms/.nearby.sharing.SharingTileService)"), SectionType.TILES, 1, 1),
             FloatingTile(TileSpec.create("battery"), SectionType.TILES, 1, 1),
-            FloatingTile(TileSpec.create("reduce_brightness"), SectionType.TILES, 1, 1),
+            FloatingTile(TileSpec.create("cast"), SectionType.TILES, 1, 1),
             FloatingTile(TileSpec.create("screenrecord"), SectionType.TILES, 1, 1),
         )
     )

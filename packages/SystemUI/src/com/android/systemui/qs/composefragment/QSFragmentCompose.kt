@@ -252,8 +252,10 @@ import com.android.systemui.qs.panels.ui.compose.infinitegrid.OneUiInsideTileAre
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.OneUiEditScreen
 import com.android.systemui.qs.panels.shared.model.QSControl
 import com.android.systemui.qs.panels.ui.compose.LocalQSControlRenderer
+import com.android.systemui.qs.panels.ui.compose.LocalQsCascadeState
 import com.android.systemui.qs.panels.ui.compose.QSControlContent
 import com.android.systemui.qs.panels.ui.compose.QSControlRenderer
+import com.android.systemui.qs.panels.ui.compose.QsCascadeState
 import com.android.systemui.qs.panels.ui.compose.asQSControl
 import com.android.systemui.qs.panels.ui.compose.bypassesOneUiContainer
 import com.android.systemui.qs.panels.ui.compose.qsControlCornerRadius
@@ -1149,14 +1151,14 @@ constructor(
     @Composable
     private fun ContentScope.QuickQuickSettingsElement(modifier: Modifier = Modifier) {
         val qqsPadding = viewModel.qqsHeaderHeight
-        val bottomPadding = viewModel.qqsBottomPadding
+        val qqsContentSettings = rememberQqsContentSettings()
+        val bottomPadding = if (qqsContentSettings.showTiles) viewModel.qqsBottomPadding else 0
         val sectionConfigs by viewModel.sectionEditModeViewModel.sectionConfigs.collectAsStateWithLifecycle(
             initialValue = SectionConfig.getDefaultConfigs()
         )
 
         val isMirroring = viewModel.showingMirror
         val contentAlpha by animateFloatAsState(targetValue = if (isMirroring) 0f else 1f, tween(200), label = "mirroring_alpha")
-        val qqsContentSettings = rememberQqsContentSettings()
 
         DisposableEffect(Unit) {
             qqsVisible.value = true
@@ -1253,15 +1255,15 @@ constructor(
                             sectionConfigs.mapNotNull { cfg ->
                                 when (cfg.type) {
                                     SectionType.BRIGHTNESS -> {
-                                        val showInQqs = when (blazeQs.showBrightnessSlider) {
+                                        val showInQqs = qqsContentSettings.showTiles && when (blazeQs.showBrightnessSlider) {
                                             0 -> false
                                             2 -> true
                                             else -> false
                                         }
                                         if (showInQqs) cfg.copy(visible = true) else null
                                     }
+                                    SectionType.TILES -> if (qqsContentSettings.showTiles) cfg else null
                                     SectionType.MEDIA -> if (qqsContentSettings.showMedia) cfg else null
-                                    else -> cfg
                                 }
                             }
                         }
@@ -1381,6 +1383,32 @@ constructor(
             label = "one_ui_blur"
         )
 
+        var qsOpenCount by remember { mutableIntStateOf(0) }
+        var wasQsOpen by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            snapshotFlow {
+                viewModel.isQsVisibleAndAnyShadeExpanded &&
+                    (viewModel.isQsExpanded || viewModel.expansionState.progress > 0.12f) &&
+                    viewModel.panelExpansionFraction > 0.05f
+            }.collect { isOpen ->
+                if (isOpen && !wasQsOpen) {
+                    qsOpenCount++
+                }
+                wasQsOpen = isOpen
+            }
+        }
+        val effectiveQsProgress by remember {
+            derivedStateOf {
+                val p1 = viewModel.expansionState.progress.coerceIn(0f, 1f)
+                val p2 = (viewModel.panelExpansionFraction * 1.15f).coerceIn(0f, 1f)
+                kotlin.math.min(p1, p2)
+            }
+        }
+        val cascadeState = remember(qsOpenCount, effectiveQsProgress) {
+            QsCascadeState(openCount = qsOpenCount, expansionProgress = effectiveQsProgress)
+        }
+
+        CompositionLocalProvider(LocalQsCascadeState provides cascadeState) {
         Box(
             modifier = modifier
                 .fillMaxSize()
@@ -1830,6 +1858,7 @@ constructor(
                     }
                 }
             }
+        }
         }
     }
 
@@ -2389,10 +2418,12 @@ private fun rememberQsBrightnessSettings(): QsBrightnessSettings {
 
 private const val QQS_SHOW_BRIGHTNESS_SLIDER = "qqs_show_brightness_slider"
 private const val QQS_SHOW_MEDIA = "qqs_show_media"
+private const val QQS_SHOW_TILES = "qqs_show_tiles"
 
 private data class QqsContentSettings(
     val showBrightness: Boolean,
     val showMedia: Boolean,
+    val showTiles: Boolean,
 )
 
 @Composable
@@ -2400,13 +2431,14 @@ private fun rememberQqsContentSettings(): QqsContentSettings {
     val context = LocalContext.current
     val cr = remember { context.contentResolver }
 
-    fun readFlag(key: String): Boolean =
-        Settings.System.getIntForUser(cr, key, 1, UserHandle.USER_CURRENT) != 0
+    fun readFlag(key: String, defaultVal: Int = 1): Boolean =
+        Settings.System.getIntForUser(cr, key, defaultVal, UserHandle.USER_CURRENT) != 0
 
     fun readCurrent() =
         QqsContentSettings(
-            showBrightness = readFlag(QQS_SHOW_BRIGHTNESS_SLIDER),
-            showMedia = readFlag(QQS_SHOW_MEDIA),
+            showBrightness = readFlag(QQS_SHOW_BRIGHTNESS_SLIDER, 0),
+            showMedia = readFlag(QQS_SHOW_MEDIA, 1),
+            showTiles = readFlag(QQS_SHOW_TILES, 0),
         )
 
     var state by remember { mutableStateOf(readCurrent()) }
@@ -2418,7 +2450,7 @@ private fun rememberQqsContentSettings(): QqsContentSettings {
                     context.mainExecutor.execute { state = readCurrent() }
                 }
             }
-        listOf(QQS_SHOW_BRIGHTNESS_SLIDER, QQS_SHOW_MEDIA).forEach {
+        listOf(QQS_SHOW_BRIGHTNESS_SLIDER, QQS_SHOW_MEDIA, QQS_SHOW_TILES).forEach {
             cr.registerContentObserver(
                 Settings.System.getUriFor(it),
                 false,

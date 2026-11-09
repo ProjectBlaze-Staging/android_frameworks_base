@@ -60,23 +60,23 @@ fun TransitionBuilder.quickQuickSettingsToQuickSettings(
 }
 
 fun TransitionBuilder.quickQuickSettingsToQuickSettingsOneUI() {
-    spec = tween(durationMillis = 350)
+    spec = tween(durationMillis = 360)
 
     sharedElement(MiniPlayerElementKey.MiniPlayer, enabled = false)
 
-    fractionRange(end = 0.3f) {
+    fractionRange(end = 0.25f) {
         fade(SceneKeys.QuickQuickSettingsContent)
         fade(SceneKeys.QqsBrightnessSlider)
         fade(QqsMiniPlayerMatcher)
     }
 
-    fractionRange(start = 0.6f) {
+    fractionRange(start = 0.12f) {
         fade(Elements.QuickSettingsContent)
         fade(SceneKeys.QsBrightnessSlider)
         fade(QsMiniPlayerMatcher)
     }
 
-    fractionRange(start = 0.75f) {
+    fractionRange(start = 0.3f) {
         fade(Elements.FooterActions)
     }
 }

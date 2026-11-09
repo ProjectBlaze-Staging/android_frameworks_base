@@ -174,6 +174,14 @@ private const val ONEUI_SPRING_STIFFNESS = 350f
 private const val ONEUI_SPRING_DAMPING = 0.85f
 
 @Immutable
+data class QsCascadeState(
+    val openCount: Int = 0,
+    val expansionProgress: Float = 1f,
+)
+
+val LocalQsCascadeState = androidx.compose.runtime.compositionLocalOf { QsCascadeState() }
+
+@Immutable
 class QSControlRenderer(
     val cornerRadius: (QSControl, DpSize) -> Dp,
     val content: @Composable (control: QSControl, span: QSControlSpan, interactive: Boolean) -> Unit,
@@ -1235,11 +1243,40 @@ private fun SectionCard(
 
     val sectionCornerRadius = 28.dp
 
+    val cascadeState = LocalQsCascadeState.current
+    val cardEntrance = remember { Animatable(if (isEditMode) 1f else 0f) }
+    LaunchedEffect(cascadeState.openCount, isEditMode) {
+        if (isEditMode || cascadeState.openCount <= 0) {
+            cardEntrance.snapTo(1f)
+        } else {
+            cardEntrance.snapTo(0f)
+            kotlinx.coroutines.delay(135L)
+            cardEntrance.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(dampingRatio = 0.76f, stiffness = 310f),
+            )
+        }
+    }
+    val density = LocalDensity.current
+    val cardCascadeProgress = if (isEditMode || isDragging) {
+        1f
+    } else {
+        (cardEntrance.value * (0.25f + 0.75f * cascadeState.expansionProgress)).coerceIn(0f, 1f)
+    }
+    val cardSlideYPx = with(density) { 54.dp.toPx() } * (1f - cardCascadeProgress)
+    val cardCascadeScale = 0.86f + 0.14f * cardCascadeProgress
+    val cardCascadeAlpha = (cardCascadeProgress * 1.35f).coerceIn(0f, 1f)
+
     Box(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .scale(scale)
+                .graphicsLayer {
+                    translationY = cardSlideYPx
+                    scaleX = scale * cardCascadeScale
+                    scaleY = scale * cardCascadeScale
+                    alpha = cardCascadeAlpha
+                }
                 .then(if (isEditMode) cardDragModifier else Modifier)
                 .then(
                     when {
@@ -1742,11 +1779,50 @@ fun DraggableGrid(
                         else -> 1f
                     }
 
+                    val cascadeState = LocalQsCascadeState.current
+                    val entranceAnim = remember { Animatable(if (isEditMode) 1f else 0f) }
+                    val staggerRow = if (isOneUi) placement.gridY + 4 else placement.gridY
+                    LaunchedEffect(cascadeState.openCount, isEditMode) {
+                        if (isEditMode || cascadeState.openCount <= 0) {
+                            entranceAnim.snapTo(1f)
+                        } else {
+                            entranceAnim.snapTo(0f)
+                            val delayMs = (staggerRow * 36L + placement.gridX * 16L).coerceAtMost(240L)
+                            kotlinx.coroutines.delay(delayMs)
+                            entranceAnim.animateTo(
+                                targetValue = 1f,
+                                animationSpec = spring(
+                                    dampingRatio = 0.74f,
+                                    stiffness = 320f,
+                                ),
+                            )
+                        }
+                    }
+
+                    val cascadeProgress = if (isEditMode || isResizing || isBeingDragged) {
+                        1f
+                    } else {
+                        val pullCurve = ((cascadeState.expansionProgress - staggerRow * 0.04f) /
+                                (1f - (staggerRow * 0.04f).coerceAtMost(0.32f))).coerceIn(0f, 1f)
+                        (entranceAnim.value * (0.25f + 0.75f * pullCurve)).coerceIn(0f, 1f)
+                    }
+                    val cascadeSlideYPx = with(density) { (44.dp + (staggerRow * 10).dp).toPx() } * (1f - cascadeProgress)
+                    val centerCol = (columns - 1) / 2f
+                    val cascadeSlideXPx = with(density) { ((placement.gridX - centerCol) * 16).dp.toPx() } * (1f - cascadeProgress)
+                    val cascadeScale = 0.78f + 0.22f * cascadeProgress
+                    val cascadeAlpha = (cascadeProgress * 1.35f).coerceIn(0f, 1f)
+
                     Box(
                         modifier = Modifier
                             .offset { IntOffset(animatedOffset.x.roundToInt(), animatedOffset.y.roundToInt()) }
                             .size(animatedTileWidth, animatedTileHeight)
-                            .alpha(tileAlpha)
+                            .graphicsLayer {
+                                translationX = cascadeSlideXPx
+                                translationY = cascadeSlideYPx
+                                scaleX = cascadeScale
+                                scaleY = cascadeScale
+                                alpha = tileAlpha * cascadeAlpha
+                            }
                             .pointerInput(isEditMode, tile.spanCols, tile.spanRows) {
                                 if (isEditMode) {
                                     detectDragGesturesAfterLongPress(

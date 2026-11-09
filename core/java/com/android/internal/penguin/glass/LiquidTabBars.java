@@ -39,7 +39,7 @@ public final class LiquidTabBars {
 
     private static final String[] BAR_CLASSES = {
             "BottomNavigationView", "NavigationBarView", "PivotBar", "BottomNavigation",
-            "BottomBar", "TabBar", "NavigationBar", "BottomTab",
+            "BottomTabLayout",
     };
     private static final String[] SCROLLER_CLASSES = {
             "RecyclerView", "ListView", "ScrollView", "GridView",
@@ -89,7 +89,7 @@ public final class LiquidTabBars {
                 return null;
             }
             boolean floatOver = Settings.Secure.getInt(
-                    context.getContentResolver(), SETTING_FLOAT, 1) != 0
+                    context.getContentResolver(), SETTING_FLOAT, 0) != 0
                     || listed(context, SETTING_FLOAT, pkg);
             return new LiquidTabBars(context, floatOver);
         } catch (RuntimeException e) {
@@ -149,22 +149,6 @@ public final class LiquidTabBars {
         mLastScan = now;
         ViewGroup found = find((ViewGroup) root, root.getWidth(), root.getHeight());
         if (found == null) {
-            if (eager || now >= mNextComposeScan) {
-                findCompose((ViewGroup) root, root.getHeight());
-                if (mComposeBar == null) {
-                    mComposeMisses = Math.min(mComposeMisses + 1, 4);
-                    mNextComposeScan = now + (SCAN_INTERVAL_MS << mComposeMisses);
-                } else {
-                    mComposeMisses = 0;
-                }
-            }
-            if (mComposeBar == null && !mScanPending) {
-                mScanPending = true;
-                root.postDelayed(() -> {
-                    mScanPending = false;
-                    if (root.isAttachedToWindow()) onLayout(root);
-                }, Math.max(mNextComposeScan - now, SCAN_INTERVAL_MS));
-            }
             return;
         }
         try {
@@ -248,8 +232,7 @@ public final class LiquidTabBars {
         }
         int maxGap = Math.max(bottomInset + Math.round(24 * mDensity), Math.round(80 * mDensity));
         if (loc[1] + h < rootHeight - maxGap) return false;
-        if (matches(v.getClass(), BAR_CLASSES)) return true;
-        return hasHorizontalTabRow(v, rootWidth);
+        return matches(v.getClass(), BAR_CLASSES) && hasHorizontalTabRow(v, rootWidth);
     }
 
     private boolean hasHorizontalTabRow(ViewGroup v, int rootWidth) {
