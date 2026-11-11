@@ -138,7 +138,16 @@ public class AuthService extends SystemService {
             if ((configs == null || configs.length == 0)
                     && !isHidlDisabled(context)) {
                 String[] aidlFp = getFingerprintAidlInstances();
-                if ((aidlFp == null || aidlFp.length == 0)
+                boolean hasRealAidlFp = false;
+                if (aidlFp != null) {
+                    for (String inst : aidlFp) {
+                        if (inst != null && !inst.isEmpty() && !"virtual".equals(inst)) {
+                            hasRealAidlFp = true;
+                            break;
+                        }
+                    }
+                }
+                if (!hasRealAidlFp
                         && context.getPackageManager().hasSystemFeature(
                                 PackageManager.FEATURE_FINGERPRINT)) {
                     configs = new String[] {

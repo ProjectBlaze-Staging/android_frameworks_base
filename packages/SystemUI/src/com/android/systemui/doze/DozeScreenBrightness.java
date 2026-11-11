@@ -162,8 +162,11 @@ public class DozeScreenBrightness extends BroadcastReceiver implements DozeMachi
         mScreenBrightnessMinimumDimAmount = context.getResources().getFloat(
                 R.dimen.config_screenBrightnessMinimumDimAmountFloat);
 
-        mDefaultDozeBrightness = mDisplayManager.getDefaultDozeBrightness(mContext.getDisplayId());
-        mScreenBrightnessDim = alwaysOnDisplayPolicy.dimBrightness;
+        float rawDefaultDoze = mDisplayManager.getDefaultDozeBrightness(mContext.getDisplayId());
+        mScreenBrightnessDim = alwaysOnDisplayPolicy.dimBrightness > 0.01f
+                ? alwaysOnDisplayPolicy.dimBrightness : 0.05f;
+        mDefaultDozeBrightness = rawDefaultDoze > 0.01f
+                ? rawDefaultDoze : Math.max(mScreenBrightnessDim, 0.05f);
         float[] sensorToBrightness =
                 mDisplayManager.getDozeBrightnessSensorValueToBrightness(mContext.getDisplayId());
         if (sensorToBrightness == null) {

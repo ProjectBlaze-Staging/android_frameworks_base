@@ -1255,7 +1255,7 @@ constructor(
                             sectionConfigs.mapNotNull { cfg ->
                                 when (cfg.type) {
                                     SectionType.BRIGHTNESS -> {
-                                        val showInQqs = qqsContentSettings.showTiles && when (blazeQs.showBrightnessSlider) {
+                                        val showInQqs = when (blazeQs.showBrightnessSlider) {
                                             0 -> false
                                             2 -> true
                                             else -> false

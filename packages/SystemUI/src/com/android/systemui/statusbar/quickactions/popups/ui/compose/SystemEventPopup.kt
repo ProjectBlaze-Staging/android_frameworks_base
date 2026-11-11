@@ -1,5 +1,6 @@
 package com.android.systemui.statusbar.quickactions.popups.ui.compose
 
+import android.media.AudioManager
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -7,6 +8,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.semantics
@@ -165,6 +169,10 @@ fun SystemEventPopup(model: PopupContentModel.SystemEvent, modifier: Modifier = 
                 ChargingDetailsGrid(model.chargingDetails, accent)
             }
 
+            if (model.kind == SystemEventKind.Call) {
+                InCallAudioControlsRow(accent = accent)
+            }
+
             if (model.actions.isNotEmpty()) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -180,6 +188,114 @@ fun SystemEventPopup(model: PopupContentModel.SystemEvent, modifier: Modifier = 
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun InCallAudioControlsRow(accent: Color) {
+    val context = LocalContext.current
+    val audioManager = remember(context) { context.getSystemService(AudioManager::class.java) }
+    var speakerOn by remember { mutableStateOf(audioManager?.isSpeakerphoneOn == true) }
+    var micMuted by remember { mutableStateOf(audioManager?.isMicrophoneMute == true) }
+
+    LaunchedEffect(audioManager) {
+        while (true) {
+            speakerOn = audioManager?.isSpeakerphoneOn == true
+            micMuted = audioManager?.isMicrophoneMute == true
+            delay(500L)
+        }
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(LocalContentColor.current.copy(alpha = 0.06f))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            AudioReactiveBars(
+                isPlaying = true,
+                isCall = true,
+                color = accent,
+                barWidth = 2.5.dp,
+                barSpacing = 2.dp,
+                barHeight = 16.dp,
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    if (speakerOn) accent.copy(alpha = 0.24f)
+                    else LocalContentColor.current.copy(alpha = 0.06f)
+                )
+                .clickable {
+                    runCatching {
+                        val next = !speakerOn
+                        @Suppress("DEPRECATION")
+                        audioManager?.isSpeakerphoneOn = next
+                        speakerOn = next
+                    }
+                }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.VolumeUp,
+                contentDescription = null,
+                tint = if (speakerOn) accent else LocalContentColor.current.copy(alpha = 0.85f),
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = "Hoparlör",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (speakerOn) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (speakerOn) accent else LocalContentColor.current.copy(alpha = 0.85f),
+                maxLines = 1,
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    if (micMuted) accent.copy(alpha = 0.24f)
+                    else LocalContentColor.current.copy(alpha = 0.06f)
+                )
+                .clickable {
+                    runCatching {
+                        val next = !micMuted
+                        audioManager?.isMicrophoneMute = next
+                        micMuted = next
+                    }
+                }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Mic,
+                contentDescription = null,
+                tint = if (micMuted) accent else LocalContentColor.current.copy(alpha = 0.85f),
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = if (micMuted) "Sessizde" else "Mikrofon",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (micMuted) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (micMuted) accent else LocalContentColor.current.copy(alpha = 0.85f),
+                maxLines = 1,
+            )
         }
     }
 }
@@ -366,9 +482,22 @@ private fun CallIdentity(model: PopupContentModel.SystemEvent, accent: Color) {
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         EventGlyph(model, accent, size = 64.dp)
-        model.callStartTimeMs?.let { start ->
-            Text(rememberCallDurationText(start), style = MaterialTheme.typography.titleLarge,
-                color = accent, textAlign = TextAlign.Center)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AudioReactiveBars(
+                isPlaying = true,
+                isCall = true,
+                color = accent,
+                barWidth = 2.6.dp,
+                barSpacing = 2.dp,
+                barHeight = 16.dp,
+            )
+            model.callStartTimeMs?.let { start ->
+                Text(rememberCallDurationText(start), style = MaterialTheme.typography.titleLarge,
+                    color = accent, textAlign = TextAlign.Center)
+            }
         }
         Text(model.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)

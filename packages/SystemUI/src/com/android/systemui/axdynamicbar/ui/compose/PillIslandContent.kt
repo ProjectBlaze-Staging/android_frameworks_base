@@ -1475,38 +1475,19 @@ fun PulsingDot(color: Color, size: Dp = 8.dp, durationMs: Int = 600, minAlpha: F
 }
 
 @Composable
-fun WaveformAnimation(color: Color, modifier: Modifier = Modifier.size(34.dp, 20.dp), isAnimating: Boolean = true, barCount: Int = 4) {
-    val phaseState: State<Float>?
-    if (isAnimating) {
-        val transition = rememberInfiniteTransition(label = "waveform")
-        phaseState =
-            transition.animateFloat(
-                initialValue = 0f,
-                targetValue = 2f * PI.toFloat(),
-                animationSpec =
-                    infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart),
-                label = "wave_phase",
-            )
-    } else {
-        phaseState = null
-    }
-    Canvas(modifier = modifier) {
-        val phase = phaseState?.value ?: 0f
-        val barW = size.width / (barCount * 2.8f)
-        val maxH = size.height * 0.82f
-        val staticH = if (!isAnimating) maxH * 0.35f else 0f
-        val gap = (size.width - barCount * barW) / (barCount + 1)
-        for (i in 0 until barCount) {
-            val x = gap + i * (barW + gap) + barW / 2f
-            val h = if (isAnimating) maxH * (0.22f + 0.78f * ((sin(phase + i * 0.9f) + 1f) / 2f)) else staticH
-            val y = (size.height - h) / 2f
-            drawLine(
-                color = color,
-                start = Offset(x, y),
-                end = Offset(x, y + h),
-                strokeWidth = barW,
-                cap = StrokeCap.Round,
-            )
-        }
+fun WaveformAnimation(
+    color: Color,
+    modifier: Modifier = Modifier.size(34.dp, 20.dp),
+    isAnimating: Boolean = true,
+    barCount: Int = 4,
+) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        com.android.systemui.statusbar.quickactions.popups.ui.compose.AudioReactiveBars(
+            isPlaying = isAnimating,
+            color = color,
+            barWidth = 2.2.dp,
+            barSpacing = 1.6.dp,
+            barHeight = 15.dp,
+        )
     }
 }

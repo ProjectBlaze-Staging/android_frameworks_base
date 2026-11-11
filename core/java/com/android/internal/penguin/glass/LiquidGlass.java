@@ -172,9 +172,9 @@ public final class LiquidGlass {
 
     private float mBlurRadius;
 
-    public static final @ColorInt int TINT_LIGHT = 0x99F2F2F7;
-    public static final @ColorInt int TINT_DARK = 0x991C1C1E;
-    public static final @ColorInt int TINT_DARK_CRYSTAL = 0xB80E1016;
+    public static final @ColorInt int TINT_LIGHT = 0x78F2F2F7;
+    public static final @ColorInt int TINT_DARK = 0x701C1C1E;
+    public static final @ColorInt int TINT_DARK_CRYSTAL = 0x7810141E;
 
     public LiquidGlass setShape(float left, float top, float right, float bottom, float radius) {
         if (mShader != null) {

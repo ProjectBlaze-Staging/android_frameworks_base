@@ -546,7 +546,7 @@ object KeyguardRootViewBinder {
     private val deviceEntryIcon = R.id.device_entry_icon_view
     private val nsslPlaceholderId = R.id.nssl_placeholder
     private val authInteractionProperties = AuthInteractionProperties()
-    private val authUiIds = setOf(deviceEntryIcon, indicationArea)
+    private val authUiIds = setOf(deviceEntryIcon, indicationArea, R.id.clock_ls)
 
     private const val AOD_ICONS_APPEAR_DURATION: Long = 200
     private const val TAG = "KeyguardRootViewBinder"

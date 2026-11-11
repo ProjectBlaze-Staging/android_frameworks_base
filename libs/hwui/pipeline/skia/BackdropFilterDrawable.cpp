@@ -38,6 +38,7 @@ void BackdropFilterDrawable::forceDraw(SkCanvas* canvas) const {
         return;
     }
 
+    SkAutoCanvasRestore acr(canvas, true);
     SkRect srcBounds = SkRect::MakeWH(properties.getWidth(), properties.getHeight());
 
     float alphaMultiplier = 1.0f;

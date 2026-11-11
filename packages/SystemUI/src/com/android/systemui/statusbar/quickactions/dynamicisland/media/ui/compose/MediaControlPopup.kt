@@ -152,6 +152,14 @@ fun MediaControlPopup(
                         )
                     }
                 }
+                com.android.systemui.statusbar.quickactions.popups.ui.compose.AudioReactiveBars(
+                    isPlaying = model.isPlaying,
+                    color = accent,
+                    artworkDrawable = artworkDrawable,
+                    barWidth = 2.6.dp,
+                    barSpacing = 2.dp,
+                    barHeight = 18.dp,
+                )
             }
 
             if (model.durationMs > 0L) {

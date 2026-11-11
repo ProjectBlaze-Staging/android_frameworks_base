@@ -22,6 +22,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -31,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
@@ -42,6 +44,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.palette.graphics.Palette
 import com.airbnb.lottie.LottieComposition
@@ -142,74 +145,26 @@ internal fun rememberScreenInteractive(): Boolean {
 }
 
 @Composable
-internal fun CosVoicePrint(playing: Boolean, size: Dp) {
-    val context = LocalContext.current
+internal fun CosVoicePrint(
+    playing: Boolean,
+    size: Dp,
+    artworkDrawable: Drawable? = null,
+    isCall: Boolean = false,
+    color: Color = Color(0xFF4ADE80),
+) {
     val activePlaying = playing && rememberScreenInteractive()
-    var composition by remember { mutableStateOf<LottieComposition?>(null) }
-    LaunchedEffect(Unit) { composition = CosIslandMedia.voiceprint(context) }
-    val loaded = composition
-    if (activePlaying && loaded != null) {
-        LottieAnimation(
-            composition = loaded,
-            iterations = LottieConstants.IterateForever,
-            modifier = Modifier.size(size),
+    Box(
+        modifier = Modifier.size(size),
+        contentAlignment = Alignment.Center,
+    ) {
+        AudioReactiveBars(
+            isPlaying = activePlaying,
+            color = color,
+            artworkDrawable = artworkDrawable,
+            isCall = isCall,
+            barWidth = (size.value * 0.105f).dp.coerceAtLeast(1.8.dp),
+            barSpacing = (size.value * 0.075f).dp.coerceAtLeast(1.2.dp),
+            barHeight = (size.value * 0.78f).dp.coerceAtLeast(12.dp),
         )
-    } else if (activePlaying) {
-        val infinite = rememberInfiniteTransition(label = "cos_island_eq")
-        val bar0 by infinite.animateFloat(
-            initialValue = 0.28f, targetValue = 0.90f,
-            animationSpec = infiniteRepeatable(tween(420, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "b0"
-        )
-        val bar1 by infinite.animateFloat(
-            initialValue = 0.85f, targetValue = 0.25f,
-            animationSpec = infiniteRepeatable(tween(340, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "b1"
-        )
-        val bar2 by infinite.animateFloat(
-            initialValue = 0.40f, targetValue = 0.96f,
-            animationSpec = infiniteRepeatable(tween(480, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "b2"
-        )
-        val bar3 by infinite.animateFloat(
-            initialValue = 0.92f, targetValue = 0.32f,
-            animationSpec = infiniteRepeatable(tween(380, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "b3"
-        )
-        val bar4 by infinite.animateFloat(
-            initialValue = 0.35f, targetValue = 0.80f,
-            animationSpec = infiniteRepeatable(tween(450, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "b4"
-        )
-        val bars = floatArrayOf(bar0, bar1, bar2, bar3, bar4)
-        Canvas(Modifier.size(size)) {
-            val w = this.size.width
-            val h = this.size.height
-            val barW = w / 9.5f
-            val gap = (w - barW * 5f) / 6f
-            for (i in 0 until 5) {
-                val barH = (h * bars[i]).coerceAtLeast(barW)
-                val x = gap + i * (barW + gap)
-                val y = (h - barH) / 2f
-                drawRoundRect(
-                    color = Color(0xFF4ADE80),
-                    topLeft = Offset(x, y),
-                    size = Size(barW, barH),
-                    cornerRadius = CornerRadius(barW / 2f, barW / 2f),
-                )
-            }
-        }
-    } else {
-        Canvas(Modifier.size(size)) {
-            val unit = this.size.width / 26f
-            for (i in 0 until 6) {
-                drawRoundRect(
-                    Color.White.copy(alpha = 0.8f),
-                    topLeft = Offset((0.5f + 4.5f * i) * unit, 11.75f * unit),
-                    size = Size(2.5f * unit, 2.5f * unit),
-                    cornerRadius = CornerRadius(1.25f * unit),
-                )
-            }
-        }
     }
 }

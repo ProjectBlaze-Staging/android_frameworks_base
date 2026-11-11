@@ -6,6 +6,7 @@
 package com.android.systemui.statusbar.quickactions.dynamicisland.media.ui.compose
 
 import android.content.Context
+import android.graphics.drawable.Drawable
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
@@ -199,7 +200,7 @@ fun CosMediaCard(model: MediaControlChipModel, modifier: Modifier = Modifier) {
                     height = CosMediaCard.ContentHeight,
                 )
             }
-            CosCardVoicePrint(model.isPlaying)
+            CosCardVoicePrint(model.isPlaying, artwork)
         }
 
         CosSeekBar(
@@ -279,50 +280,19 @@ private fun CosSwitchText(text: String, color: Color, size: Int, bold: Boolean, 
 }
 
 @Composable
-private fun CosCardVoicePrint(playing: Boolean) {
-    val composition = rememberCosLottie("voiceprintDark.json")
-    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-        if (playing && composition != null) {
-            LottieAnimation(
-                composition,
-                iterations = LottieConstants.IterateForever,
-                modifier = Modifier.size(24.dp),
-            )
-        } else if (playing) {
-            val transition = rememberInfiniteTransition(label = "cos_card_voiceprint")
-            val p0 by transition.animateFloat(0.28f, 0.92f, infiniteRepeatable(tween(420, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "cb0")
-            val p1 by transition.animateFloat(0.88f, 0.24f, infiniteRepeatable(tween(360, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "cb1")
-            val p2 by transition.animateFloat(0.35f, 1.0f, infiniteRepeatable(tween(480, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "cb2")
-            val p3 by transition.animateFloat(0.95f, 0.30f, infiniteRepeatable(tween(390, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "cb3")
-            val p4 by transition.animateFloat(0.25f, 0.82f, infiniteRepeatable(tween(450, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "cb4")
-            val heights = floatArrayOf(p0, p1, p2, p3, p4)
-            Canvas(Modifier.size(24.dp)) {
-                val unit = this.size.width / 22f
-                val maxBarH = this.size.height * 0.78f
-                for (i in 0 until 5) {
-                    val bh = (maxBarH * heights[i]).coerceAtLeast(2.5f * unit)
-                    val top = (this.size.height - bh) / 2f
-                    drawRoundRect(
-                        Color(0xFF5EEAD4),
-                        topLeft = Offset((1.2f + 4.3f * i) * unit, top),
-                        size = Size(2.4f * unit, bh),
-                        cornerRadius = CornerRadius(1.2f * unit),
-                    )
-                }
-            }
-        } else {
-            Canvas(Modifier.size(24.dp)) {
-                val unit = this.size.width / 26f
-                for (i in 0 until 6) {
-                    drawRoundRect(
-                        Color.White.copy(alpha = 0.8f),
-                        topLeft = Offset((0.5f + 4.5f * i) * unit, 11.75f * unit),
-                        size = Size(2.5f * unit, 2.5f * unit),
-                        cornerRadius = CornerRadius(1.25f * unit),
-                    )
-                }
-            }
-        }
+private fun CosCardVoicePrint(
+    playing: Boolean,
+    artworkDrawable: Drawable? = null,
+) {
+    Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) {
+        com.android.systemui.statusbar.quickactions.popups.ui.compose.AudioReactiveBars(
+            isPlaying = playing,
+            color = Color(0xFF5EEAD4),
+            artworkDrawable = artworkDrawable,
+            barWidth = 2.6.dp,
+            barSpacing = 2.dp,
+            barHeight = 19.dp,
+        )
     }
 }
 

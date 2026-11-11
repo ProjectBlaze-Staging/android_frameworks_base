@@ -358,7 +358,7 @@ final class ComposeTabBar {
             int key = ((w * 31 + h) * 2 + (dark ? 1 : 0)) * 8 + style;
             if (key != mGlassKey) {
                 mGlassKey = key;
-                boolean darkCrystal = (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL);
+                boolean darkCrystal = (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) && dark;
                 int tint = darkCrystal
                         ? LiquidGlass.TINT_DARK_CRYSTAL
                         : (dark ? LiquidGlass.TINT_DARK : LiquidGlass.TINT_LIGHT);
@@ -427,15 +427,15 @@ final class ComposeTabBar {
                     mCapsule.centerY() + h / 2f);
             float r = h / 2f;
             int style = LiquidGlass.getEffectiveStyle(mView.getContext());
-            if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) {
-                mPillPaint.setColor(0xDC06080D);
+            if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL && dark) {
+                mPillPaint.setColor(0x38385078);
                 canvas.drawRoundRect(mPill, r, r, mPillPaint);
                 mInnerPillRim.setStyle(Paint.Style.STROKE);
                 float stroke = dp(1.15f);
                 mInnerPillRim.setStrokeWidth(stroke);
                 mInnerPillRim.setShader(new LinearGradient(
                         mPill.left, mPill.top, mPill.right, mPill.bottom,
-                        new int[] {0xB0FFFFFF, 0x22FFFFFF, 0x7866B8FF},
+                        new int[] {0xC8FFFFFF, 0x2EFFFFFF, 0x8866B8FF},
                         new float[] {0f, 0.5f, 1f},
                         Shader.TileMode.CLAMP));
                 float half = stroke / 2f;

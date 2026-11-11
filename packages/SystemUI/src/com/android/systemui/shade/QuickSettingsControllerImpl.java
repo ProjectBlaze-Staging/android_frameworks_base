@@ -625,10 +625,6 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                             lineageos.providers.LineageSettings.System.STATUS_BAR_QUICK_QS_PULLDOWN,
                             1, android.os.UserHandle.USER_CURRENT);
                 }
-                if (mode == 0) {
-                    // Default to Dual-Shade (Left = Notifications, Right = Quick Settings)
-                    mode = 1;
-                }
                 if (mode > 0) {
                     int w = mPanelView.getWidth();
                     if (w > 0) {

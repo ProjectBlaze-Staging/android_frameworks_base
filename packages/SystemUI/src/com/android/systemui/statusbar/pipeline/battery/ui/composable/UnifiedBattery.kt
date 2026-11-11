@@ -101,9 +101,10 @@ private fun readCustomBatteryInt(context: Context, key: String, defaultVal: Int)
         if (v != -999) return v
     } catch (_: Throwable) {}
     try {
-        val res: Bundle? = cr.call(Uri.parse("content://lineageos.platform/system"), "GET_system", key, Bundle())
-        val s = res?.getString("value")
-        if (!s.isNullOrEmpty()) return s.toInt()
+        val v = lineageos.providers.LineageSettings.System.getIntForUser(
+            cr, key, -999, UserHandle.USER_CURRENT
+        )
+        if (v != -999) return v
     } catch (_: Throwable) {}
     return defaultVal
 }
@@ -262,8 +263,14 @@ fun UnifiedBattery(
                 UserHandle.USER_ALL
             )
             cr.registerContentObserver(
-                Uri.parse("content://lineageos.platform/system"),
-                true,
+                lineageos.providers.LineageSettings.System.getUriFor("status_bar_battery_style"),
+                false,
+                observer,
+                UserHandle.USER_ALL
+            )
+            cr.registerContentObserver(
+                lineageos.providers.LineageSettings.System.getUriFor("status_bar_show_battery_percent"),
+                false,
                 observer,
                 UserHandle.USER_ALL
             )

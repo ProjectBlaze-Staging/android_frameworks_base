@@ -89,7 +89,7 @@ public final class LiquidTabBars {
                 return null;
             }
             boolean floatOver = Settings.Secure.getInt(
-                    context.getContentResolver(), SETTING_FLOAT, 0) != 0
+                    context.getContentResolver(), SETTING_FLOAT, 1) != 0
                     || listed(context, SETTING_FLOAT, pkg);
             return new LiquidTabBars(context, floatOver);
         } catch (RuntimeException e) {
@@ -149,6 +149,22 @@ public final class LiquidTabBars {
         mLastScan = now;
         ViewGroup found = find((ViewGroup) root, root.getWidth(), root.getHeight());
         if (found == null) {
+            if (eager || now >= mNextComposeScan) {
+                findCompose((ViewGroup) root, root.getHeight());
+                if (mComposeBar == null) {
+                    mComposeMisses = Math.min(mComposeMisses + 1, 4);
+                    mNextComposeScan = now + (SCAN_INTERVAL_MS << mComposeMisses);
+                } else {
+                    mComposeMisses = 0;
+                }
+            }
+            if (mComposeBar == null && !mScanPending) {
+                mScanPending = true;
+                root.postDelayed(() -> {
+                    mScanPending = false;
+                    if (root.isAttachedToWindow()) onLayout(root);
+                }, Math.max(mNextComposeScan - now, SCAN_INTERVAL_MS));
+            }
             return;
         }
         try {
@@ -276,28 +292,39 @@ public final class LiquidTabBars {
     }
 
     private void floatOverContent(ViewGroup bar) {
-        ViewParent p = bar.getParent();
-        if (!(p instanceof ViewGroup parent)) return;
         int barHeight = bar.getHeight();
-        View content = null;
-        if (parent instanceof LinearLayout ll && ll.getOrientation() == LinearLayout.VERTICAL) {
-            int index = parent.indexOfChild(bar);
-            if (index > 0 && bar.getLayoutParams() instanceof ViewGroup.MarginLayoutParams lp) {
-                lp.topMargin -= barHeight;
-                bar.setLayoutParams(lp);
-                content = parent.getChildAt(index - 1);
+        View target = bar;
+        for (int depth = 0; depth < 3 && target.getParent() instanceof ViewGroup parent;
+                depth++, target = parent) {
+            if (depth > 0 && target.getHeight() > barHeight + Math.round(24 * mDensity)) {
+                break;
             }
-        } else {
-            for (int i = 0; i < parent.getChildCount(); i++) {
-                View child = parent.getChildAt(i);
-                if (child == bar || Math.abs(child.getBottom() - bar.getTop()) > 2) continue;
-                if (extendToBottom(child, bar, barHeight)) {
-                    content = child;
-                    break;
+            View content = null;
+            if (parent instanceof LinearLayout ll && ll.getOrientation() == LinearLayout.VERTICAL) {
+                int index = parent.indexOfChild(target);
+                if (index > 0
+                        && target.getLayoutParams() instanceof ViewGroup.MarginLayoutParams lp) {
+                    lp.topMargin -= barHeight;
+                    target.setLayoutParams(lp);
+                    content = parent.getChildAt(index - 1);
+                }
+            } else {
+                for (int i = 0; i < parent.getChildCount(); i++) {
+                    View child = parent.getChildAt(i);
+                    if (child == target || Math.abs(child.getBottom() - target.getTop()) > 4) {
+                        continue;
+                    }
+                    if (extendToBottom(child, target, barHeight)) {
+                        content = child;
+                        break;
+                    }
                 }
             }
+            if (content != null) {
+                padScrollers(content, barHeight);
+                return;
+            }
         }
-        if (content != null) padScrollers(content, barHeight);
     }
 
     private static boolean extendToBottom(View child, View bar, int barHeight) {

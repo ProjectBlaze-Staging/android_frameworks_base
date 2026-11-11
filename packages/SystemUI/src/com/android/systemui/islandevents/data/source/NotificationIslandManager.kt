@@ -260,7 +260,13 @@ constructor(
                     return
                 }
 
-                if (sbn.notification?.category == Notification.CATEGORY_CALL) {
+                val isCallNotification =
+                    sbn.notification?.category == Notification.CATEGORY_CALL ||
+                        sbn.notification?.isStyle(Notification.CallStyle::class.java) == true ||
+                        extras.getInt(Notification.EXTRA_CALL_TYPE, -1) > 0 ||
+                        extras.containsKey(Notification.EXTRA_ANSWER_INTENT) ||
+                        extras.containsKey(Notification.EXTRA_HANG_UP_INTENT)
+                if (isCallNotification) {
                     val isCallStyle =
                         sbn.isOngoing ||
                             extras.containsKey(Notification.EXTRA_ANSWER_INTENT) ||
@@ -924,9 +930,14 @@ constructor(
             }
 
         val callWhen = sbn.notification?.`when` ?: 0L
+        val audioMgr = context.getSystemService(android.media.AudioManager::class.java)
+        val audioInCall = audioMgr?.mode == android.media.AudioManager.MODE_IN_CALL ||
+                audioMgr?.mode == android.media.AudioManager.MODE_IN_COMMUNICATION
         val connected =
             callType == "Phone:active" &&
-                (extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER) || sbn.isOngoing)
+                (extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER) ||
+                    androidCallType == Notification.CallStyle.CALL_TYPE_ONGOING ||
+                    audioInCall)
         val previousCall = _callEvents.value.firstOrNull { it.sbn.key == sbn.key }
         val callStart = when {
             connected && callWhen > 0L -> callWhen

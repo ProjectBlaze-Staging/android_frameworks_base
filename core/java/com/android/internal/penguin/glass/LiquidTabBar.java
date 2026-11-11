@@ -78,12 +78,23 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
     private int mAddedPadding;
     private int mLastGlassKey;
     private float mLabelLuminance = -1f;
+    private float mBgLuminance = -1f;
+    private ViewGroup mWrapperParent;
+    private Drawable mWrapperOriginalBackground;
     private final java.util.ArrayList<View[]> mTabParts = new java.util.ArrayList<>();
 
     LiquidTabBar(ViewGroup bar) {
         mBar = bar;
         mDensity = bar.getResources().getDisplayMetrics().density;
         mOriginalBackground = bar.getBackground();
+        if (mOriginalBackground instanceof android.graphics.drawable.ColorDrawable cd
+                && cd.getAlpha() > 128) {
+            mBgLuminance = android.graphics.Color.luminance(cd.getColor());
+        }
+        TextView initialLabel = findLabel(bar);
+        if (initialLabel != null) {
+            mLabelLuminance = android.graphics.Color.luminance(initialLabel.getCurrentTextColor());
+        }
         mOriginalElevation = bar.getElevation();
         mOriginalOutline = bar.getOutlineProvider();
         mOriginalForeground = bar.getForeground();
@@ -105,7 +116,7 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
 
         bar.setBackground(mPill);
         bar.setForeground(mLens);
-        bar.setElevation(Math.max(mOriginalElevation, dp(8f)));
+        bar.setElevation(0f);
         bar.setOutlineProvider(null);
         bar.addOnLayoutChangeListener(this);
         bar.getViewTreeObserver().addOnPreDrawListener(this);
@@ -127,6 +138,11 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
         LiquidGlass.removeFrom(mBar);
         setAddedPadding(0);
         restoreItemsInset();
+        if (mWrapperParent != null) {
+            mWrapperParent.setBackground(mWrapperOriginalBackground);
+            mWrapperParent = null;
+            mWrapperOriginalBackground = null;
+        }
         mBar.setBackground(mOriginalBackground);
         mBar.setElevation(mOriginalElevation);
         mBar.setOutlineProvider(mOriginalOutline);
@@ -154,6 +170,13 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
         int w = mBar.getWidth();
         int h = mBar.getHeight();
         if (w == 0 || h == 0) return;
+        if (mWrapperParent == null && mBar.getParent() instanceof ViewGroup parent
+                && parent.getHeight() > 0 && parent.getHeight() <= h + Math.round(dp(24f))
+                && parent.getBackground() != null) {
+            mWrapperParent = parent;
+            mWrapperOriginalBackground = parent.getBackground();
+            parent.setBackground(null);
+        }
         float vInset = dp(VERTICAL_INSET_DP);
         float contentTop = Math.max(mBar.getPaddingTop(), vInset);
         float contentBottom = h - Math.max(mBar.getPaddingBottom(), vInset);
@@ -169,7 +192,7 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
                 + (int) mCapsule.bottom) * 8 + (mDark ? 4 : 0) + style;
         if (key != mLastGlassKey) {
             mLastGlassKey = key;
-            boolean darkCrystal = (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL);
+            boolean darkCrystal = (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) && mDark;
             int tint = darkCrystal
                     ? LiquidGlass.TINT_DARK_CRYSTAL
                     : (mDark ? LiquidGlass.TINT_DARK : LiquidGlass.TINT_LIGHT);
@@ -216,6 +239,14 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             else if (name.endsWith("small_label_view") && v instanceof TextView) parts[3] = v;
             else if (name.endsWith("item_icon_container")) parts[4] = v;
         }
+        if (parts[1] == null && v instanceof ImageView iv && iv.getVisibility() == View.VISIBLE
+                && iv.getDrawable() != null) {
+            parts[1] = iv;
+        } else if (v instanceof TextView tv && tv.getVisibility() == View.VISIBLE
+                && tv != parts[2] && tv != parts[3]) {
+            if (parts[2] == null) parts[2] = tv;
+            else if (parts[3] == null) parts[3] = tv;
+        }
         if (v instanceof ViewGroup g) {
             for (int i = 0; i < g.getChildCount(); i++) collect(g.getChildAt(i), parts);
         }
@@ -254,7 +285,11 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
                     icon.setAlpha(1f);
                 }
                 ColorStateList tint = icon.getImageTintList();
-                if (tint == null || tint.getDefaultColor() != color || tint.isStateful()) {
+                if (tint != null) {
+                    if (tint.getDefaultColor() != color || tint.isStateful()) {
+                        icon.setImageTintList(ColorStateList.valueOf(color));
+                    }
+                } else if (!(icon.getDrawable() instanceof android.graphics.drawable.BitmapDrawable)) {
                     icon.setImageTintList(ColorStateList.valueOf(color));
                 }
             }
@@ -343,7 +378,7 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             count++;
         }
         mItemCount = count;
-        mMotion.setMax(count - 1);
+        mMotion.setMax(Math.max(0, count - 1));
         if (selected < 0 && count >= 2 && mSelected < 0) {
             selected = 0;
         }
@@ -365,8 +400,7 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             mLastGlassKey = 0;
             relayout();
         }
-        float minElevation = Math.max(mOriginalElevation, dp(8f));
-        if (mBar.getElevation() < minElevation) mBar.setElevation(minElevation);
+        if (mBar.getElevation() != 0f) mBar.setElevation(0f);
         if (mItems != null && !mDragging) updateSelection(true);
         recolorTabs();
         return true;
@@ -407,8 +441,11 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
                 if (up && !mMoved) {
                     mSelected = target;
                 } else if (up && mMoved && target != mSelected) {
-                    View tab = tabAt(target);
-                    if (tab != null) tab.performClick();
+                    // Only trigger synthetic click when user dragged across tabs (more than 1 tab width / 2)
+                    if (Math.abs(x - mDownX) > tabWidth() * 0.45f) {
+                        View tab = tabAt(target);
+                        if (tab != null) tab.performClick();
+                    }
                     mSelected = target;
                 } else if (!up || mMoved) {
                     target = mSelected;
@@ -494,14 +531,12 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
     }
 
     private boolean isDarkSurface() {
-        int style = LiquidGlass.getEffectiveStyle(mBar.getContext());
-        if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) {
-            return true;
-        }
         return isDark();
     }
 
     private boolean isDark() {
+        if (mBgLuminance >= 0f) return mBgLuminance < 0.5f;
+        if (mLabelLuminance >= 0f) return mLabelLuminance > 0.35f;
         return (mBar.getResources().getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
     }
@@ -575,13 +610,13 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
         private void drawCapsuleSurfaceAndRim(Canvas canvas) {
             int style = LiquidGlass.getEffectiveStyle(mBar.getContext());
             float r = mCapsule.height() / 2f;
-            // Translucent glass capsule base so it stands out even over solid backgrounds
-            if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) {
-                mPaint.setColor(mDark ? 0xB810131C : 0xCC181C26);
+            // Subtle optical glass sheen so backdrop refraction/blur remains vivid and never turns black
+            if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL && mDark) {
+                mPaint.setColor(0x28182030);
             } else if (style == LiquidGlass.STYLE_IOS_LIQUID_GLASS) {
-                mPaint.setColor(mDark ? 0x521C1E26 : 0x66F0F4FA);
+                mPaint.setColor(mDark ? 0x22202430 : 0x30F0F4FA);
             } else {
-                mPaint.setColor(mDark ? 0x6622242C : 0x7AF2F4F8);
+                mPaint.setColor(mDark ? 0x38222630 : 0x48F2F4F8);
             }
             canvas.drawRoundRect(mCapsule, r, r, mPaint);
 
@@ -594,13 +629,13 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
                 mRimTop = mCapsule.top;
                 mRimDark = mDark;
                 mRimStyle = style;
-                if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) {
+                if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL && mDark) {
                     mRim.setShader(new android.graphics.LinearGradient(
                             mCapsule.left, mCapsule.top, mCapsule.right, mCapsule.bottom,
                             new int[] {
                                     0xDEFFFFFF,
-                                    0x26FFFFFF,
-                                    0x8C70C4FF
+                                    0x32FFFFFF,
+                                    0x9970C4FF
                             },
                             new float[] {0f, 0.52f, 1f},
                             android.graphics.Shader.TileMode.CLAMP));
@@ -641,15 +676,15 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             float h = mRect.height();
             float r = h / 2f;
 
-            if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL) {
-                // Apple iOS 27 Native Recessed Dark Smoked Crystal Active Lens Pill
-                mPaint.setColor(0xDC06080D);
+            if (style == LiquidGlass.STYLE_IOS27_DARK_CRYSTAL && mDark) {
+                // Luminous Smoked Crystal Active Lens Pill (translucent sapphire sheen, never opaque black)
+                mPaint.setColor(0x38385078);
                 canvas.drawRoundRect(mRect, r, r, mPaint);
 
                 // Subtle top optical refraction sheen inside active pill
                 mInnerGlow.setShader(new android.graphics.LinearGradient(
                         mRect.left, mRect.top, mRect.left, mRect.bottom,
-                        new int[] {0x2EFFFFFF, 0x06FFFFFF, 0x1A4EA8FF},
+                        new int[] {0x38FFFFFF, 0x0CFFFFFF, 0x244EA8FF},
                         new float[] {0f, 0.55f, 1f},
                         android.graphics.Shader.TileMode.CLAMP));
                 canvas.drawRoundRect(mRect, r, r, mInnerGlow);
@@ -659,7 +694,7 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
                 mInnerPillRim.setStrokeWidth(innerStroke);
                 mInnerPillRim.setShader(new android.graphics.LinearGradient(
                         mRect.left, mRect.top, mRect.right, mRect.bottom,
-                        new int[] {0xB0FFFFFF, 0x22FFFFFF, 0x7866B8FF},
+                        new int[] {0xC8FFFFFF, 0x2EFFFFFF, 0x8866B8FF},
                         new float[] {0f, 0.5f, 1f},
                         android.graphics.Shader.TileMode.CLAMP));
                 float half = innerStroke / 2f;

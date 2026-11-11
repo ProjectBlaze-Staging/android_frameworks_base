@@ -16,6 +16,7 @@
 
 package com.android.systemui.qs.composefragment.ui
 
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import com.android.compose.animation.scene.ContentKey
 import com.android.compose.animation.scene.ElementKey
@@ -60,7 +61,7 @@ fun TransitionBuilder.quickQuickSettingsToQuickSettings(
 }
 
 fun TransitionBuilder.quickQuickSettingsToQuickSettingsOneUI() {
-    spec = tween(durationMillis = 360)
+    spec = spring(dampingRatio = 0.84f, stiffness = 360f)
 
     sharedElement(MiniPlayerElementKey.MiniPlayer, enabled = false)
 

@@ -185,7 +185,7 @@ public class DisplayModeDirector {
      * The allowed refresh rate switching type. This is used by SurfaceFlinger.
      */
     @DisplayManager.SwitchingType
-    private int mModeSwitchingType = DisplayManager.SWITCHING_TYPE_WITHIN_GROUPS;
+    private int mModeSwitchingType = DisplayManager.SWITCHING_TYPE_ACROSS_AND_WITHIN_GROUPS;
 
     private final boolean mHasArrSupportFlagEnabled;
 

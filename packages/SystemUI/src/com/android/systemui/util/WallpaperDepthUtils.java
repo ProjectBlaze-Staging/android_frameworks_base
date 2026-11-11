@@ -148,12 +148,35 @@ public class WallpaperDepthUtils {
                 "depth_wallpaper_gyro_parallax",
                 "depth_wallpaper_bottom_fade",
                 "depth_wallpaper_fade_curve",
-                "depth_wallpaper_bottom_inset"
+                "depth_wallpaper_bottom_inset",
+                "depth_wallpaper_auto_subject"
             };
             for (String k : keys) {
                 cr.registerContentObserver(Settings.System.getUriFor(k), false, sysObserver,
                         android.os.UserHandle.USER_ALL);
             }
+            android.content.BroadcastReceiver wallReceiver = new android.content.BroadcastReceiver() {
+                @Override
+                public void onReceive(Context ctx, android.content.Intent intent) {
+                    try {
+                        boolean autoSubj = Settings.System.getIntForUser(
+                                mContext.getContentResolver(), "depth_wallpaper_auto_subject", 1,
+                                android.os.UserHandle.USER_CURRENT) != 0;
+                        if (autoSubj) {
+                            new java.io.File("/sdcard/Pictures/blaze_depth_subject.png").delete();
+                            new java.io.File("/data/system/users/0/blaze_depth_subject.png").delete();
+                            mWallpaperSubjectPath = null;
+                            mWallpaperLoaded = false;
+                            if (mDWallpaperEnabled) {
+                                updateDepthWallpaper(true);
+                            }
+                        }
+                    } catch (Throwable ignored) {}
+                }
+            };
+            mContext.registerReceiver(wallReceiver,
+                    new android.content.IntentFilter(android.content.Intent.ACTION_WALLPAPER_CHANGED),
+                    Context.RECEIVER_NOT_EXPORTED);
         } catch (Throwable ignored) {}
         reloadFromSystemSettings();
     }
@@ -234,6 +257,12 @@ public class WallpaperDepthUtils {
 
     public void onUnlockCompleted() {
         mUnlocking = false;
+        updateGyroParallaxRegistration(false);
+        updateDepthWallpaperVisibility();
+    }
+
+    public void onScreenTurnedOff() {
+        updateGyroParallaxRegistration(false);
     }
     
     public void onDozingChanged(boolean dozing) {
@@ -374,8 +403,7 @@ public class WallpaperDepthUtils {
     }
 
     private boolean isDWallpaperEnabled() {
-        return mDWallpaperEnabled && mWallpaperSubjectPath != null
-                && !mWallpaperSubjectPath.isEmpty();
+        return mDWallpaperEnabled;
     }
 
     private boolean canShowDepthWallpaper() {
@@ -686,10 +714,19 @@ public class WallpaperDepthUtils {
                     }
                 }
                 if (bitmap == null) {
+                    java.io.File pubFile = new java.io.File("/sdcard/Pictures/blaze_depth_subject.png");
+                    if (pubFile.exists()) {
+                        bitmap = BitmapFactory.decodeFile(pubFile.getAbsolutePath());
+                    }
+                }
+                if (bitmap == null) {
                     java.io.File fallbackFile = new java.io.File("/data/system/users/0/blaze_depth_subject.png");
                     if (fallbackFile.exists()) {
                         bitmap = BitmapFactory.decodeFile(fallbackFile.getAbsolutePath());
                     }
+                }
+                if (bitmap == null) {
+                    bitmap = extractSubjectFromCurrentWallpaper();
                 }
                 if (bitmap == null) {
                     Log.d("LoadWallpaperTask", "Failed to decode bitmap from file");
@@ -744,6 +781,276 @@ public class WallpaperDepthUtils {
         }
     }
     
+    private Bitmap extractSubjectFromCurrentWallpaper() {
+        try {
+            android.app.WallpaperManager wm = android.app.WallpaperManager.getInstance(mContext);
+            Bitmap src = null;
+            try {
+                android.os.ParcelFileDescriptor pfd = wm.getWallpaperFile(android.app.WallpaperManager.FLAG_LOCK);
+                if (pfd == null) {
+                    pfd = wm.getWallpaperFile(android.app.WallpaperManager.FLAG_SYSTEM);
+                }
+                if (pfd != null) {
+                    src = BitmapFactory.decodeFileDescriptor(pfd.getFileDescriptor());
+                    pfd.close();
+                }
+            } catch (Throwable ignored) {}
+            if (src == null) {
+                try {
+                    Drawable d = wm.getDrawable();
+                    if (d instanceof BitmapDrawable && ((BitmapDrawable) d).getBitmap() != null) {
+                        src = ((BitmapDrawable) d).getBitmap().copy(Bitmap.Config.ARGB_8888, false);
+                    }
+                } catch (Throwable ignored) {}
+            }
+            if (src == null) {
+                Log.w("WallpaperDepthUtils", "extractSubjectFromCurrentWallpaper: no wallpaper bitmap available");
+                return null;
+            }
+            Rect displayBounds = mContext.getSystemService(WindowManager.class)
+                    .getCurrentWindowMetrics().getBounds();
+            int dstW = Math.max(1, displayBounds.width());
+            int dstH = Math.max(1, displayBounds.height());
+            float scale = Math.max(dstW / (float) src.getWidth(), dstH / (float) src.getHeight());
+            Bitmap cropped = Bitmap.createBitmap(dstW, dstH, Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas c = new android.graphics.Canvas(cropped);
+            android.graphics.Matrix m = new android.graphics.Matrix();
+            float bw = src.getWidth() * scale;
+            float bh = src.getHeight() * scale;
+            m.postScale(scale, scale);
+            m.postTranslate((dstW - bw) * 0.5f, (dstH - bh) * 0.5f);
+            c.drawBitmap(src, m, new android.graphics.Paint(
+                    android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.FILTER_BITMAP_FLAG));
+
+            Bitmap segmented = segmentWallpaperForeground(cropped);
+            cropped.recycle();
+            if (segmented != null) {
+                try {
+                    java.io.File sysFile = new java.io.File("/data/system/users/0/blaze_depth_subject.png");
+                    if (sysFile.getParentFile() != null) sysFile.getParentFile().mkdirs();
+                    try (java.io.FileOutputStream out = new java.io.FileOutputStream(sysFile)) {
+                        segmented.compress(Bitmap.CompressFormat.PNG, 100, out);
+                    }
+                    sysFile.setReadable(true, false);
+                    mWallpaperSubjectPath = sysFile.getAbsolutePath();
+                    mPreviousWallpaperPath = mWallpaperSubjectPath;
+                } catch (Throwable fallbackErr) {
+                    try {
+                        java.io.File cacheFile = new java.io.File(mContext.getFilesDir(), "blaze_depth_subject.png");
+                        try (java.io.FileOutputStream out = new java.io.FileOutputStream(cacheFile)) {
+                            segmented.compress(Bitmap.CompressFormat.PNG, 100, out);
+                        }
+                        cacheFile.setReadable(true, false);
+                        mWallpaperSubjectPath = cacheFile.getAbsolutePath();
+                        mPreviousWallpaperPath = mWallpaperSubjectPath;
+                    } catch (Throwable ignored) {}
+                }
+            }
+            return segmented;
+        } catch (Throwable t) {
+            Log.e("WallpaperDepthUtils", "extractSubjectFromCurrentWallpaper failed", t);
+            return null;
+        }
+    }
+
+    private Bitmap segmentWallpaperForeground(Bitmap source) {
+        int origW = source.getWidth();
+        int origH = source.getHeight();
+        if (origW <= 0 || origH <= 0) return null;
+        float scale = Math.min(1f, 360f / (float) origW);
+        int w = Math.max(64, Math.round(origW * scale));
+        int h = Math.max(64, Math.round(origH * scale));
+        Bitmap small = (w != origW || h != origH)
+                ? Bitmap.createScaledBitmap(source, w, h, true)
+                : source.copy(Bitmap.Config.ARGB_8888, false);
+
+        int[] pixels = new int[w * h];
+        small.getPixels(pixels, 0, w, 0, 0, w, h);
+
+        int[] rArr = new int[w * h];
+        int[] gArr = new int[w * h];
+        int[] bArr = new int[w * h];
+        int[] luma = new int[w * h];
+        for (int i = 0; i < pixels.length; i++) {
+            int c = pixels[i];
+            int r = (c >> 16) & 0xFF;
+            int g = (c >> 8) & 0xFF;
+            int b = c & 0xFF;
+            rArr[i] = r;
+            gArr[i] = g;
+            bArr[i] = b;
+            luma[i] = (r * 77 + g * 150 + b * 29) >> 8;
+        }
+
+        int[] edgeMag = new int[w * h];
+        for (int y = 1; y < h - 1; y++) {
+            int row = y * w;
+            for (int x = 1; x < w - 1; x++) {
+                int idx = row + x;
+                int gx = -luma[idx - w - 1] + luma[idx - w + 1]
+                        - 2 * luma[idx - 1] + 2 * luma[idx + 1]
+                        - luma[idx + w - 1] + luma[idx + w + 1];
+                int gy = -luma[idx - w - 1] - 2 * luma[idx - w] - luma[idx - w + 1]
+                        + luma[idx + w - 1] + 2 * luma[idx + w] + luma[idx + w + 1];
+                edgeMag[idx] = Math.min(255, (Math.abs(gx) + Math.abs(gy)) >> 2);
+            }
+        }
+
+        boolean[] subjectProtected = new boolean[w * h];
+        try {
+            Bitmap rgb565 = small.copy(Bitmap.Config.RGB_565, false);
+            android.media.FaceDetector.Face[] faces = new android.media.FaceDetector.Face[3];
+            int found = new android.media.FaceDetector(w, h, 3).findFaces(rgb565, faces);
+            rgb565.recycle();
+            android.graphics.PointF mid = new android.graphics.PointF();
+            for (int i = 0; i < found; i++) {
+                android.media.FaceDetector.Face f = faces[i];
+                if (f == null) continue;
+                f.getMidPoint(mid);
+                float ed = f.eyesDistance();
+                float cx = mid.x;
+                float cy = mid.y;
+                float rx = ed * 1.85f;
+                float ryTop = ed * 2.1f;
+                float ryBot = (float) h;
+                int yStart = Math.max(0, (int) (cy - ryTop));
+                int xStart = Math.max(0, (int) (cx - rx * 1.4f));
+                int xEnd = Math.min(w, (int) (cx + rx * 1.4f));
+                for (int y = yStart; y < h; y++) {
+                    for (int x = xStart; x < xEnd; x++) {
+                        float nx = (x - cx) / (y > cy + ed ? rx * 1.45f : rx);
+                        float ny = (y <= cy) ? (y - cy) / ryTop : (y - cy) / ryBot;
+                        if (nx * nx + ny * ny <= 1.0f) {
+                            subjectProtected[y * w + x] = true;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        boolean[] isBg = new boolean[w * h];
+        boolean[] visited = new boolean[w * h];
+        java.util.ArrayDeque<Integer> queue = new java.util.ArrayDeque<>(w * h / 2);
+
+        int sideSeedMaxY = (int) (h * 0.48f);
+        for (int x = 0; x < w; x++) {
+            if (!subjectProtected[x]) {
+                visited[x] = true;
+                isBg[x] = true;
+                queue.add(x);
+            }
+        }
+        for (int y = 1; y < sideSeedMaxY; y++) {
+            int leftIdx = y * w;
+            int rightIdx = y * w + (w - 1);
+            if (!visited[leftIdx] && !subjectProtected[leftIdx]) {
+                visited[leftIdx] = true;
+                isBg[leftIdx] = true;
+                queue.add(leftIdx);
+            }
+            if (!visited[rightIdx] && !subjectProtected[rightIdx]) {
+                visited[rightIdx] = true;
+                isBg[rightIdx] = true;
+                queue.add(rightIdx);
+            }
+        }
+
+        int maxFloodY = (int) (h * 0.78f);
+        int[] dirs = new int[]{-1, 1, -w, w};
+        while (!queue.isEmpty()) {
+            int curr = queue.removeFirst();
+            int cy = curr / w;
+            int cx = curr % w;
+            int cr = rArr[curr];
+            int cg = gArr[curr];
+            int cb = bArr[curr];
+            for (int d : dirs) {
+                int next = curr + d;
+                if (next < 0 || next >= w * h) continue;
+                int ny = next / w;
+                int nx = next % w;
+                if (Math.abs(nx - cx) + Math.abs(ny - cy) != 1) continue;
+                if (ny >= maxFloodY || visited[next] || subjectProtected[next]) continue;
+                int stepDist = Math.abs(rArr[next] - cr) + Math.abs(gArr[next] - cg) + Math.abs(bArr[next] - cb);
+                if (edgeMag[next] < 38 && stepDist < 42) {
+                    visited[next] = true;
+                    isBg[next] = true;
+                    queue.add(next);
+                }
+            }
+        }
+
+        int[] alphaMask = new int[w * h];
+        int fgAboveMidCount = 0;
+        int midY = (int) (h * 0.45f);
+        int topClockClearY = (int) (h * 0.22f);
+        for (int y = 0; y < h; y++) {
+            int row = y * w;
+            for (int x = 0; x < w; x++) {
+                int idx = row + x;
+                boolean fg = !isBg[idx] && (y >= topClockClearY || subjectProtected[idx]);
+                alphaMask[idx] = fg ? 255 : 0;
+                if (fg && y >= (h / 10) && y <= midY) {
+                    fgAboveMidCount++;
+                }
+            }
+        }
+
+        int minExpectedFg = (w * midY) / 18;
+        int maxExpectedFg = (w * midY) * 6 / 10;
+        if (fgAboveMidCount < minExpectedFg || fgAboveMidCount > maxExpectedFg) {
+            for (int y = 0; y < h; y++) {
+                int row = y * w;
+                float ny = y / (float) h;
+                for (int x = 0; x < w; x++) {
+                    float nx = (x / (float) w) - 0.5f;
+                    float archY = 0.27f + (nx * nx) * 0.65f;
+                    boolean inSubjectZone = ny >= archY;
+                    alphaMask[row + x] = inSubjectZone ? 255 : 0;
+                }
+            }
+        }
+
+        int[] smoothed = new int[w * h];
+        for (int y = 1; y < h - 1; y++) {
+            int row = y * w;
+            for (int x = 1; x < w - 1; x++) {
+                int idx = row + x;
+                int sum = alphaMask[idx - w - 1] + alphaMask[idx - w] + alphaMask[idx - w + 1]
+                        + alphaMask[idx - 1] + alphaMask[idx] * 2 + alphaMask[idx + 1]
+                        + alphaMask[idx + w - 1] + alphaMask[idx + w] + alphaMask[idx + w + 1];
+                smoothed[idx] = sum / 10;
+            }
+        }
+
+        for (int i = 0; i < pixels.length; i++) {
+            int a = MathUtils.constrain(smoothed[i], 0, 255);
+            pixels[i] = (a << 24) | (pixels[i] & 0x00FFFFFF);
+        }
+
+        Bitmap outSmall = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        outSmall.setPixels(pixels, 0, w, 0, 0, w, h);
+        if (small != source) small.recycle();
+
+        if (w != origW || h != origH) {
+            Bitmap scaledMaskBmp = Bitmap.createScaledBitmap(outSmall, origW, origH, true);
+            outSmall.recycle();
+            Bitmap outFull = source.copy(Bitmap.Config.ARGB_8888, true);
+            int[] fullPixels = new int[origW * origH];
+            int[] maskPixels = new int[origW * origH];
+            outFull.getPixels(fullPixels, 0, origW, 0, 0, origW, origH);
+            scaledMaskBmp.getPixels(maskPixels, 0, origW, 0, 0, origW, origH);
+            scaledMaskBmp.recycle();
+            for (int i = 0; i < fullPixels.length; i++) {
+                int a = maskPixels[i] >>> 24;
+                fullPixels[i] = (a << 24) | (fullPixels[i] & 0x00FFFFFF);
+            }
+            outFull.setPixels(fullPixels, 0, origW, 0, 0, origW, origH);
+            return outFull;
+        }
+        return outSmall;
+    }
+
     public void onDetachedFromWindow() {
         mTunerService.removeTunable(mTunable);
         mWallpaperBitmap = null;

@@ -249,13 +249,17 @@ public class LockScreenWidgetsController implements OmniJawsClient.OmniJawsObser
         mContext.registerReceiver(mRingerModeReceiver, ringerFilter);
     }
 
+    private int mStatusBarState = StatusBarState.KEYGUARD;
+
     private final StatusBarStateController.StateListener mStatusBarStateListener =
             new StatusBarStateController.StateListener() {
         @Override
         public void onStateChanged(int newState) {
+            mStatusBarState = newState;
             if (newState == StatusBarState.KEYGUARD) {
                 syncAllTileStatesOnKeyguard();
             }
+            updateContainerVisibility();
         }
         @Override
         public void onDozingChanged(boolean dozing) {
@@ -464,7 +468,7 @@ public class LockScreenWidgetsController implements OmniJawsClient.OmniJawsObser
     }
 
     private void updateContainerVisibility() {
-        if (!mLockscreenWidgetsEnabled) {
+        if (!mLockscreenWidgetsEnabled || mStatusBarState != StatusBarState.KEYGUARD) {
             final View mc = mView.findViewById(R.id.main_widgets_container);
             if (mc != null) mc.setVisibility(View.GONE);
             final View sc = mView.findViewById(R.id.secondary_widgets_container);
@@ -472,8 +476,12 @@ public class LockScreenWidgetsController implements OmniJawsClient.OmniJawsObser
             mView.setVisibility(View.GONE);
             return;
         }
-        final boolean isMainEmpty = mMainLockscreenWidgetsList == null || TextUtils.isEmpty(mMainLockscreenWidgetsList);
-        final boolean isSecondaryEmpty = mSecondaryLockscreenWidgetsList == null || TextUtils.isEmpty(mSecondaryLockscreenWidgetsList);
+        final boolean isMainEmpty = mMainLockscreenWidgetsList == null
+                || TextUtils.isEmpty(mMainLockscreenWidgetsList)
+                || mMainWidgetsList.stream().allMatch(w -> TextUtils.isEmpty(w) || "none".equals(w));
+        final boolean isSecondaryEmpty = mSecondaryLockscreenWidgetsList == null
+                || TextUtils.isEmpty(mSecondaryLockscreenWidgetsList)
+                || mSecondaryWidgetsList.stream().allMatch(w -> TextUtils.isEmpty(w) || "none".equals(w));
         final View mc = mView.findViewById(R.id.main_widgets_container);
         if (mc != null) mc.setVisibility(isMainEmpty ? View.GONE : View.VISIBLE);
         final View sc = mView.findViewById(R.id.secondary_widgets_container);

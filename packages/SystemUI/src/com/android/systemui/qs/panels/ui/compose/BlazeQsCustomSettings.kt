@@ -70,16 +70,6 @@ private fun readBlazeInt(cr: ContentResolver, key: String, defaultVal: Int): Int
         val v = LineageSettings.System.getIntForUser(cr, key, -999, UserHandle.USER_CURRENT)
         if (v != -999) return v
     } catch (_: Throwable) {}
-    try {
-        val res: Bundle? = cr.call(Uri.parse("content://lineageos.platform/secure"), "GET_secure", key, Bundle())
-        val s = res?.getString("value")
-        if (!s.isNullOrEmpty()) return s.toInt()
-    } catch (_: Throwable) {}
-    try {
-        val res: Bundle? = cr.call(Uri.parse("content://lineageos.platform/system"), "GET_system", key, Bundle())
-        val s = res?.getString("value")
-        if (!s.isNullOrEmpty()) return s.toInt()
-    } catch (_: Throwable) {}
     return defaultVal
 }
 
@@ -128,19 +118,23 @@ private fun loadBlazeQsSettings(context: Context, isLandscape: Boolean): BlazeQs
     )
 }
 
-@Composable
-fun rememberBlazeQsSettings(): BlazeQsSettings {
-    val context = LocalContext.current
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    var state by remember(isLandscape) {
-        mutableStateOf(loadBlazeQsSettings(context, isLandscape))
-    }
+private object BlazeQsSettingsStore {
+    private var initialized = false
+    val portraitState = mutableStateOf(BlazeQsSettings())
+    val landscapeState = mutableStateOf(BlazeQsSettings())
 
-    DisposableEffect(context, isLandscape) {
-        val cr = context.contentResolver
+    fun ensureInitialized(context: Context) {
+        if (initialized) return
+        val appCtx = context.applicationContext ?: context
+        initialized = true
+        portraitState.value = loadBlazeQsSettings(appCtx, isLandscape = false)
+        landscapeState.value = loadBlazeQsSettings(appCtx, isLandscape = true)
+
+        val cr = appCtx.contentResolver
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
-                state = loadBlazeQsSettings(context, isLandscape)
+                portraitState.value = loadBlazeQsSettings(appCtx, isLandscape = false)
+                landscapeState.value = loadBlazeQsSettings(appCtx, isLandscape = true)
             }
         }
         val systemKeys = listOf(
@@ -162,16 +156,24 @@ fun rememberBlazeQsSettings(): BlazeQsSettings {
             systemKeys.forEach { key ->
                 cr.registerContentObserver(Settings.System.getUriFor(key), false, observer, UserHandle.USER_ALL)
                 cr.registerContentObserver(Settings.Secure.getUriFor(key), false, observer, UserHandle.USER_ALL)
+                cr.registerContentObserver(LineageSettings.System.getUriFor(key), false, observer, UserHandle.USER_ALL)
+                cr.registerContentObserver(LineageSettings.Secure.getUriFor(key), false, observer, UserHandle.USER_ALL)
             }
-            cr.registerContentObserver(Uri.parse("content://lineageos.platform/system"), true, observer, UserHandle.USER_ALL)
-            cr.registerContentObserver(Uri.parse("content://lineageos.platform/secure"), true, observer, UserHandle.USER_ALL)
         } catch (_: Throwable) {}
-        onDispose {
-            try {
-                cr.unregisterContentObserver(observer)
-            } catch (_: Throwable) {}
-        }
     }
+}
 
-    return state
+@Composable
+fun rememberBlazeQsSettings(): BlazeQsSettings {
+    val context = LocalContext.current
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    remember(context) {
+        BlazeQsSettingsStore.ensureInitialized(context)
+        true
+    }
+    return if (isLandscape) {
+        BlazeQsSettingsStore.landscapeState.value
+    } else {
+        BlazeQsSettingsStore.portraitState.value
+    }
 }

@@ -172,6 +172,17 @@ fun StatusBarDynamicIslandChip(
                     0.dp
                 }
             is PopupContentModel.ScreenRecord -> 11.dp
+            is PopupContentModel.SystemEvent ->
+                if (
+                    popupContent.kind == SystemEventKind.Call ||
+                        popupContent.kind == SystemEventKind.Recording
+                ) {
+                    16.dp
+                } else if (pageCount > 1) {
+                    11.dp
+                } else {
+                    0.dp
+                }
             else -> {
                 if (pageCount > 1) 11.dp else 0.dp
             }
@@ -345,13 +356,43 @@ fun StatusBarDynamicIslandChip(
                     (popupContent.model.artworkIcon as? IconModel.Loaded)?.drawable
                 }
                 if (cos) {
-                    CosVoicePrint(playing = popupContent.model.isPlaying, size = CosIsland.IconSize)
+                    CosVoicePrint(
+                        playing = popupContent.model.isPlaying,
+                        size = CosIsland.IconSize,
+                        artworkDrawable = artworkDrawable,
+                    )
                 } else if (popupContent.model.isPlaying) {
                     AudioReactiveBars(
                         isPlaying = true,
                         color = IslandAccents.Music,
                         artworkDrawable = artworkDrawable,
                     )
+                } else if (pageCount > 1) {
+                    SwipeHint(color = chipContentColor.copy(alpha = 0.72f))
+                }
+            }
+            is PopupContentModel.SystemEvent -> {
+                if (
+                    popupContent.kind == SystemEventKind.Call ||
+                        popupContent.kind == SystemEventKind.Recording
+                ) {
+                    val waveColor =
+                        if (popupContent.kind == SystemEventKind.Call) IslandAccents.Calls
+                        else IslandAccents.Recording
+                    if (cos) {
+                        CosVoicePrint(
+                            playing = true,
+                            size = CosIsland.IconSize,
+                            isCall = popupContent.kind == SystemEventKind.Call,
+                            color = waveColor,
+                        )
+                    } else {
+                        AudioReactiveBars(
+                            isPlaying = true,
+                            isCall = popupContent.kind == SystemEventKind.Call,
+                            color = waveColor,
+                        )
+                    }
                 } else if (pageCount > 1) {
                     SwipeHint(color = chipContentColor.copy(alpha = 0.72f))
                 }
@@ -408,6 +449,11 @@ private fun UtilityStatusIslandChip(
             label = "utilityChipPressScale",
         )
     val isSystemEvent = viewModel.popupContent is PopupContentModel.SystemEvent
+    val isCallOrRecording =
+        (viewModel.popupContent as? PopupContentModel.SystemEvent)?.let {
+            it.kind == SystemEventKind.Call || it.kind == SystemEventKind.Recording
+        } == true
+    val callWaveSpace = if (isCallOrRecording) 22.dp * widthScale else 0.dp
     val isFlashlight = viewModel.popupContent is PopupContentModel.Flashlight
     val hasBalancedSegments = isSystemEvent || isFlashlight
     val deviceImage = (viewModel.popupContent as? PopupContentModel.SystemEvent)
@@ -437,13 +483,13 @@ private fun UtilityStatusIslandChip(
         val measured = textMeasurer.measure(liveChipText,
             style = MaterialTheme.typography.labelLarge, maxLines = 1)
         (with(density) { measured.size.width.toDp() } +
-            6.dp * widthScale + textEndPadding + deviceImageSpace)
-            .coerceAtMost(92.dp * widthScale)
+            6.dp * widthScale + textEndPadding + deviceImageSpace + callWaveSpace)
+            .coerceAtMost((if (isCallOrRecording) 108.dp else 92.dp) * widthScale)
     } else 0.dp
     val rightSegmentWidth =
         (when (viewModel.popupContent) {
             is PopupContentModel.Alarm -> 72.dp
-            is PopupContentModel.SystemEvent -> 60.dp
+            is PopupContentModel.SystemEvent -> if (isCallOrRecording) 78.dp else 60.dp
             else -> 80.dp
         } * widthScale).coerceAtLeast(eventTextWidth)
     val connectedIslandWidth = if (isSystemEvent) {
@@ -521,6 +567,12 @@ private fun UtilityStatusIslandChip(
                         modifier = Modifier.size(18.dp * widthScale),
                     )
                 } else {
+                    val iconTint = when {
+                        !chipIcon.tint -> Color.Unspecified
+                        event.kind == SystemEventKind.Call -> IslandAccents.Calls
+                        event.kind == SystemEventKind.Recording -> IslandAccents.Recording
+                        else -> chipContentColor
+                    }
                     Icon(
                         icon = chipIcon.icon,
                         modifier = Modifier.size(18.dp * widthScale)
@@ -529,7 +581,7 @@ private fun UtilityStatusIslandChip(
                                     Modifier.clip(CircleShape)
                                 else Modifier
                             ),
-                        tint = if (chipIcon.tint) chipContentColor else Color.Unspecified,
+                        tint = iconTint,
                     )
                 }
             } else {
@@ -559,16 +611,38 @@ private fun UtilityStatusIslandChip(
                 horizontalArrangement = Arrangement.spacedBy(6.dp * widthScale, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = utilityText,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = chipContentColor,
-                    maxLines = 1,
-                    softWrap = !isFlashlight,
-                    overflow = if (isFlashlight) TextOverflow.Clip else TextOverflow.Ellipsis,
-                    textAlign = TextAlign.End,
-                    modifier = if (isFlashlight) Modifier else Modifier.weight(1f),
-                )
+                if (utilityText.isNotEmpty()) {
+                    Text(
+                        text = utilityText,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (
+                            (viewModel.popupContent as? PopupContentModel.SystemEvent)?.kind ==
+                                SystemEventKind.Call
+                        ) {
+                            IslandAccents.Calls
+                        } else {
+                            chipContentColor
+                        },
+                        maxLines = 1,
+                        softWrap = !isFlashlight,
+                        overflow = if (isFlashlight) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        textAlign = TextAlign.End,
+                        modifier = if (isFlashlight) Modifier else Modifier.weight(1f),
+                    )
+                }
+                if (isCallOrRecording) {
+                    val sysEvent = viewModel.popupContent as PopupContentModel.SystemEvent
+                    AudioReactiveBars(
+                        isPlaying = true,
+                        isCall = sysEvent.kind == SystemEventKind.Call,
+                        color =
+                            if (sysEvent.kind == SystemEventKind.Call) IslandAccents.Calls
+                            else IslandAccents.Recording,
+                        barWidth = 1.9.dp * widthScale,
+                        barSpacing = 1.3.dp * widthScale,
+                        barHeight = 13.dp * heightScale,
+                    )
+                }
                 deviceImage?.let { artwork ->
                     Icon(icon = artwork, tint = Color.Unspecified,
                         modifier = Modifier.size(deviceImageSize))

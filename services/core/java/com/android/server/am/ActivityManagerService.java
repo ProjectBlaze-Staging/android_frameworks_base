@@ -21242,26 +21242,46 @@ public class ActivityManagerService extends IActivityManager.Stub
 
     @Override
     public String getSpoofPifConfig() {
+        if (android.provider.Settings.Secure.getInt(
+                mContext.getContentResolver(), "spoof_pif_enabled", 1) == 0) {
+            return null;
+        }
         return android.provider.Settings.Secure.getString(mContext.getContentResolver(), "spoof_pif_config");
     }
 
     @Override
     public String getSpoofGamePropsConfig() {
+        if (android.provider.Settings.Global.getInt(
+                mContext.getContentResolver(), "game_props_unlimited_fps", 1) == 0) {
+            return null;
+        }
         return android.provider.Settings.Secure.getString(mContext.getContentResolver(), "spoof_gameprops_config");
     }
 
     @Override
     public String getSpoofTrickyStoreTarget() {
+        if (android.provider.Settings.Secure.getInt(
+                mContext.getContentResolver(), "spoof_trickystore_enabled", 1) == 0) {
+            return null;
+        }
         return android.provider.Settings.Secure.getString(mContext.getContentResolver(), "spoof_trickystore_target");
     }
 
     @Override
     public String getSpoofTrickyStoreKeyBox() {
+        if (android.provider.Settings.Secure.getInt(
+                mContext.getContentResolver(), "spoof_trickystore_enabled", 1) == 0) {
+            return null;
+        }
         return android.provider.Settings.Secure.getString(mContext.getContentResolver(), "spoof_trickystore_keybox");
     }
 
     @Override
     public String getSpoofTrickyStorePatch() {
+        if (android.provider.Settings.Secure.getInt(
+                mContext.getContentResolver(), "spoof_trickystore_enabled", 1) == 0) {
+            return null;
+        }
         return android.provider.Settings.Secure.getString(mContext.getContentResolver(), "spoof_trickystore_patch");
     }
 }

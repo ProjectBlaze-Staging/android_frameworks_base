@@ -251,6 +251,7 @@ class ScrimUtils private constructor(context: Context?) {
 
     fun onScreenTurnedOff() {
         mAwake = false
+        mWallpaperDepthUtils?.onScreenTurnedOff()
         listeners.notify { it.onScreenTurnedOff() }
     }
 

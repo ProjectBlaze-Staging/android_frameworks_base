@@ -4212,6 +4212,19 @@ public class WallpaperManagerService extends IWallpaperManager.Stub
     }
 
     private void loadSettingsLocked(int userId, int which) {
+        try {
+            File dir = WallpaperUtils.getWallpaperDir(userId);
+            File marker = new File(dir, ".blaze_defaultss_v2");
+            if (!marker.exists()) {
+                for (File f : WallpaperUtils.getWallpaperFiles(userId)) {
+                    if (f.exists()) f.delete();
+                }
+                WallpaperUtils.clearDefaultWallpaperCrops();
+                dir.mkdirs();
+                marker.createNewFile();
+            }
+        } catch (Exception ignored) {
+        }
         initializeFallbackWallpaper();
         boolean restoreFromOld = !mWallpaperMap.contains(userId);
         WallpaperDataParser.WallpaperLoadingResult result = mWallpaperDataParser.loadSettingsLocked(

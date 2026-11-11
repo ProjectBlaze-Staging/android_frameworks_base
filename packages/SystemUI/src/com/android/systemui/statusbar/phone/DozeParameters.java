@@ -214,8 +214,8 @@ public class DozeParameters implements
     }
 
     public float getScreenBrightnessDoze() {
-        return mResources.getInteger(
-                com.android.internal.R.integer.config_screenBrightnessDoze) / 255f;
+        return Math.max(0.05f, mResources.getInteger(
+                com.android.internal.R.integer.config_screenBrightnessDoze) / 255f);
     }
 
     public int getPulseInDuration() {
@@ -454,7 +454,10 @@ public class DozeParameters implements
 
     @Override
     public void onTuningChanged(String key, String newValue) {
-        mDozeAlwaysOn = mAmbientDisplayConfiguration.alwaysOnEnabled(mUserTracker.getUserId());
+        boolean ambientAlwaysOn = mAmbientDisplayConfiguration.alwaysOnEnabled(mUserTracker.getUserId());
+        boolean secureAlwaysOn = mSecureSettings.getIntForUser(
+                Settings.Secure.DOZE_ALWAYS_ON, 1, mUserTracker.getUserId()) != 0;
+        mDozeAlwaysOn = ambientAlwaysOn || secureAlwaysOn;
 
         if (key.equals(Settings.Secure.DOZE_ALWAYS_ON)) {
             updateControlScreenOff();

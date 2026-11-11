@@ -1780,37 +1780,27 @@ fun DraggableGrid(
                     }
 
                     val cascadeState = LocalQsCascadeState.current
-                    val entranceAnim = remember { Animatable(if (isEditMode) 1f else 0f) }
-                    val staggerRow = if (isOneUi) placement.gridY + 4 else placement.gridY
-                    LaunchedEffect(cascadeState.openCount, isEditMode) {
-                        if (isEditMode || cascadeState.openCount <= 0) {
-                            entranceAnim.snapTo(1f)
-                        } else {
-                            entranceAnim.snapTo(0f)
-                            val delayMs = (staggerRow * 36L + placement.gridX * 16L).coerceAtMost(240L)
-                            kotlinx.coroutines.delay(delayMs)
-                            entranceAnim.animateTo(
-                                targetValue = 1f,
-                                animationSpec = spring(
-                                    dampingRatio = 0.74f,
-                                    stiffness = 320f,
-                                ),
-                            )
-                        }
-                    }
-
-                    val cascadeProgress = if (isEditMode || isResizing || isBeingDragged) {
+                    val staggerRow = (if (isOneUi) placement.gridY + 1 else placement.gridY).coerceAtMost(6)
+                    val staggerStart = (staggerRow * 0.045f + placement.gridX * 0.018f).coerceAtMost(0.32f)
+                    val targetCascade = if (isEditMode || isResizing || isBeingDragged) {
                         1f
                     } else {
-                        val pullCurve = ((cascadeState.expansionProgress - staggerRow * 0.04f) /
-                                (1f - (staggerRow * 0.04f).coerceAtMost(0.32f))).coerceIn(0f, 1f)
-                        (entranceAnim.value * (0.25f + 0.75f * pullCurve)).coerceIn(0f, 1f)
+                        ((cascadeState.expansionProgress - staggerStart) / (1f - staggerStart))
+                            .coerceIn(0f, 1f)
                     }
-                    val cascadeSlideYPx = with(density) { (44.dp + (staggerRow * 10).dp).toPx() } * (1f - cascadeProgress)
+                    val cascadeProgress by animateFloatAsState(
+                        targetValue = targetCascade,
+                        animationSpec = spring(
+                            dampingRatio = 0.80f,
+                            stiffness = 380f,
+                        ),
+                        label = "qs_cascade_${tile.spec.spec}",
+                    )
+                    val cascadeSlideYPx = with(density) { (28.dp + (staggerRow * 8).dp).toPx() } * (1f - cascadeProgress)
                     val centerCol = (columns - 1) / 2f
-                    val cascadeSlideXPx = with(density) { ((placement.gridX - centerCol) * 16).dp.toPx() } * (1f - cascadeProgress)
-                    val cascadeScale = 0.78f + 0.22f * cascadeProgress
-                    val cascadeAlpha = (cascadeProgress * 1.35f).coerceIn(0f, 1f)
+                    val cascadeSlideXPx = with(density) { ((placement.gridX - centerCol) * 10).dp.toPx() } * (1f - cascadeProgress)
+                    val cascadeScale = 0.86f + 0.14f * cascadeProgress
+                    val cascadeAlpha = (0.15f + cascadeProgress * 1.15f).coerceIn(0f, 1f)
 
                     Box(
                         modifier = Modifier
@@ -2310,8 +2300,7 @@ fun DraggableTile(
                             val iconSize          = 28.dp
 
                             Box(modifier = Modifier.fillMaxSize()
-                                .background(tileBackgroundColor, customFloatingShape)
-                                .blur(16.dp))
+                                .background(tileBackgroundColor, customFloatingShape))
 
                             Row(
                                 modifier = Modifier.fillMaxSize()
@@ -2335,8 +2324,7 @@ fun DraggableTile(
                                 ) {
                                     Box(modifier = Modifier.size(iconContainerSize), contentAlignment = Alignment.Center) {
                                         Box(modifier = Modifier.fillMaxSize()
-                                            .background(iconContainerColor, customFloatingShape)
-                                            .then(if (!isActive) Modifier.blur(4.dp) else Modifier))
+                                            .background(iconContainerColor, customFloatingShape))
 
                                         val currentTileState = state
                                         if (currentTileState?.icon != null) {

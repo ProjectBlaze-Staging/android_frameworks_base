@@ -99,11 +99,18 @@ class ClockStyle @JvmOverloads constructor(
     private var clockWobbleOnChargeEnabled = true
     private var wobbleAnimator: ObjectAnimator? = null
     private var wobbleGlowAnimator: android.animation.ValueAnimator? = null
+    private var lastWakeAnimMillis = 0L
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                Intent.ACTION_SCREEN_ON -> forceTimeUpdate()
+                Intent.ACTION_SCREEN_ON -> {
+                    forceTimeUpdate()
+                    if (!isDozing && aodAnimEnabled &&
+                        android.os.SystemClock.uptimeMillis() - lastWakeAnimMillis > 500L) {
+                        animateAodTransition(false)
+                    }
+                }
                 Intent.ACTION_TIME_TICK,
                 Intent.ACTION_TIME_CHANGED,
                 DOZE_PULSE_ACTION -> onTimeChanged()
@@ -130,11 +137,12 @@ class ClockStyle @JvmOverloads constructor(
     private val burnInProtectionRunnable = object : Runnable {
         override fun run() {
             if (!isDozing) return
+            val aodBaseY = 20f * resources.displayMetrics.density
             currentShiftX = random.nextInt(BURN_IN_PROTECTION_MAX_SHIFT * 2) - BURN_IN_PROTECTION_MAX_SHIFT
             currentShiftY = random.nextInt(BURN_IN_PROTECTION_MAX_SHIFT * 2) - BURN_IN_PROTECTION_MAX_SHIFT
             currentClockView?.apply {
                 translationX = currentShiftX.toFloat()
-                translationY = currentShiftY.toFloat()
+                translationY = aodBaseY + currentShiftY.toFloat()
             }
             invalidate()
             handler.postDelayed(this, BURN_IN_PROTECTION_INTERVAL)
@@ -326,16 +334,31 @@ class ClockStyle @JvmOverloads constructor(
 
     private fun applyDozing(dozing: Boolean) {
         isDozing = dozing
-        animateAodTransition(dozing)
-        applyClockAlpha()
+        val isCustomActive = KeyguardClockSourceManager.isCustomClockActive(context.contentResolver)
+        if (isCustomActive && clockStyle != 0) {
+            this.visibility = View.VISIBLE
+            this.alpha = 1f
+        }
         applyClockColors()
         if (dozing) {
+            forceTimeUpdate()
+            if (aodAnimEnabled) {
+                animateAodTransition(true)
+            } else {
+                applyClockAlpha()
+            }
             startBurnInProtection()
             startAodTick()
         } else {
             stopBurnInProtection()
             stopAodTick()
             forceTimeUpdate()
+            if (aodAnimEnabled) {
+                animateAodTransition(false)
+            } else {
+                applyClockAlpha()
+                applyClockScale()
+            }
         }
     }
 
@@ -370,29 +393,45 @@ class ClockStyle @JvmOverloads constructor(
         val view = currentClockView ?: return
         if (!aodAnimEnabled) return
         view.animate().cancel()
+        val density = resources.displayMetrics.density
+        val targetScale = getScaleFactor()
+        val aodScale = targetScale * AOD_SCALE_DOWN
+        val aodAlpha = (clockOpacity.coerceAtMost(AOD_OPACITY_CAP)) / 100f
+        val lockAlpha = (clockOpacity.coerceIn(0, 100)) / 100f
         if (toAod) {
+            val aodSlideY = 20f * density
             view.animate()
-                .scaleX(AOD_SCALE_DOWN)
-                .scaleY(AOD_SCALE_DOWN)
-                .alpha(0f)
+                .scaleX(aodScale)
+                .scaleY(aodScale)
+                .translationY(aodSlideY)
+                .alpha(aodAlpha)
                 .setDuration(AOD_ANIM_OUT_MS)
-                .setInterpolator(AccelerateInterpolator(1.5f))
+                .setInterpolator(android.view.animation.DecelerateInterpolator(1.5f))
                 .withEndAction {
-                    applyClockAlpha()
-                    view.scaleX = AOD_SCALE_DOWN
-                    view.scaleY = AOD_SCALE_DOWN
+                    view.alpha = aodAlpha
+                    view.scaleX = aodScale
+                    view.scaleY = aodScale
                 }
                 .start()
         } else {
-            view.scaleX = AOD_SCALE_DOWN
-            view.scaleY = AOD_SCALE_DOWN
-            val targetScale = getScaleFactor()
+            lastWakeAnimMillis = android.os.SystemClock.uptimeMillis()
+            view.scaleX = aodScale
+            view.scaleY = aodScale
+            view.translationY = 24f * density
+            view.alpha = aodAlpha
             view.animate()
                 .scaleX(targetScale)
                 .scaleY(targetScale)
-                .alpha(clockOpacity / 100f)
+                .translationY(0f)
+                .alpha(lockAlpha)
                 .setDuration(AOD_ANIM_IN_MS)
-                .setInterpolator(OvershootInterpolator(1.2f))
+                .setInterpolator(android.view.animation.PathInterpolator(0.22f, 1f, 0.36f, 1f))
+                .withEndAction {
+                    view.scaleX = targetScale
+                    view.scaleY = targetScale
+                    view.translationY = 0f
+                    view.alpha = lockAlpha
+                }
                 .start()
         }
     }
@@ -513,6 +552,11 @@ class ClockStyle @JvmOverloads constructor(
     }
 
     private fun applyClockAlpha() {
+        val isCustomActive = KeyguardClockSourceManager.isCustomClockActive(context.contentResolver)
+        if (isCustomActive && clockStyle != 0) {
+            this.alpha = 1f
+            this.visibility = View.VISIBLE
+        }
         val view = currentClockView ?: return
         val effective = if (isDozing && clockOpacity > AOD_OPACITY_CAP) AOD_OPACITY_CAP else clockOpacity
         view.alpha = effective / 100f

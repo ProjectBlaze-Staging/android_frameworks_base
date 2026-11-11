@@ -350,7 +350,8 @@ class SystemEventPopupMapper @Inject constructor(
             )),
             chipText = when (event) {
                 is IslandEvent.Charging -> "${event.level}%"
-                is IslandEvent.Call, is IslandEvent.BiometricUnlock,
+                is IslandEvent.Call -> title.take(12)
+                is IslandEvent.BiometricUnlock,
                 is IslandEvent.Clipboard -> null
                 is IslandEvent.Notification -> when {
                     indeterminate -> null
