@@ -64,7 +64,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
@@ -151,10 +154,48 @@ fun AudioReactiveBars(
     barWidth: Dp = 2.dp,
     barSpacing: Dp = 1.5.dp,
     barHeight: Dp = 14.dp,
+    isCollapsed: Boolean = false,
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
+    var isWindowVisible by remember {
+        mutableStateOf(view.isAttachedToWindow && view.windowVisibility == View.VISIBLE)
+    }
+    DisposableEffect(view) {
+        val listener = ViewTreeObserver.OnWindowVisibilityChangeListener { visibility ->
+            isWindowVisible = (visibility == View.VISIBLE)
+        }
+        view.viewTreeObserver.addOnWindowVisibilityChangeListener(listener)
+        onDispose {
+            view.viewTreeObserver.removeOnWindowVisibilityChangeListener(listener)
+        }
+    }
+
+    val audioManager = remember(context) { context.getSystemService(AudioManager::class.java) }
+    var isMuted by remember {
+        mutableStateOf(
+            runCatching {
+                (audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 1) == 0 ||
+                    audioManager?.isStreamMute(AudioManager.STREAM_MUSIC) == true
+            }.getOrDefault(false)
+        )
+    }
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                isMuted = runCatching {
+                    (audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 1) == 0 ||
+                        audioManager?.isStreamMute(AudioManager.STREAM_MUSIC) == true
+                }.getOrDefault(false)
+            }
+        }
+        val filter = IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+        runCatching { context.registerReceiver(receiver, filter) }
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+    }
+
     val screenInteractive = rememberScreenInteractive(context)
-    val active = isPlaying && screenInteractive
+    val active = isPlaying && screenInteractive && isWindowVisible && !isCollapsed && (isCall || !isMuted)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val paletteColors by rememberArtworkPalette(artworkDrawable, fallback = color)
     val levels = remember {
@@ -376,7 +417,6 @@ fun AudioReactiveBars(
 
     // Syllabic voice formant cadence ONLY for genuinely connected cellular calls
     // when baseband audio bypasses session 0 (never while ringing unanswered or screen off).
-    val audioManager = remember(context) { context.getSystemService(AudioManager::class.java) }
     LaunchedEffect(active, isCall) {
         if (!active) return@LaunchedEffect
         var phase = 0f

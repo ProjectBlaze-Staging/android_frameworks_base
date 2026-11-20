@@ -173,9 +173,9 @@ public final class PixelPropsUtils {
 
     private static final boolean sIsMainlineDevice = detectMainlinePixelDevice();
 
-    private static volatile boolean sPhotosSpoofEnabled = true;
+    private static volatile boolean sPhotosSpoofEnabled = false;
     private static volatile boolean sSnapchatSpoofEnabled = false;
-    private static volatile boolean sPixelPropsSpoofEnabled = true;
+    private static volatile boolean sPixelPropsSpoofEnabled = false;
     private static volatile boolean sInitialized = false;
     private static volatile Set<String> sPpTargets = null;
     private static volatile String sPpModel = null;
@@ -217,11 +217,11 @@ public final class PixelPropsUtils {
         final Runnable refresh = () -> {
             try {
                 sPhotosSpoofEnabled = Settings.Secure.getInt(
-                        cr, Settings.Secure.PI_PHOTOS_SPOOF, 1) == 1;
+                        cr, Settings.Secure.PI_PHOTOS_SPOOF, 0) == 1;
                 sSnapchatSpoofEnabled = Settings.Secure.getInt(
                         cr, Settings.Secure.PI_SNAPCHAT_SPOOF, 0) == 1;
                 sPixelPropsSpoofEnabled = Settings.Secure.getInt(
-                        cr, Settings.Secure.PI_PP_SPOOF, 1) == 1;
+                        cr, Settings.Secure.PI_PP_SPOOF, 0) == 1;
                 sGamePropsEnabled = Settings.Global.getInt(
                         cr, Settings.Global.GAME_PROPS_UNLIMITED_FPS, 1) == 1;
                 sNetflixSpoofEnabled = Settings.Global.getInt(

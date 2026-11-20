@@ -28,9 +28,14 @@ import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityNodeProvider;
 
+import java.util.Collections;
+import java.util.Set;
+import java.util.WeakHashMap;
+
 final class ComposeTabBar {
     private static final float SIDE_MARGIN_DP = 16f;
     private static final float VERTICAL_INSET_DP = 3f;
+    private static final float MAX_CAPSULE_HEIGHT_DP = 64f;
     private static final int MAX_NODES = 400;
     private static final String KEY_SHADER = ""
             + "uniform shader content;\n"
@@ -55,21 +60,29 @@ final class ComposeTabBar {
     private final float mDensity;
     private final Mask mMask = new Mask();
     private final Rect mBar = new Rect();
+    private final Rect mActualBar = new Rect();
     private final ViewGroup mHost;
     private final int[] mTabIds;
     private final boolean mFloat;
+    private final Set<View> mPadded;
     private int mShift;
     private int mOriginalHeight;
     private boolean mOwned;
+    private boolean mMoved;
+    private float mDownX;
+    private float mLastX;
     private int mSelected = -1;
     private final LiquidMotion mMotion = new LiquidMotion(78f / 56f, () -> mMask.invalidateSelf());
 
-    private ComposeTabBar(View view, int barId, Rect bar, int[] tabIds, boolean floatOver) {
+    private ComposeTabBar(View view, int barId, Rect bar, int[] tabIds, boolean floatOver,
+            Set<View> padded) {
         mView = view;
         mBarId = barId;
         mTabIds = tabIds;
+        mPadded = padded != null ? padded : Collections.newSetFromMap(new WeakHashMap<>());
         mDensity = view.getResources().getDisplayMetrics().density;
         mBar.set(bar);
+        mActualBar.set(bar);
         mHost = view.getParent() instanceof ViewGroup g ? g : null;
         if (mHost != null) {
             mMask.setBounds(0, 0, mHost.getWidth(), mHost.getHeight());
@@ -82,6 +95,41 @@ final class ComposeTabBar {
             mShift = mHost.getHeight() - (view.getTop() + bar.top);
             mOriginalHeight = mHost.getLayoutParams().height;
             setHeight(mHost.getHeight() + mShift);
+            if (mHost.getParent() instanceof ViewGroup parent) {
+                padScrollers(parent, mShift > 0 ? mShift : mBar.height());
+            }
+        }
+    }
+
+    public int getBarHeight() {
+        return mBar.height();
+    }
+
+    private static final String[] SCROLLER_CLASSES = {
+            "RecyclerView", "ListView", "ScrollView", "GridView",
+            "AndroidComposeView", "ComposeView", "NestedScrollView", "ViewPager2",
+    };
+
+    void padScrollers(View view, int barHeight) {
+        if (view instanceof ViewGroup group) {
+            String cls = view.getClass().getSimpleName();
+            boolean isScroller = false;
+            for (String s : SCROLLER_CLASSES) {
+                if (cls.contains(s)) {
+                    isScroller = true;
+                    break;
+                }
+            }
+            if (isScroller && !mPadded.contains(view)) {
+                mPadded.add(view);
+                group.setClipToPadding(false);
+                view.setPadding(view.getPaddingLeft(), view.getPaddingTop(),
+                        view.getPaddingRight(), view.getPaddingBottom() + barHeight);
+                return;
+            }
+            for (int i = 0; i < group.getChildCount(); i++) {
+                padScrollers(group.getChildAt(i), barHeight);
+            }
         }
     }
 
@@ -101,29 +149,78 @@ final class ComposeTabBar {
     boolean onTouch(MotionEvent ev) {
         if (!mFloat) return false;
         RectF capsule = mMask.mCapsuleInWindow;
+        int count = mTabIds.length;
         switch (ev.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 mOwned = !capsule.isEmpty() && capsule.contains(ev.getX(), ev.getY());
-                if (mOwned && mSelected >= 0) mMotion.pressDown();
+                if (mOwned) {
+                    mDownX = ev.getX();
+                    mLastX = ev.getX();
+                    mMoved = false;
+                    if (mSelected >= 0) {
+                        mMotion.pressDown();
+                        if (count > 0 && capsule.width() > 0) {
+                            float idx = (float) Math.floor(
+                                    (ev.getX() - capsule.left) / capsule.width() * count);
+                            if (mView.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
+                                idx = count - 1 - idx;
+                            }
+                            idx = Math.max(0, Math.min(count - 1, idx));
+                            mMotion.updateValue(idx);
+                        }
+                    }
+                }
                 return mOwned;
+            case MotionEvent.ACTION_MOVE:
+                if (!mOwned) return false;
+                float x = ev.getX();
+                float dx = x - mLastX;
+                mLastX = x;
+                if (Math.abs(x - mDownX) > 6f * mDensity) mMoved = true;
+                if (dx != 0f && mMoved && count > 0 && capsule.width() > 0) {
+                    float tabW = capsule.width() / count;
+                    float rtl = mView.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL ? -1f : 1f;
+                    mMotion.updateValue(mMotion.target() + rtl * dx / tabW);
+                }
+                return true;
             case MotionEvent.ACTION_UP:
                 if (!mOwned) return false;
                 mOwned = false;
-                int count = mTabIds.length;
-                if (count > 0 && capsule.contains(ev.getX(), ev.getY())) {
-                    int index = (int) ((ev.getX() - capsule.left) / capsule.width() * count);
-                    index = Math.max(0, Math.min(count - 1, index));
-                    if (mView.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
-                        index = count - 1 - index;
+                if (count > 0) {
+                    int index = -1;
+                    if (mMoved) {
+                        index = Math.round(mMotion.target());
+                    } else if (capsule.contains(ev.getX(), ev.getY())) {
+                        index = (int) ((ev.getX() - capsule.left) / capsule.width() * count);
+                        if (mView.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
+                            index = count - 1 - index;
+                        }
                     }
-                    AccessibilityNodeProvider provider = mView.getAccessibilityNodeProvider();
-                    if (provider != null) {
-                        provider.performAction(mTabIds[index],
-                                AccessibilityNodeInfo.ACTION_CLICK, null);
-                    }
-                    if (mSelected >= 0 && index != mSelected) {
+                    if (index >= 0) {
+                        index = Math.max(0, Math.min(count - 1, index));
+                        AccessibilityNodeProvider provider = mView.getAccessibilityNodeProvider();
+                        boolean clicked = provider != null
+                                && provider.performAction(mTabIds[index],
+                                        AccessibilityNodeInfo.ACTION_CLICK, null);
+                        if (!clicked) {
+                            Rect targetBar = mActualBar.isEmpty() ? mBar : mActualBar;
+                            int rtlIndex = mView.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL
+                                    ? (count - 1 - index) : index;
+                            float tapX = targetBar.left
+                                    + (rtlIndex + 0.5f) * (targetBar.width() / (float) count);
+                            float tapY = targetBar.centerY();
+                            long now = android.os.SystemClock.uptimeMillis();
+                            MotionEvent down = MotionEvent.obtain(
+                                    now, now, MotionEvent.ACTION_DOWN, tapX, tapY, 0);
+                            MotionEvent up = MotionEvent.obtain(
+                                    now, now + 12, MotionEvent.ACTION_UP, tapX, tapY, 0);
+                            mView.dispatchTouchEvent(down);
+                            mView.dispatchTouchEvent(up);
+                            down.recycle();
+                            up.recycle();
+                        }
                         mSelected = index;
-                        mMotion.animateToValue(index);
+                        mMotion.updateValue(index);
                     }
                 }
                 mMotion.release();
@@ -131,6 +228,7 @@ final class ComposeTabBar {
             case MotionEvent.ACTION_CANCEL:
                 boolean owned = mOwned;
                 mOwned = false;
+                mMoved = false;
                 if (owned) mMotion.release();
                 return owned;
             default:
@@ -149,7 +247,28 @@ final class ComposeTabBar {
             if (base > 0) setHeight(base + mShift);
         }
         if (mFloat) updateSelection(provider);
-        Rect bar = mFloat ? mBar : boundsInView(mView, node);
+        Rect liveBar = boundsInView(mView, node);
+        if (!liveBar.isEmpty()) {
+            int minTop = Integer.MAX_VALUE;
+            int maxBottom = Integer.MIN_VALUE;
+            for (int tabId : mTabIds) {
+                AccessibilityNodeInfo t = provider.createAccessibilityNodeInfo(tabId);
+                if (t != null) {
+                    Rect tr = boundsInView(mView, t);
+                    if (tr.top < minTop) minTop = tr.top;
+                    if (tr.bottom > maxBottom) maxBottom = tr.bottom;
+                }
+            }
+            if (maxBottom > minTop && maxBottom <= liveBar.bottom) {
+                liveBar.top = minTop;
+                liveBar.bottom = maxBottom;
+            }
+            if (!liveBar.equals(mActualBar)) {
+                mActualBar.set(liveBar);
+                mMask.invalidateSelf();
+            }
+        }
+        Rect bar = mFloat ? mBar : liveBar;
         if (!bar.equals(mBar)) {
             mBar.set(bar);
             mMask.invalidateSelf();
@@ -178,6 +297,10 @@ final class ComposeTabBar {
     }
 
     static ComposeTabBar find(View view, boolean floatOver) {
+        return find(view, floatOver, null);
+    }
+
+    static ComposeTabBar find(View view, boolean floatOver, Set<View> padded) {
         AccessibilityNodeProvider provider = view.getAccessibilityNodeProvider();
         if (provider == null || view.getWidth() == 0) return null;
         AccessibilityNodeInfo root =
@@ -191,7 +314,7 @@ final class ComposeTabBar {
         if (!search(view, provider, root, density, budget, found, bar, tabs)) return null;
         int[] tabIds = new int[tabs.size()];
         for (int i = 0; i < tabIds.length; i++) tabIds[i] = tabs.get(i);
-        return new ComposeTabBar(view, found[0], bar, tabIds, floatOver);
+        return new ComposeTabBar(view, found[0], bar, tabIds, floatOver, padded);
     }
 
     private static boolean search(View view, AccessibilityNodeProvider provider,
@@ -224,6 +347,8 @@ final class ComposeTabBar {
         if (r.bottom < view.getHeight() - 120 * density) return false;
         int selected = 0;
         int lastRight = Integer.MIN_VALUE / 2;
+        int minTop = Integer.MAX_VALUE;
+        int maxBottom = Integer.MIN_VALUE;
         for (int i = 0; i < node.getChildCount(); i++) {
             int id = AccessibilityNodeInfo.getVirtualDescendantId(node.getChildId(i));
             AccessibilityNodeInfo child = provider.createAccessibilityNodeInfo(id);
@@ -235,10 +360,19 @@ final class ComposeTabBar {
             }
             if (c.left < lastRight - 2) return false;
             lastRight = c.right;
+            if (c.top < minTop) minTop = c.top;
+            if (c.bottom > maxBottom) maxBottom = c.bottom;
             tabs.add(id);
             if (child.isSelected()) selected++;
         }
-        return tabs.size() >= 2 && tabs.size() <= 6 && selected == 1;
+        if (tabs.size() >= 2 && tabs.size() <= 6 && selected == 1) {
+            if (maxBottom > minTop && maxBottom <= r.bottom) {
+                r.top = minTop;
+                r.bottom = maxBottom;
+            }
+            return true;
+        }
+        return false;
     }
 
     private static final int[] sLocation = new int[2];
@@ -328,20 +462,38 @@ final class ComposeTabBar {
         private void drawFloating(Canvas canvas) {
             float ox = mView.getLeft();
             float oy = mView.getTop();
-            float sourceTop = oy + mView.getHeight() - mShift;
-            mSource.set(mBar.left + ox, sourceTop, mBar.right + ox, sourceTop + mBar.height());
-            float barTop = sourceTop - mShift;
-            mBarF.set(mSource.left, barTop, mSource.right, barTop + mSource.height());
+            int baseHeight = (mHost.getParent() instanceof ViewGroup p)
+                    ? p.getHeight() - mHost.getTop()
+                    : mView.getHeight();
+            Rect srcRect = mActualBar.isEmpty() ? mBar : mActualBar;
+            if (mView.getHeight() > baseHeight + mShift / 2) {
+                float sourceTop = oy + mView.getHeight() - mShift;
+                mSource.set(mBar.left + ox, sourceTop, mBar.right + ox, sourceTop + mBar.height());
+            } else {
+                mSource.set(srcRect.left + ox, srcRect.top + oy, srcRect.right + ox,
+                        srcRect.bottom + oy);
+            }
+            float barTop = oy + mBar.top;
+            mBarF.set(mBar.left + ox, barTop, mBar.right + ox, barTop + mSource.height());
             float side = dp(SIDE_MARGIN_DP);
             float inset = dp(VERTICAL_INSET_DP);
-            mCapsule.set(mBarF.left + side, mBarF.top + inset, mBarF.right - side,
-                    mBarF.bottom - inset);
+            float availH = Math.max(dp(44f), mBarF.height() - 2f * inset);
+            float capH = Math.min(dp(MAX_CAPSULE_HEIGHT_DP), availH);
+            float cy = mBarF.top + inset + capH / 2f;
+            mCapsule.set(mBarF.left + side, cy - capH / 2f, mBarF.right - side, cy + capH / 2f);
             if (mCapsule.isEmpty()) return;
             mHost.getLocationInWindow(mHostLocation);
             mCapsuleInWindow.set(mCapsule);
             mCapsuleInWindow.offset(mHostLocation[0], mHostLocation[1]);
             float r = mCapsule.height() / 2f;
-            boolean dark = isDark(pageColor());
+            int page = pageColor();
+            boolean dark = isDark(page);
+
+            if (mSource.top < baseHeight - dp(4f)) {
+                mPage.setColor(page);
+                canvas.drawRect(mBarF.left, Math.min(mBarF.top, mSource.top),
+                        mBarF.right, Math.max(baseHeight, oy + mView.getHeight()), mPage);
+            }
 
             mPath.reset();
             mPath.addRoundRect(mCapsule, r, r, Path.Direction.CW);
@@ -389,7 +541,7 @@ final class ComposeTabBar {
             if (mSelected >= 0 && mTabIds.length > 0) {
                 float tab = mSource.width() / mTabIds.length;
                 float iconX = mSource.left + (mSelected + 0.5f) * tab;
-                float x = (iconX - dp(14f) - mSource.centerX()) * scale + mCapsule.centerX() - left;
+                float x = (iconX - dp(20f) - mSource.centerX()) * scale + mCapsule.centerX() - left;
                 float y = (mSource.top + mSource.height() * 0.35f - mSource.centerY()) * scale
                         + mCapsule.centerY() - top;
                 mKey.setFloatUniform("indicator", x, y, dp(24f) * scale);
@@ -444,9 +596,26 @@ final class ComposeTabBar {
                 return;
             }
             float press = mMotion.press();
-            int alpha = Math.round(255 * (0.10f + 0.06f * press));
-            mPillPaint.setColor((alpha << 24) | (dark ? 0xFFFFFF : 0x000000));
+            int alpha = Math.round(255 * (0.20f + 0.08f * press));
+            mPillPaint.setShader(new LinearGradient(
+                    mPill.left, mPill.top, mPill.left, mPill.bottom,
+                    (alpha << 24) | 0x60A5FF,
+                    (alpha << 24) | 0x4781FF,
+                    Shader.TileMode.CLAMP));
             canvas.drawRoundRect(mPill, r, r, mPillPaint);
+            mPillPaint.setShader(null);
+
+            mInnerPillRim.setStyle(Paint.Style.STROKE);
+            float stroke = dp(0.9f);
+            mInnerPillRim.setStrokeWidth(stroke);
+            mInnerPillRim.setShader(new LinearGradient(
+                    mPill.left, mPill.top, mPill.right, mPill.bottom,
+                    new int[] {0xC2FFFFFF, 0x38FFFFFF, 0x8860A5FF},
+                    new float[] {0f, 0.5f, 1f},
+                    Shader.TileMode.CLAMP));
+            float half = stroke / 2f;
+            canvas.drawRoundRect(mPill.left + half, mPill.top + half,
+                    mPill.right - half, mPill.bottom - half, r - half, r - half, mInnerPillRim);
         }
 
         private void drawRim(Canvas canvas, float r, boolean dark) {

@@ -169,6 +169,9 @@ constructor(
             .flatMapLatest { state -> state.token.playbackInfoFlow(context) }
             .distinctUntilChanged()
 
+    @Volatile private var lastReportedMediaPkg: String? = null
+    @Volatile private var lastReportedMediaPlaying: Int? = null
+
     private val baseMediaControlChipModel: Flow<MediaControlChipModel?> =
         combine(
             mediaControlState,
@@ -188,17 +191,25 @@ constructor(
                     } else {
                         null
                     }
+                val targetPkg = resolvedModel?.packageName ?: ""
+                val targetPlaying = if (resolvedModel != null && resolvedModel.isPlaying) 1 else 0
                 runCatching {
-                    Settings.Global.putString(
-                        context.contentResolver,
-                        "blaze_island_active_media_pkg",
-                        resolvedModel?.packageName ?: "",
-                    )
-                    Settings.Global.putInt(
-                        context.contentResolver,
-                        "blaze_island_media_playing",
-                        if (resolvedModel != null && resolvedModel.isPlaying) 1 else 0,
-                    )
+                    if (lastReportedMediaPkg != targetPkg) {
+                        Settings.Global.putString(
+                            context.contentResolver,
+                            "blaze_island_active_media_pkg",
+                            targetPkg,
+                        )
+                        lastReportedMediaPkg = targetPkg
+                    }
+                    if (lastReportedMediaPlaying != targetPlaying) {
+                        Settings.Global.putInt(
+                            context.contentResolver,
+                            "blaze_island_media_playing",
+                            targetPlaying,
+                        )
+                        lastReportedMediaPlaying = targetPlaying
+                    }
                 }
                 resolvedModel
             }
@@ -335,7 +346,9 @@ constructor(
         val playingCtrl =
             controllers.firstOrNull { it.playbackState?.isActivePlaybackState() == true }
                 ?: controllers.firstOrNull {
-                    it.playbackState?.state == PlaybackState.STATE_PAUSED && it.metadata != null
+                    (it.playbackState?.state == PlaybackState.STATE_PAUSED ||
+                        it.playbackState?.state == PlaybackState.STATE_STOPPED) &&
+                        it.metadata != null
                 }
         sessionFallbackState.value =
             playingCtrl?.toMediaControlState(
@@ -450,7 +463,7 @@ private fun MediaDataModel.toMediaControlState(
                 artworkIcon = background ?: appIcon,
                 appName = appName,
                 artistName = subtitle,
-                songName = title,
+                songName = title?.takeIf { it.isNotBlank() } ?: appName ?: packageName,
                 playOrPause = playbackStateActions?.getActionById(R.id.actionPlayPause),
                 nextAction = playbackStateActions?.getActionById(R.id.actionNext),
                 previousAction = playbackStateActions?.getActionById(R.id.actionPrev),

@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2026 Guest (ColorCC) & The BlazeAOSP Project -->
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="colorcc_add" formatted="false">Ekle</string>
+    <string name="colorcc_all_in" formatted="false">Her şey kontrol merkezinde.</string>
+    <string name="colorcc_appearance" formatted="false">Görünüm</string>
+    <string name="colorcc_auto_brightness" formatted="false">Otomatik\nparlaklık</string>
+    <string name="colorcc_background_blur" formatted="false">Arka plan bulanıklığı</string>
+    <string name="colorcc_balanced" formatted="false">Dengeli</string>
+    <string name="colorcc_bluetooth" formatted="false">Bluetooth</string>
+    <string name="colorcc_bluetooth_off" formatted="false">Cihazlarınızı görmek için Bluetooth\'u açın</string>
+    <string name="colorcc_blur_strength" formatted="false">Bulanıklık gücü</string>
+    <string name="colorcc_bright" formatted="false">Parlak</string>
+    <string name="colorcc_brightness" formatted="false">Parlaklık</string>
+    <string name="colorcc_cancel" formatted="false">İptal</string>
+    <string name="colorcc_cards_sliders" formatted="false">Kartlar ve kaydırıcılar</string>
+    <string name="colorcc_clear" formatted="false">Şeffaf</string>
+    <string name="colorcc_colour_strength" formatted="false">Renk canlılığı</string>
+    <string name="colorcc_colour_tone" formatted="false">Uyarlanabilir renk tonu</string>
+    <string name="colorcc_connected" formatted="false">Bağlı</string>
+    <string name="colorcc_custom" formatted="false">Özel</string>
+    <string name="colorcc_dark_mode" formatted="false">Karanlık mod</string>
+    <string name="colorcc_data_used" formatted="false">Bugün %1$s, bu ay %2$s kullanıldı</string>
+    <string name="colorcc_device_connected" formatted="false">1 cihaz bağlı</string>
+    <string name="colorcc_devices_connected" formatted="false">%d cihaz bağlı</string>
+    <string name="colorcc_dnd" formatted="false">Rahatsız Etmeyin</string>
+    <string name="colorcc_dnd_off" formatted="false">Rahatsız Etmeyin kapalı</string>
+    <string name="colorcc_dnd_until_off" formatted="false">Elle kapatılana kadar açık kalır.</string>
+    <string name="colorcc_done" formatted="false">Bitti</string>
+    <string name="colorcc_edge_shine" formatted="false">Kenar parlaklığı</string>
+    <string name="colorcc_edit" formatted="false">Düzenle</string>
+    <string name="colorcc_edit_how" formatted="false">Kaldırmak için −, eklemek için + simgesine dokunun. Taşımak için basılı tutun. Boyutlandırmak için bir köşeyi sürükleyin.</string>
+    <string name="colorcc_edit_tiles" formatted="false">Döşemeleri düzenle</string>
+    <string name="colorcc_extra_brightness" formatted="false">Ekstra parlaklık</string>
+    <string name="colorcc_frost" formatted="false">Buzlanma</string>
+    <string name="colorcc_frosted" formatted="false">Buzlu</string>
+    <string name="colorcc_glass" formatted="false">Cam</string>
+    <string name="colorcc_glass_tint" formatted="false">Cam tonu</string>
+    <string name="colorcc_hide" formatted="false">Gizle</string>
+    <string name="colorcc_hotspot" formatted="false">Mobil erişim noktası</string>
+    <string name="colorcc_hours" formatted="false">%d sa</string>
+    <string name="colorcc_hue" formatted="false">Ton</string>
+    <string name="colorcc_icon_colours" formatted="false">Simge renkleri</string>
+    <string name="colorcc_in_panel" formatted="false">Kontrol merkezinde</string>
+    <string name="colorcc_layout" formatted="false">Düzen</string>
+    <string name="colorcc_light" formatted="false">Hafif</string>
+    <string name="colorcc_lightness" formatted="false">Açıklık</string>
+    <string name="colorcc_liquid" formatted="false">Sıvı</string>
+    <string name="colorcc_look" formatted="false">Stil</string>
+    <string name="colorcc_media" formatted="false">Medya</string>
+    <string name="colorcc_media_output" formatted="false">Medya çıkışı</string>
+    <string name="colorcc_media_volume" formatted="false">Medya ses düzeyi</string>
+    <string name="colorcc_mobile_data" formatted="false">Mobil veri</string>
+    <string name="colorcc_more_settings" formatted="false">Diğer ayarlar</string>
+    <string name="colorcc_name" formatted="false">Ad</string>
+    <string name="colorcc_next" formatted="false">Sonraki</string>
+    <string name="colorcc_no_outputs" formatted="false">Başka cihaz bulunamadı</string>
+    <string name="colorcc_no_paired" formatted="false">Eşleştirilmiş cihaz yok</string>
+    <string name="colorcc_no_sim" formatted="false">SIM kart yok</string>
+    <string name="colorcc_none" formatted="false">Yok</string>
+    <string name="colorcc_normal" formatted="false">Normal</string>
+    <string name="colorcc_not_playing" formatted="false">Çalmıyor</string>
+    <string name="colorcc_notif_buttons" formatted="false">Bildirim düğmeleri</string>
+    <string name="colorcc_notif_match" formatted="false">Panelle aynı</string>
+    <string name="colorcc_notif_stock" formatted="false">Samsung</string>
+    <string name="colorcc_notif_swipe" formatted="false">Bildirim kaydırma</string>
+    <string name="colorcc_notifications" formatted="false">Bildirimler</string>
+    <string name="colorcc_off" formatted="false">Kapalı</string>
+    <string name="colorcc_off_at" formatted="false">%s saatinde kapanır</string>
+    <string name="colorcc_on" formatted="false">Açık</string>
+    <string name="colorcc_opaque" formatted="false">Opak</string>
+    <string name="colorcc_open_app" formatted="false">Çalan uygulamayı aç</string>
+    <string name="colorcc_other_networks" formatted="false">Diğer ağlar</string>
+    <string name="colorcc_paired_devices" formatted="false">Eşleştirilen cihazlar</string>
+    <string name="colorcc_password" formatted="false">Şifre</string>
+    <string name="colorcc_pause" formatted="false">Duraklat</string>
+    <string name="colorcc_plain_auto" formatted="false">Otomatik</string>
+    <string name="colorcc_plain_black" formatted="false">Siyah</string>
+    <string name="colorcc_plain_colour" formatted="false">Yok rengi</string>
+    <string name="colorcc_plain_white" formatted="false">Beyaz</string>
+    <string name="colorcc_play" formatted="false">Oynat</string>
+    <string name="colorcc_playback_position" formatted="false">Oynatma konumu</string>
+    <string name="colorcc_power_menu" formatted="false">Güç menüsü</string>
+    <string name="colorcc_previous" formatted="false">Önceki</string>
+    <string name="colorcc_refresh" formatted="false">Yenile</string>
+    <string name="colorcc_remove" formatted="false">Kaldır</string>
+    <string name="colorcc_reset" formatted="false">Varsayılana sıfırla</string>
+    <string name="colorcc_reset_how" formatted="false">Düzeni, döşemeleri ve stili ilk hallerine döndürür.</string>
+    <string name="colorcc_reset_look_how" formatted="false">Yalnızca görünümü ilk hâline döndürür. Düzen ve kutucuklar kalır.</string>
+    <string name="colorcc_resize" formatted="false">Yeniden boyutlandır</string>
+    <string name="colorcc_rim_glow" formatted="false">Kenar parlaması</string>
+    <string name="colorcc_rim_width" formatted="false">Kenar genişliği</string>
+    <string name="colorcc_ringtone" formatted="false">Zil sesi</string>
+    <string name="colorcc_ringtone_volume" formatted="false">Zil sesi düzeyi</string>
+    <string name="colorcc_saturation" formatted="false">Doygunluk</string>
+    <string name="colorcc_saved_networks" formatted="false">Kayıtlı ağlar</string>
+    <string name="colorcc_searching" formatted="false">Ağlar aranıyor…</string>
+    <string name="colorcc_settings" formatted="false">Ayarlar</string>
+    <string name="colorcc_show" formatted="false">Göster</string>
+    <string name="colorcc_silent" formatted="false">Sessiz</string>
+    <string name="colorcc_silent_mode" formatted="false">Sessiz mod</string>
+    <string name="colorcc_slider_jelly" formatted="false">Kaydırıcı esnekliği</string>
+    <string name="colorcc_soft" formatted="false">Yumuşak</string>
+    <string name="colorcc_sound" formatted="false">Ses</string>
+    <string name="colorcc_sound_modes" formatted="false">Ses modları</string>
+    <string name="colorcc_sound_output" formatted="false">Ses çıkışı</string>
+    <string name="colorcc_strong" formatted="false">Güçlü</string>
+    <string name="colorcc_system" formatted="false">Sistem</string>
+    <string name="colorcc_tap_to_add" formatted="false">Eklemek için + simgesine dokunun</string>
+    <string name="colorcc_thickness" formatted="false">Kalınlık</string>
+    <string name="colorcc_tile_names" formatted="false">Döşeme adları</string>
+    <string name="colorcc_tile_rows" formatted="false">Sayfa başına döşeme satırı</string>
+    <string name="colorcc_tiles" formatted="false">Döşemeler</string>
+    <string name="colorcc_torch" formatted="false">El feneri</string>
+    <string name="colorcc_torch_brightness" formatted="false">El feneri parlaklığı</string>
+    <string name="colorcc_torch_off" formatted="false">El feneri: kapalı</string>
+    <string name="colorcc_torch_on" formatted="false">El feneri: açık</string>
+    <string name="colorcc_unlock_to_see" formatted="false">Görmek için kilidi açın</string>
+    <string name="colorcc_vibrate" formatted="false">Titreşim</string>
+    <string name="colorcc_volume" formatted="false">Ses düzeyi</string>
+    <string name="colorcc_vpn_connected" formatted="false">VPN\'e bağlı. VPN ayarlarını aç</string>
+    <string name="colorcc_vpn_connected_to" formatted="false">VPN\'e bağlı: %s. VPN ayarlarını aç</string>
+    <string name="colorcc_wifi" formatted="false">Wi-Fi</string>
+    <string name="colorcc_wifi_off" formatted="false">Ağları görmek için Wi-Fi\'ı açın</string>
+    <string name="colorcc_classic_qs" formatted="false">Klasik Blaze QS paneli</string>
+    <string name="colorcc_switch_classic_qs" formatted="false">Klasik Blaze QS Paneline Geç</string>
+    <string name="colorcc_switch_classic_qs_how" formatted="false">BlazeAOSP Compose Hızlı Ayarlar paneline geri döner. İstediğiniz zaman QS üst çubuğundan ColorCC paneline tekrar geçebilirsiniz.</string>
+</resources>

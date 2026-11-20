@@ -17,12 +17,15 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.RenderNode;
 import android.graphics.drawable.Drawable;
+import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.ViewTreeObserver;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityNodeProvider;
 import android.widget.Checkable;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -36,8 +39,8 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
 
     private static final float SIDE_MARGIN_DP = 16f;
     private static final float INNER_PADDING_DP = 4f;
-    private static final float VERTICAL_INSET_DP = 3f;
-    private static final float HEIGHT_DP = 62f;
+    private static final float VERTICAL_INSET_DP = 2.5f;
+    private static final float HEIGHT_DP = 64f;
     private static final float BLUR_DP = 20f;
     private static final float LENS_DP = 24f;
     private static final float PRESSED_SCALE = 78f / 56f;
@@ -52,6 +55,8 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
     private final LiquidGlass mGlass = new LiquidGlass();
     private final Pill mPill = new Pill();
     private Drawable mOriginalBackground;
+    private final ColorStateList mOriginalBackgroundTint;
+    private final boolean mOriginalClipToOutline;
     private final float mOriginalElevation;
     private final android.view.ViewOutlineProvider mOriginalOutline;
     private final boolean mOriginalClipChildren;
@@ -72,6 +77,10 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
     private final RectF mCapsule = new RectF();
     private final Rect mTmp = new Rect();
     private ViewGroup mItems;
+    private View mComposeChild;
+    private int[] mComposeTabIds;
+    private long mLastComposeQueryTime;
+    private static final long COMPOSE_QUERY_THROTTLE_MS = 500;
     private int mSelected = -1;
     private int mItemCount;
     private boolean mDark;
@@ -82,11 +91,14 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
     private ViewGroup mWrapperParent;
     private Drawable mWrapperOriginalBackground;
     private final java.util.ArrayList<View[]> mTabParts = new java.util.ArrayList<>();
+    private final java.util.WeakHashMap<View, Drawable> mOriginalChildBackgrounds = new java.util.WeakHashMap<>();
 
     LiquidTabBar(ViewGroup bar) {
         mBar = bar;
         mDensity = bar.getResources().getDisplayMetrics().density;
         mOriginalBackground = bar.getBackground();
+        mOriginalBackgroundTint = bar.getBackgroundTintList();
+        mOriginalClipToOutline = bar.getClipToOutline();
         if (mOriginalBackground instanceof android.graphics.drawable.ColorDrawable cd
                 && cd.getAlpha() > 128) {
             mBgLuminance = android.graphics.Color.luminance(cd.getColor());
@@ -108,12 +120,14 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
         // Unclip bar and up to 4 ancestor ViewGroups so top edge and magnified pill never clip
         bar.setClipChildren(false);
         bar.setClipToPadding(false);
+        bar.setClipToOutline(false);
         ViewParent p = bar.getParent();
         for (int depth = 0; depth < 4 && p instanceof ViewGroup vg; depth++, p = vg.getParent()) {
             vg.setClipChildren(false);
             vg.setClipToPadding(false);
         }
 
+        bar.setBackgroundTintList(null);
         bar.setBackground(mPill);
         bar.setForeground(mLens);
         bar.setElevation(0f);
@@ -132,6 +146,7 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
         mBar.setTranslationX(0f);
         mBar.setClipChildren(mOriginalClipChildren);
         mBar.setClipToPadding(mOriginalClipToPadding);
+        mBar.setClipToOutline(mOriginalClipToOutline);
         mBar.setForeground(mOriginalForeground);
         mBar.removeOnLayoutChangeListener(this);
         mBar.getViewTreeObserver().removeOnPreDrawListener(this);
@@ -143,9 +158,17 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             mWrapperParent = null;
             mWrapperOriginalBackground = null;
         }
+        mBar.setBackgroundTintList(mOriginalBackgroundTint);
         mBar.setBackground(mOriginalBackground);
         mBar.setElevation(mOriginalElevation);
         mBar.setOutlineProvider(mOriginalOutline);
+        for (java.util.Map.Entry<View, Drawable> entry : mOriginalChildBackgrounds.entrySet()) {
+            View child = entry.getKey();
+            if (child != null && entry.getValue() != null) {
+                child.setBackground(entry.getValue());
+            }
+        }
+        mOriginalChildBackgrounds.clear();
     }
 
     private float dp(float v) {
@@ -177,13 +200,23 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             mWrapperOriginalBackground = parent.getBackground();
             parent.setBackground(null);
         }
+        mItems = findItems(mBar);
+        mComposeChild = (mItems == null) ? findComposeChild(mBar) : null;
+
+        int screenWidth = mBar.getResources().getDisplayMetrics().widthPixels;
+        boolean compactWidth = screenWidth > 0 && w < screenWidth * 0.85f;
+        float sideDp = compactWidth ? 2f : SIDE_MARGIN_DP;
         float vInset = dp(VERTICAL_INSET_DP);
         float contentTop = Math.max(mBar.getPaddingTop(), vInset);
         float contentBottom = h - Math.max(mBar.getPaddingBottom(), vInset);
+        if (mItems != null && mItems != mBar && mItems.getHeight() > 0 && mItems.getBottom() > 0) {
+            contentTop = Math.max(dp(1.5f), mItems.getTop());
+            contentBottom = Math.min(h - dp(1.5f), mItems.getBottom() + dp(5f));
+        }
         float availableHeight = Math.max(dp(44f), contentBottom - contentTop);
         float height = Math.min(dp(HEIGHT_DP), availableHeight);
         float cy = (contentTop + contentBottom) / 2f;
-        float side = dp(SIDE_MARGIN_DP);
+        float side = dp(sideDp);
         mCapsule.set(side, cy - height / 2f, w - side, cy + height / 2f);
 
         mDark = isDark();
@@ -204,17 +237,34 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
                     .setLook(dp(BLUR_DP), darkCrystal ? 1.65f : 1.5f, rimAlpha, tint)
                     .applyTo(mBar);
         }
-        mItems = findItems(mBar);
-        int inset = Math.round(dp(SIDE_MARGIN_DP + INNER_PADDING_DP));
+        int inset = Math.round(dp(sideDp + INNER_PADDING_DP));
         if (mItems == mBar) {
             if (mBar.getPaddingStart() < inset) mAddedPadding = 0;
             setAddedPadding(inset);
-        } else {
-            insetItems(inset);
+        } else if (mItems != null) {
+            insetItems(mItems, inset);
+        } else if (mComposeChild != null && mBar.getChildCount() > 0
+                && mBar.getChildAt(0) instanceof ViewGroup composeWrapper) {
+            insetItems(composeWrapper, inset);
         }
+        mComposeTabIds = null;
+        mLastComposeQueryTime = SystemClock.uptimeMillis();
         collectTabParts();
         updateSelection(mSelected >= 0);
         recolorTabs();
+    }
+
+    private static View findComposeChild(ViewGroup group) {
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            if (child.getVisibility() != View.VISIBLE || child.getWidth() == 0) continue;
+            if (child.getAccessibilityNodeProvider() != null) return child;
+            if (child instanceof ViewGroup inner) {
+                View found = findComposeChild(inner);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     private void collectTabParts() {
@@ -233,14 +283,24 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
     private void collect(View v, View[] parts) {
         String name = entryName(v);
         if (name != null) {
-            if (name.endsWith("active_indicator_view")) parts[0] = v;
-            else if (name.endsWith("item_icon_view") && v instanceof ImageView) parts[1] = v;
-            else if (name.endsWith("large_label_view") && v instanceof TextView) parts[2] = v;
-            else if (name.endsWith("small_label_view") && v instanceof TextView) parts[3] = v;
-            else if (name.endsWith("item_icon_container")) parts[4] = v;
+            if (name.endsWith("active_indicator_view")
+                    || name.equals("active_indicator")
+                    || name.endsWith("_active_indicator")) {
+                parts[0] = v;
+            } else if ((name.endsWith("item_icon_view") || name.equals("bottom_nav_item_image"))
+                    && v instanceof ImageView) {
+                parts[1] = v;
+            } else if ((name.endsWith("large_label_view") || name.equals("bottom_nav_item_text"))
+                    && v instanceof TextView) {
+                parts[2] = v;
+            } else if (name.endsWith("small_label_view") && v instanceof TextView) {
+                parts[3] = v;
+            } else if (name.endsWith("item_icon_container")) {
+                parts[4] = v;
+            }
         }
         if (parts[1] == null && v instanceof ImageView iv && iv.getVisibility() == View.VISIBLE
-                && iv.getDrawable() != null) {
+                && iv.getDrawable() != null && !isAvatarView(iv, name)) {
             parts[1] = iv;
         } else if (v instanceof TextView tv && tv.getVisibility() == View.VISIBLE
                 && tv != parts[2] && tv != parts[3]) {
@@ -250,6 +310,16 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
         if (v instanceof ViewGroup g) {
             for (int i = 0; i < g.getChildCount(); i++) collect(g.getChildAt(i), parts);
         }
+    }
+
+    private static boolean isAvatarView(ImageView iv, String name) {
+        if (name != null && (name.contains("avatar") || name.contains("profile")
+                || name.contains("account"))) {
+            return true;
+        }
+        String cls = iv.getClass().getSimpleName();
+        return cls.contains("CircularImageView") || cls.contains("Avatar")
+                || cls.contains("SmartImageView") || cls.contains("AccountParticle");
     }
 
     private static String entryName(View v) {
@@ -271,15 +341,25 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             int color = i == mSelected ? accent : label;
             if (parts[0] != null && parts[0] != parts[1] && parts[0] != parts[4]
                     && !(parts[0] instanceof ViewGroup) && parts[0].getBackground() != null) {
+                if (!mOriginalChildBackgrounds.containsKey(parts[0])) {
+                    mOriginalChildBackgrounds.put(parts[0], parts[0].getBackground());
+                }
                 parts[0].setBackground(null);
             }
             for (int j = 4; j < 6; j++) {
                 if (parts[j] != null
                         && parts[j].getBackground() instanceof android.graphics.drawable.RippleDrawable) {
+                    if (!mOriginalChildBackgrounds.containsKey(parts[j])) {
+                        mOriginalChildBackgrounds.put(parts[j], parts[j].getBackground());
+                    }
                     parts[j].setBackground(null);
                 }
             }
+            boolean hasLabel = parts[2] != null || parts[3] != null;
             if (parts[1] instanceof ImageView icon && icon.getDrawable() != null) {
+                if (!hasLabel && icon.getWidth() > dp(36f)) {
+                    continue;
+                }
                 icon.setImageAlpha(255);
                 if (icon.getAlpha() < 0.85f) {
                     icon.setAlpha(1f);
@@ -305,16 +385,16 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
     private int mItemsMarginStart;
     private int mItemsMarginEnd;
 
-    private void insetItems(int inset) {
-        if (mItems == null || mItems == mBar || mItems == mInsetItems) return;
-        if (!(mItems.getLayoutParams() instanceof ViewGroup.MarginLayoutParams lp)) return;
+    private void insetItems(ViewGroup targetGroup, int inset) {
+        if (targetGroup == null || targetGroup == mBar || targetGroup == mInsetItems) return;
+        if (!(targetGroup.getLayoutParams() instanceof ViewGroup.MarginLayoutParams lp)) return;
         restoreItemsInset();
-        mInsetItems = mItems;
+        mInsetItems = targetGroup;
         mItemsMarginStart = lp.getMarginStart();
         mItemsMarginEnd = lp.getMarginEnd();
         lp.setMarginStart(mItemsMarginStart + inset);
         lp.setMarginEnd(mItemsMarginEnd + inset);
-        mItems.setLayoutParams(lp);
+        targetGroup.setLayoutParams(lp);
     }
 
     private void restoreItemsInset() {
@@ -366,7 +446,11 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
 
     private void updateSelection(boolean animate) {
         if (mItems == null) {
-            mSelected = -1;
+            if (mComposeChild != null) {
+                updateComposeSelection(animate);
+            } else {
+                mSelected = -1;
+            }
             return;
         }
         int count = 0;
@@ -377,6 +461,124 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             if (selected < 0 && isSelected(child, 2)) selected = count;
             count++;
         }
+        applySelection(count, selected, animate);
+    }
+
+    private void updateComposeSelection(boolean animate) {
+        if (mComposeChild == null) return;
+        AccessibilityNodeProvider provider = mComposeChild.getAccessibilityNodeProvider();
+        if (provider == null) {
+            if (mItemCount < 2) mItemCount = 5;
+            applySelection(mItemCount, -1, animate);
+            return;
+        }
+        // Direct check on cached tab virtual IDs (only 3-6 nodes) - avoids traversing the 120-node tree
+        if (mComposeTabIds != null && mComposeTabIds.length >= 2) {
+            int selected = -1;
+            for (int i = 0; i < mComposeTabIds.length; i++) {
+                AccessibilityNodeInfo tab = provider.createAccessibilityNodeInfo(mComposeTabIds[i]);
+                if (tab != null && (tab.isSelected() || tab.isChecked())) {
+                    selected = i;
+                    break;
+                }
+            }
+            if (selected >= 0 || mSelected >= 0) {
+                applySelection(mComposeTabIds.length, selected, animate);
+                return;
+            }
+        }
+        int count = 0;
+        int selected = -1;
+        try {
+            AccessibilityNodeInfo root = provider.createAccessibilityNodeInfo(
+                    AccessibilityNodeProvider.HOST_VIEW_ID);
+            if (root != null) {
+                int[] result = new int[] {0, -1};
+                int[] budget = new int[] {120};
+                java.util.List<Integer> tabIds = new java.util.ArrayList<>();
+                findComposeTabRow(mComposeChild, provider, root, budget, result, tabIds);
+                count = result[0];
+                selected = result[1];
+                if (tabIds.size() >= 2) {
+                    mComposeTabIds = new int[tabIds.size()];
+                    for (int i = 0; i < tabIds.size(); i++) {
+                        mComposeTabIds[i] = tabIds.get(i);
+                    }
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+        if (count < 2) {
+            count = mItemCount >= 2 ? mItemCount : 5;
+        }
+        applySelection(count, selected, animate);
+    }
+
+    private static boolean findComposeTabRow(View view, AccessibilityNodeProvider provider,
+            AccessibilityNodeInfo node, int[] budget, int[] result, java.util.List<Integer> tabIds) {
+        int w = Math.max(view.getWidth(), 1);
+        int childCount = node.getChildCount();
+        if (childCount >= 2 && childCount <= 8) {
+            int tabs = 0;
+            int selected = -1;
+            int lastRight = Integer.MIN_VALUE / 2;
+            boolean validRow = true;
+            int[] screenLoc = new int[2];
+            view.getLocationOnScreen(screenLoc);
+            Rect r = new Rect();
+            tabIds.clear();
+            for (int i = 0; i < childCount && budget[0] > 0; i++) {
+                int id = AccessibilityNodeInfo.getVirtualDescendantId(node.getChildId(i));
+                AccessibilityNodeInfo child = provider.createAccessibilityNodeInfo(id);
+                budget[0]--;
+                if (child == null || !child.isVisibleToUser()) continue;
+                child.getBoundsInScreen(r);
+                r.offset(-screenLoc[0], -screenLoc[1]);
+                if (r.width() < w * 0.11f || r.width() > w * 0.56f) continue;
+                if (r.left < lastRight - 4) {
+                    validRow = false;
+                    break;
+                }
+                lastRight = r.right;
+                tabIds.add(id);
+                if (selected < 0 && isComposeNodeSelected(provider, child, 2, budget)) {
+                    selected = tabs;
+                }
+                tabs++;
+            }
+            if (validRow && tabs >= 2 && tabs <= 6) {
+                result[0] = tabs;
+                result[1] = selected;
+                return true;
+            }
+            tabIds.clear();
+        }
+        for (int i = 0; i < childCount && budget[0] > 0; i++) {
+            int id = AccessibilityNodeInfo.getVirtualDescendantId(node.getChildId(i));
+            AccessibilityNodeInfo child = provider.createAccessibilityNodeInfo(id);
+            budget[0]--;
+            if (child == null || !child.isVisibleToUser()) continue;
+            if (findComposeTabRow(view, provider, child, budget, result, tabIds)) return true;
+        }
+        return false;
+    }
+
+    private static boolean isComposeNodeSelected(AccessibilityNodeProvider provider,
+            AccessibilityNodeInfo node, int depth, int[] budget) {
+        if (node.isSelected() || node.isChecked()) return true;
+        if (depth <= 0) return false;
+        for (int i = 0; i < node.getChildCount() && budget[0] > 0; i++) {
+            int id = AccessibilityNodeInfo.getVirtualDescendantId(node.getChildId(i));
+            AccessibilityNodeInfo child = provider.createAccessibilityNodeInfo(id);
+            budget[0]--;
+            if (child != null && isComposeNodeSelected(provider, child, depth - 1, budget)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void applySelection(int count, int selected, boolean animate) {
         mItemCount = count;
         mMotion.setMax(Math.max(0, count - 1));
         if (selected < 0 && count >= 2 && mSelected < 0) {
@@ -401,7 +603,15 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
             relayout();
         }
         if (mBar.getElevation() != 0f) mBar.setElevation(0f);
-        if (mItems != null && !mDragging) updateSelection(true);
+        if (mItems != null && !mDragging) {
+            updateSelection(true);
+        } else if (mComposeChild != null && !mDragging) {
+            long now = SystemClock.uptimeMillis();
+            if (now - mLastComposeQueryTime >= COMPOSE_QUERY_THROTTLE_MS) {
+                mLastComposeQueryTime = now;
+                updateSelection(true);
+            }
+        }
         recolorTabs();
         return true;
     }
@@ -410,6 +620,9 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
         float x = ev.getX();
         switch (ev.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
+                if (mComposeChild != null && (mSelected < 0 || mItemCount < 2)) {
+                    updateComposeSelection(false);
+                }
                 if (!mCapsule.contains(x, ev.getY()) || mSelected < 0 || mItemCount < 2) return;
                 mDragging = true;
                 mMoved = false;
@@ -437,15 +650,12 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
                 if (!mDragging) return;
                 mDragging = false;
                 int target = Math.round(mMotion.target());
+                target = Math.max(0, Math.min(mItemCount - 1, target));
                 boolean up = ev.getActionMasked() == MotionEvent.ACTION_UP;
                 if (up && !mMoved) {
                     mSelected = target;
                 } else if (up && mMoved && target != mSelected) {
-                    // Only trigger synthetic click when user dragged across tabs (more than 1 tab width / 2)
-                    if (Math.abs(x - mDownX) > tabWidth() * 0.45f) {
-                        View tab = tabAt(target);
-                        if (tab != null) tab.performClick();
-                    }
+                    performTabClick(target);
                     mSelected = target;
                 } else if (!up || mMoved) {
                     target = mSelected;
@@ -453,9 +663,68 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
                 mMotion.updateValue(target);
                 mMotion.release();
                 mOffsetSpring.animateToFinalPosition(0f);
-                mBar.postOnAnimation(() -> updateSelection(true));
+                mLastComposeQueryTime = SystemClock.uptimeMillis();
+                if (mComposeChild != null) {
+                    mBar.postDelayed(() -> updateSelection(true), 220);
+                } else {
+                    mBar.postOnAnimation(() -> updateSelection(true));
+                }
                 break;
         }
+    }
+
+    private void performTabClick(int index) {
+        View tab = tabAt(index);
+        if (tab != null) {
+            tab.performClick();
+            return;
+        }
+        final View compose = mComposeChild;
+        if (compose == null) return;
+        final int count = Math.max(mItemCount, 1);
+        final int rtlIndex = mBar.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL
+                ? (count - 1 - index) : index;
+        final int[] tabIds = mComposeTabIds;
+        compose.post(() -> {
+            if (!compose.isAttachedToWindow()) return;
+            AccessibilityNodeProvider provider = compose.getAccessibilityNodeProvider();
+            if (provider != null && tabIds != null && index >= 0 && index < tabIds.length) {
+                if (performComposeNodeClick(provider, tabIds[index], 2)) {
+                    return;
+                }
+            }
+            float w = compose.getWidth();
+            float h = compose.getHeight();
+            if (w <= 0f || h <= 0f) return;
+            float tapX = (rtlIndex + 0.5f) * (w / count);
+            float tapY = h * 0.5f;
+            long now = SystemClock.uptimeMillis();
+            MotionEvent down = MotionEvent.obtain(
+                    now, now, MotionEvent.ACTION_DOWN, tapX, tapY, 0);
+            MotionEvent upEvent = MotionEvent.obtain(
+                    now, now + 12, MotionEvent.ACTION_UP, tapX, tapY, 0);
+            compose.dispatchTouchEvent(down);
+            compose.dispatchTouchEvent(upEvent);
+            down.recycle();
+            upEvent.recycle();
+        });
+    }
+
+    private static boolean performComposeNodeClick(AccessibilityNodeProvider provider,
+            int virtualId, int depth) {
+        if (provider.performAction(virtualId, AccessibilityNodeInfo.ACTION_CLICK, null)) {
+            return true;
+        }
+        if (depth <= 0) return false;
+        AccessibilityNodeInfo node = provider.createAccessibilityNodeInfo(virtualId);
+        if (node == null) return false;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            int childId = AccessibilityNodeInfo.getVirtualDescendantId(node.getChildId(i));
+            if (performComposeNodeClick(provider, childId, depth - 1)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private float tabWidth() {
@@ -705,17 +974,28 @@ final class LiquidTabBar implements ViewTreeObserver.OnPreDrawListener,
                 return;
             }
 
-            int base = mDark ? 0xFFFFFF : 0x0088FF;
-            int alpha = Math.round(255 * (mDark ? 0.18f : 0.15f) * (1f - press * 0.35f));
+            // AmeOS 16 Float Bar (Figma 4:1460) active pill gradient (#60A5FF -> #4781FF) + specular rim
+            int alpha = Math.round(255 * (mDark ? 0.24f : 0.22f) * (1f - press * 0.25f));
             if (alpha > 0) {
-                mPaint.setColor((alpha << 24) | base);
-                canvas.drawRoundRect(mRect, r, r, mPaint);
+                mInnerGlow.setShader(new android.graphics.LinearGradient(
+                        mRect.left, mRect.top, mRect.left, mRect.bottom,
+                        (alpha << 24) | 0x60A5FF,
+                        (alpha << 24) | 0x4781FF,
+                        android.graphics.Shader.TileMode.CLAMP));
+                canvas.drawRoundRect(mRect, r, r, mInnerGlow);
             }
-            int shade = Math.round(255 * 0.06f * press);
-            if (shade > 0) {
-                mPaint.setColor((shade << 24) | (mDark ? 0x66B2FF : 0x0088FF));
-                canvas.drawRoundRect(mRect, r, r, mPaint);
-            }
+            float innerStroke = dp(0.9f);
+            mInnerPillRim.setStrokeWidth(innerStroke);
+            mInnerPillRim.setShader(new android.graphics.LinearGradient(
+                    mRect.left, mRect.top, mRect.right, mRect.bottom,
+                    new int[] {0xC2FFFFFF, 0x38FFFFFF, 0x8860A5FF},
+                    new float[] {0f, 0.5f, 1f},
+                    android.graphics.Shader.TileMode.CLAMP));
+            float half = innerStroke / 2f;
+            canvas.drawRoundRect(
+                    mRect.left + half, mRect.top + half,
+                    mRect.right - half, mRect.bottom - half,
+                    r - half, r - half, mInnerPillRim);
         }
 
         @Override

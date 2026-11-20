@@ -36,6 +36,7 @@ import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.penguin.StatusBarIsland
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.phone.KeyguardStatusBarView
+import com.android.systemui.statusbar.phone.PhoneStatusBarView
 import com.android.systemui.statusbar.phone.StatusIconContainer
 import com.android.systemui.statusbar.quickactions.popups.shared.DynamicIslandFeatureSettings.LEGACY_MASTER_ENABLED
 import com.android.systemui.statusbar.quickactions.popups.shared.DynamicIslandFeatureSettings.MASTER_ENABLED
@@ -87,25 +88,27 @@ constructor(
             settingObserver,
             UserHandle.USER_ALL,
         )
-        statusBar.addOnAttachStateChangeListener(
-            object : View.OnAttachStateChangeListener {
-                override fun onViewAttachedToWindow(v: View) {}
+        val centeredArea = statusBar.requireViewById<ViewGroup>(R.id.centered_area)
+        centeredArea.clipChildren = false
+        centeredArea.clipToPadding = false
+        if (statusBar is ViewGroup) {
+            statusBar.clipChildren = false
+            statusBar.clipToPadding = false
+        }
 
-                override fun onViewDetachedFromWindow(v: View) {
-                    context.contentResolver.unregisterContentObserver(settingObserver)
-                }
-            }
-        )
-
-        val reportBounds = { bounds: Rect ->
+        lateinit var composeView: ComposeView
+        val reportBounds: (Rect) -> Unit = { bounds: Rect ->
             onBoundsChanged(bounds)
             publishIslandBounds(context, bounds)
             overlap.collapse(bounds)
+            (statusBar as? PhoneStatusBarView)?.setDynamicIslandBounds(bounds, composeView)
         }
 
-        val centeredArea = statusBar.requireViewById<ViewGroup>(R.id.centered_area)
-        val composeView =
+        composeView =
             ComposeView(context).apply {
+                clipChildren = false
+                clipToPadding = false
+                clipToOutline = false
                 layoutParams =
                     LinearLayout.LayoutParams(
                             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -162,12 +165,38 @@ constructor(
             }
         centeredArea.addView(composeView)
 
+        val unclipAncestors = {
+            var p: View? = composeView
+            while (p != null) {
+                if (p is ViewGroup) {
+                    p.clipChildren = false
+                    p.clipToPadding = false
+                }
+                p.clipToOutline = false
+                p = p.parent as? View
+            }
+        }
+        unclipAncestors()
+
+        statusBar.addOnAttachStateChangeListener(
+            object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {
+                    unclipAncestors()
+                }
+
+                override fun onViewDetachedFromWindow(v: View) {
+                    context.contentResolver.unregisterContentObserver(settingObserver)
+                }
+            }
+        )
+
         centeredArea.viewTreeObserver.addOnGlobalLayoutListener {
             if (
                 centeredArea.visibility != View.VISIBLE || composeView.visibility != View.VISIBLE
             ) {
                 onBoundsChanged(Rect())
                 overlap.collapse(Rect())
+                (statusBar as? PhoneStatusBarView)?.setDynamicIslandBounds(Rect(), null)
             }
         }
     }

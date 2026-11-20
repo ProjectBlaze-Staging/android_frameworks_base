@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2026 Guest (ColorCC) & The BlazeAOSP Project -->
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="colorcc_add" formatted="false">Ajouter</string>
+    <string name="colorcc_all_in" formatted="false">Tout est dans le centre de contrôle.</string>
+    <string name="colorcc_appearance" formatted="false">Apparence</string>
+    <string name="colorcc_auto_brightness" formatted="false">Luminosité\nauto</string>
+    <string name="colorcc_background_blur" formatted="false">Flou d\'arrière-plan</string>
+    <string name="colorcc_balanced" formatted="false">Équilibrée</string>
+    <string name="colorcc_bluetooth" formatted="false">Bluetooth</string>
+    <string name="colorcc_bluetooth_off" formatted="false">Activez le Bluetooth pour voir vos appareils</string>
+    <string name="colorcc_blur_strength" formatted="false">Intensité du flou</string>
+    <string name="colorcc_bright" formatted="false">Vif</string>
+    <string name="colorcc_brightness" formatted="false">Luminosité</string>
+    <string name="colorcc_cancel" formatted="false">Annuler</string>
+    <string name="colorcc_cards_sliders" formatted="false">Cartes et curseurs</string>
+    <string name="colorcc_clear" formatted="false">Transparente</string>
+    <string name="colorcc_colour_strength" formatted="false">Intensité des couleurs</string>
+    <string name="colorcc_colour_tone" formatted="false">Tonalité adaptative</string>
+    <string name="colorcc_connected" formatted="false">Connecté</string>
+    <string name="colorcc_custom" formatted="false">Personnalisée</string>
+    <string name="colorcc_dark_mode" formatted="false">Mode sombre</string>
+    <string name="colorcc_data_used" formatted="false">%1$s utilisés aujourd\'hui ; %2$s ce mois-ci</string>
+    <string name="colorcc_device_connected" formatted="false">1 appareil connecté</string>
+    <string name="colorcc_devices_connected" formatted="false">%d appareils connectés</string>
+    <string name="colorcc_dnd" formatted="false">Ne pas déranger</string>
+    <string name="colorcc_dnd_off" formatted="false">Ne pas déranger est désactivé</string>
+    <string name="colorcc_dnd_until_off" formatted="false">Reste activé jusqu\'à ce que vous le désactiviez.</string>
+    <string name="colorcc_done" formatted="false">OK</string>
+    <string name="colorcc_edge_shine" formatted="false">Reflet des bords</string>
+    <string name="colorcc_edit" formatted="false">Modifier</string>
+    <string name="colorcc_edit_how" formatted="false">Touchez − pour retirer, + pour ajouter. Maintenez pour déplacer. Faites glisser un coin pour redimensionner.</string>
+    <string name="colorcc_edit_tiles" formatted="false">Modifier les vignettes</string>
+    <string name="colorcc_extra_brightness" formatted="false">Luminosité extra</string>
+    <string name="colorcc_frost" formatted="false">Givre</string>
+    <string name="colorcc_frosted" formatted="false">Dépoli</string>
+    <string name="colorcc_glass" formatted="false">Verre</string>
+    <string name="colorcc_glass_tint" formatted="false">Teinte du verre</string>
+    <string name="colorcc_hide" formatted="false">Masquer</string>
+    <string name="colorcc_hotspot" formatted="false">Point d\'accès mobile</string>
+    <string name="colorcc_hours" formatted="false">%d h</string>
+    <string name="colorcc_hue" formatted="false">Teinte</string>
+    <string name="colorcc_icon_colours" formatted="false">Couleurs des icônes</string>
+    <string name="colorcc_in_panel" formatted="false">Dans le centre de contrôle</string>
+    <string name="colorcc_layout" formatted="false">Disposition</string>
+    <string name="colorcc_light" formatted="false">Léger</string>
+    <string name="colorcc_lightness" formatted="false">Luminosité</string>
+    <string name="colorcc_liquid" formatted="false">Liquide</string>
+    <string name="colorcc_look" formatted="false">Style</string>
+    <string name="colorcc_media" formatted="false">Multimédia</string>
+    <string name="colorcc_media_output" formatted="false">Sortie multimédia</string>
+    <string name="colorcc_media_volume" formatted="false">Volume multimédia</string>
+    <string name="colorcc_mobile_data" formatted="false">Données mobiles</string>
+    <string name="colorcc_more_settings" formatted="false">Plus de paramètres</string>
+    <string name="colorcc_name" formatted="false">Nom</string>
+    <string name="colorcc_next" formatted="false">Suivant</string>
+    <string name="colorcc_no_outputs" formatted="false">Aucun autre appareil trouvé</string>
+    <string name="colorcc_no_paired" formatted="false">Aucun appareil associé</string>
+    <string name="colorcc_no_sim" formatted="false">Aucune carte SIM</string>
+    <string name="colorcc_none" formatted="false">Aucun</string>
+    <string name="colorcc_normal" formatted="false">Normal</string>
+    <string name="colorcc_not_playing" formatted="false">Aucune lecture</string>
+    <string name="colorcc_notif_buttons" formatted="false">Boutons des notifications</string>
+    <string name="colorcc_notif_match" formatted="false">Comme le panneau</string>
+    <string name="colorcc_notif_stock" formatted="false">Samsung</string>
+    <string name="colorcc_notif_swipe" formatted="false">Balayage des notifications</string>
+    <string name="colorcc_notifications" formatted="false">Notifications</string>
+    <string name="colorcc_off" formatted="false">Désactivé</string>
+    <string name="colorcc_off_at" formatted="false">Se désactive à %s</string>
+    <string name="colorcc_on" formatted="false">Activé</string>
+    <string name="colorcc_opaque" formatted="false">Opaque</string>
+    <string name="colorcc_open_app" formatted="false">Ouvrir l\'appli en cours de lecture</string>
+    <string name="colorcc_other_networks" formatted="false">Autres réseaux</string>
+    <string name="colorcc_paired_devices" formatted="false">Appareils associés</string>
+    <string name="colorcc_password" formatted="false">Mot de passe</string>
+    <string name="colorcc_pause" formatted="false">Pause</string>
+    <string name="colorcc_plain_auto" formatted="false">Auto</string>
+    <string name="colorcc_plain_black" formatted="false">Noir</string>
+    <string name="colorcc_plain_colour" formatted="false">Couleur de Aucun</string>
+    <string name="colorcc_plain_white" formatted="false">Blanc</string>
+    <string name="colorcc_play" formatted="false">Lire</string>
+    <string name="colorcc_playback_position" formatted="false">Position de lecture</string>
+    <string name="colorcc_power_menu" formatted="false">Menu d\'alimentation</string>
+    <string name="colorcc_previous" formatted="false">Précédent</string>
+    <string name="colorcc_refresh" formatted="false">Actualiser</string>
+    <string name="colorcc_remove" formatted="false">Retirer</string>
+    <string name="colorcc_reset" formatted="false">Rétablir par défaut</string>
+    <string name="colorcc_reset_how" formatted="false">Remet la disposition, les vignettes et le style comme au départ.</string>
+    <string name="colorcc_reset_look_how" formatted="false">Remet seulement l\'apparence d\'origine. La disposition et les vignettes restent.</string>
+    <string name="colorcc_resize" formatted="false">Redimensionner</string>
+    <string name="colorcc_rim_glow" formatted="false">Lueur du bord</string>
+    <string name="colorcc_rim_width" formatted="false">Largeur du bord</string>
+    <string name="colorcc_ringtone" formatted="false">Sonnerie</string>
+    <string name="colorcc_ringtone_volume" formatted="false">Volume de la sonnerie</string>
+    <string name="colorcc_saturation" formatted="false">Saturation</string>
+    <string name="colorcc_saved_networks" formatted="false">Réseaux enregistrés</string>
+    <string name="colorcc_searching" formatted="false">Recherche de réseaux…</string>
+    <string name="colorcc_settings" formatted="false">Paramètres</string>
+    <string name="colorcc_show" formatted="false">Afficher</string>
+    <string name="colorcc_silent" formatted="false">Silencieux</string>
+    <string name="colorcc_silent_mode" formatted="false">Mode silencieux</string>
+    <string name="colorcc_slider_jelly" formatted="false">Effet gelée</string>
+    <string name="colorcc_soft" formatted="false">Doux</string>
+    <string name="colorcc_sound" formatted="false">Son</string>
+    <string name="colorcc_sound_modes" formatted="false">Modes sonores</string>
+    <string name="colorcc_sound_output" formatted="false">Sortie audio</string>
+    <string name="colorcc_strong" formatted="false">Fort</string>
+    <string name="colorcc_system" formatted="false">Système</string>
+    <string name="colorcc_tap_to_add" formatted="false">Touchez + pour ajouter</string>
+    <string name="colorcc_thickness" formatted="false">Épaisseur</string>
+    <string name="colorcc_tile_names" formatted="false">Noms des vignettes</string>
+    <string name="colorcc_tile_rows" formatted="false">Rangées de vignettes par page</string>
+    <string name="colorcc_tiles" formatted="false">Vignettes</string>
+    <string name="colorcc_torch" formatted="false">Lampe torche</string>
+    <string name="colorcc_torch_brightness" formatted="false">Luminosité de la lampe</string>
+    <string name="colorcc_torch_off" formatted="false">Lampe torche : désactivée</string>
+    <string name="colorcc_torch_on" formatted="false">Lampe torche : activée</string>
+    <string name="colorcc_unlock_to_see" formatted="false">Déverrouillez pour voir</string>
+    <string name="colorcc_vibrate" formatted="false">Vibreur</string>
+    <string name="colorcc_volume" formatted="false">Volume</string>
+    <string name="colorcc_vpn_connected" formatted="false">Connecté au VPN. Ouvrir les paramètres VPN</string>
+    <string name="colorcc_vpn_connected_to" formatted="false">Connecté au VPN : %s. Ouvrir les paramètres VPN</string>
+    <string name="colorcc_wifi" formatted="false">Wi-Fi</string>
+    <string name="colorcc_wifi_off" formatted="false">Activez le Wi-Fi pour voir les réseaux</string>
+    <string name="colorcc_classic_qs" formatted="false">Panneau QS Blaze classique</string>
+    <string name="colorcc_switch_classic_qs" formatted="false">Passer au panneau QS Blaze classique</string>
+    <string name="colorcc_switch_classic_qs_how" formatted="false">Revient au panneau des paramètres rapides BlazeAOSP.</string>
+</resources>

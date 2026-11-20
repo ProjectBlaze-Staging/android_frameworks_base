@@ -67,11 +67,7 @@ public final class LiquidGlass {
                         return sEffectiveStyle;
                     }
                     int thermalStatus = pm.getCurrentThermalStatus();
-                    if (thermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) {
-                        sEffectiveStyle = STYLE_MATERIAL3_LITE;
-                        return sEffectiveStyle;
-                    }
-                    if (thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE
+                    if (thermalStatus >= PowerManager.THERMAL_STATUS_CRITICAL
                             && isLiquidLensStyle(style)) {
                         sEffectiveStyle = STYLE_COLOROS_FROSTED;
                         return sEffectiveStyle;

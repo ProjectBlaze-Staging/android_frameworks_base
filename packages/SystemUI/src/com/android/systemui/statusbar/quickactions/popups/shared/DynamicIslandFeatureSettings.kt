@@ -60,12 +60,17 @@ object DynamicIslandFeatureSettings {
     const val SHOW_LYRICS = "status_bar_dynamic_island_lyrics"
     const val WIDTH_SCALE = "status_bar_dynamic_island_width_scale"
     const val HEIGHT_SCALE = "status_bar_dynamic_island_height_scale"
+    const val OFFSET_X = "status_bar_dynamic_island_offset_x"
+    const val OFFSET_Y = "status_bar_dynamic_island_offset_y"
+    const val SCALE = "status_bar_dynamic_island_scale"
+    const val PREVIEW = "status_bar_dynamic_island_preview"
     const val POPUP_COLOR_MODE = "status_bar_dynamic_island_popup_color_mode"
     const val LOCKSCREEN = "status_bar_dynamic_island_lockscreen"
 
     const val SCALE_MIN = 0.7f
     const val SCALE_MAX = 1.4f
     private const val SCALE_PERCENT_DEFAULT = 100
+    private const val OFFSET_DEFAULT = 0
 
     const val POPUP_COLOR_MODE_DEFAULT = 0
     const val POPUP_COLOR_MODE_BLUR = 1
@@ -101,13 +106,7 @@ object DynamicIslandFeatureSettings {
             1,
             UserHandle.USER_CURRENT,
         )
-        val legacyEnabled = Settings.System.getIntForUser(
-            this,
-            LEGACY_MASTER_ENABLED,
-            1,
-            UserHandle.USER_CURRENT,
-        )
-        return axEnabled != 0 && legacyEnabled != 0
+        return axEnabled != 0
     }
 
     private fun ContentResolver.readDisabledAxEvents(): Set<String> {
@@ -272,6 +271,115 @@ object DynamicIslandFeatureSettings {
                 UserHandle.USER_ALL,
             )
             trySend(context.contentResolver.readDynamicIslandScale(key))
+            awaitClose { context.contentResolver.unregisterContentObserver(observer) }
+        }
+
+    fun ContentResolver.readDynamicIslandOffsetX(): Int {
+        return Settings.System.getIntForUser(
+            this,
+            OFFSET_X,
+            OFFSET_DEFAULT,
+            UserHandle.USER_CURRENT,
+        )
+    }
+
+    fun ContentResolver.readDynamicIslandOffsetY(): Int {
+        return Settings.System.getIntForUser(
+            this,
+            OFFSET_Y,
+            OFFSET_DEFAULT,
+            UserHandle.USER_CURRENT,
+        )
+    }
+
+    fun ContentResolver.readDynamicIslandManualScale(): Float {
+        val percent = Settings.System.getIntForUser(
+            this,
+            SCALE,
+            SCALE_PERCENT_DEFAULT,
+            UserHandle.USER_CURRENT,
+        )
+        return (percent / 100f).coerceIn(SCALE_MIN, SCALE_MAX)
+    }
+
+    fun ContentResolver.readDynamicIslandPreview(): Boolean {
+        return Settings.System.getIntForUser(
+            this,
+            PREVIEW,
+            0,
+            UserHandle.USER_CURRENT,
+        ) != 0
+    }
+
+    fun observeDynamicIslandOffsetX(context: Context): Flow<Int> =
+        callbackFlow {
+            val observer =
+                object : ContentObserver(Handler(Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        trySend(context.contentResolver.readDynamicIslandOffsetX())
+                    }
+                }
+            context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor(OFFSET_X),
+                false,
+                observer,
+                UserHandle.USER_ALL,
+            )
+            trySend(context.contentResolver.readDynamicIslandOffsetX())
+            awaitClose { context.contentResolver.unregisterContentObserver(observer) }
+        }
+
+    fun observeDynamicIslandOffsetY(context: Context): Flow<Int> =
+        callbackFlow {
+            val observer =
+                object : ContentObserver(Handler(Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        trySend(context.contentResolver.readDynamicIslandOffsetY())
+                    }
+                }
+            context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor(OFFSET_Y),
+                false,
+                observer,
+                UserHandle.USER_ALL,
+            )
+            trySend(context.contentResolver.readDynamicIslandOffsetY())
+            awaitClose { context.contentResolver.unregisterContentObserver(observer) }
+        }
+
+    fun observeDynamicIslandManualScale(context: Context): Flow<Float> =
+        callbackFlow {
+            val observer =
+                object : ContentObserver(Handler(Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        trySend(context.contentResolver.readDynamicIslandManualScale())
+                    }
+                }
+            context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor(SCALE),
+                false,
+                observer,
+                UserHandle.USER_ALL,
+            )
+            trySend(context.contentResolver.readDynamicIslandManualScale())
+            awaitClose { context.contentResolver.unregisterContentObserver(observer) }
+        }
+
+    fun observeDynamicIslandPreview(context: Context): Flow<Boolean> =
+        callbackFlow {
+            val observer =
+                object : ContentObserver(Handler(Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        trySend(context.contentResolver.readDynamicIslandPreview())
+                    }
+                }
+            context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor(PREVIEW),
+                false,
+                observer,
+                UserHandle.USER_ALL,
+            )
+            trySend(context.contentResolver.readDynamicIslandPreview())
             awaitClose { context.contentResolver.unregisterContentObserver(observer) }
         }
 }

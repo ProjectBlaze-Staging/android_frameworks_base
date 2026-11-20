@@ -2105,6 +2105,19 @@ public class SystemConfig {
     // This only needs to be called once after all features have been parsed
     // from various partition/apex sources.
     private void readAllPermissionsFromEnvironment() {
+        // GSI: stock vendors (e.g. Samsung) declare android.hardware.fingerprint in their own
+        // system partition, which a GSI replaces. Without the feature SystemServer never starts
+        // FingerprintService and AuthService never registers the HIDL sensor, so the vendor
+        // fingerprint HAL (running fine) is never used. Declare the feature at runtime only when
+        // the fingerprint HAL is really registered, so devices without a sensor are unaffected.
+        if (Process.myUid() == Process.SYSTEM_UID
+                && !mAvailableFeatures.containsKey(PackageManager.FEATURE_FINGERPRINT)
+                && hasRegisteredFingerprintHal()) {
+            Slog.i(TAG, "Fingerprint HAL registered; adding "
+                    + PackageManager.FEATURE_FINGERPRINT);
+            addFeature(PackageManager.FEATURE_FINGERPRINT, 0);
+        }
+
         // Some devices can be field-converted to FBE, so offer to splice in
         // those features if not already defined by the static config
         if (StorageManager.isFileEncrypted()) {
@@ -2184,6 +2197,28 @@ public class SystemConfig {
         if (vsrApi > Build.VERSION_CODES.TIRAMISU) {
             addFeature(PackageManager.FEATURE_IPSEC_TUNNEL_MIGRATION, 0);
         }
+    }
+
+    private static boolean hasRegisteredFingerprintHal() {
+        // The vendor HAL is started by init in parallel with system_server, so give it a short
+        // grace period to register before giving up.
+        for (int attempt = 0; attempt < 20; attempt++) {
+            try {
+                if (android.hardware.biometrics.fingerprint.V2_1.IBiometricsFingerprint
+                        .getService("default", false) != null) {
+                    return true;
+                }
+            } catch (Throwable t) {
+                // Not registered (yet) or not accessible.
+            }
+            try {
+                Thread.sleep(150);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return false;
     }
 
     private void addFeature(String name, int version) {

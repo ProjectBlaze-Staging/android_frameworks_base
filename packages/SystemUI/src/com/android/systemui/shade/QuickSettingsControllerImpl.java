@@ -304,6 +304,12 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
     /** The animator for QS size change */
     private ValueAnimator mSizeChangeAnimator;
 
+    private boolean mColorCCHorizontalSwiping = false;
+    private float mColorCCHorizontalDownX = 0f;
+    private float mColorCCHorizontalDownY = 0f;
+    private boolean mColorCCSwipeFromControls = false;
+    private long mLastColorCCDownTime = -1L;
+
     private ExpansionHeightListener mExpansionHeightListener;
     private ApplyClippingImmediatelyListener mApplyClippingImmediatelyListener;
     private FlingQsWithoutClickListener mFlingQsWithoutClickListener;
@@ -625,6 +631,10 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                             lineageos.providers.LineageSettings.System.STATUS_BAR_QUICK_QS_PULLDOWN,
                             1, android.os.UserHandle.USER_CURRENT);
                 }
+                if (mode <= 0
+                        && com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(ctx)) {
+                    mode = 1;
+                }
                 if (mode > 0) {
                     int w = mPanelView.getWidth();
                     if (w > 0) {
@@ -668,6 +678,12 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
     }
 
     boolean isGoingBetweenClosedShadeAndExpandedQs() {
+        if (mPanelView != null
+                && com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                        mPanelView.getContext())
+                && com.android.systemui.qs.colorcc.ColorCCBridge.isShowingControlsPage()) {
+            return true;
+        }
         // Below is true when QS are expanded and we swipe up from the same bottom of panel to
         // close the whole shade with one motion. Also this will be always true when closing
         // split shade as there QS are always expanded so every collapsing motion is motion from
@@ -727,6 +743,11 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
     @Override
     public boolean shouldQuickSettingsIntercept(float x, float y, float yDiff,
             @Nullable MotionEvent event) {
+        if (mPanelView != null
+                && com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                        mPanelView.getContext())) {
+            return false;
+        }
         if (event != null && isTrackpadThreeFingerSwipe(event)) {
             return false;
         }
@@ -1025,6 +1046,117 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         mShadeExpandedHeight = expandedHeight;
         mShadeExpandedFraction = expandedFraction;
         mMediaHierarchyManager.setShadeExpandedFraction(expandedFraction);
+        if (mPanelView != null
+                && com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                        mPanelView.getContext())) {
+            if (!com.android.systemui.qs.colorcc.ColorCCBridge.isSlidingPages()
+                    && !mAnimating) {
+                if (com.android.systemui.qs.colorcc.ColorCCBridge.isShowingControlsPage()) {
+                    float targetHeight = mMinExpansionHeight
+                            + MathUtils.constrain(expandedFraction, 0f, 1f)
+                                    * (mMaxExpansionHeight - mMinExpansionHeight);
+                    if (Math.abs(mExpansionHeight - targetHeight) > 0.5f) {
+                        setExpansionHeight(targetHeight);
+                    }
+                } else if (mExpansionHeight > mMinExpansionHeight) {
+                    setExpansionHeight(mMinExpansionHeight);
+                }
+            }
+            com.android.systemui.qs.colorcc.ColorCCBridge.onQsExpansionChanged(
+                    computeExpansionFraction(), expandedFraction);
+            syncColorCCNotificationStackVisibility();
+        }
+    }
+
+    private void syncColorCCNotificationStackVisibility() {
+        if (mPanelView == null || mNotificationStackScrollLayoutController == null) {
+            return;
+        }
+        android.view.View nsslView = mNotificationStackScrollLayoutController.getView();
+        if (nsslView == null) {
+            return;
+        }
+        if (!com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                mPanelView.getContext())) {
+            if (nsslView.getVisibility() != android.view.View.VISIBLE) {
+                nsslView.setVisibility(android.view.View.VISIBLE);
+            }
+            nsslView.setAlpha(1f);
+            nsslView.setTranslationX(0f);
+            return;
+        }
+        if (com.android.systemui.qs.colorcc.ColorCCBridge.isSlidingPages()) {
+            float controlsFrac =
+                    com.android.systemui.qs.colorcc.ColorCCBridge.getControlsVisibilityFraction();
+            mNotificationStackScrollLayoutController.setShouldShowShelfOnly(false);
+            if (nsslView.getVisibility() != android.view.View.VISIBLE) {
+                nsslView.setVisibility(android.view.View.VISIBLE);
+            }
+            nsslView.setAlpha(MathUtils.constrain(1f - controlsFrac * 1.15f, 0f, 1f));
+            nsslView.setTranslationX(-controlsFrac * Math.max(1, mPanelView.getWidth()) * 0.35f);
+        } else if (com.android.systemui.qs.colorcc.ColorCCBridge.isShowingControlsPage()) {
+            mNotificationStackScrollLayoutController.setShouldShowShelfOnly(!mSplitShadeEnabled);
+            nsslView.setAlpha(0f);
+            nsslView.setTranslationX(0f);
+            if (nsslView.getVisibility() != android.view.View.INVISIBLE) {
+                nsslView.setVisibility(android.view.View.INVISIBLE);
+            }
+        } else {
+            mNotificationStackScrollLayoutController.setShouldShowShelfOnly(false);
+            if (nsslView.getVisibility() != android.view.View.VISIBLE) {
+                nsslView.setVisibility(android.view.View.VISIBLE);
+            }
+            nsslView.setAlpha(1f);
+            nsslView.setTranslationX(0f);
+        }
+    }
+
+    void onTouchDownFromPanel(MotionEvent event, boolean isFullyCollapsed) {
+        if (mPanelView == null || event == null || !isExpansionEnabled()
+                || !com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                        mPanelView.getContext())) {
+            return;
+        }
+        if (event.getDownTime() == mLastColorCCDownTime) {
+            return;
+        }
+        mLastColorCCDownTime = event.getDownTime();
+        if (mColorCCHorizontalSwiping
+                || com.android.systemui.qs.colorcc.ColorCCBridge.isSlidingPages()) {
+            mColorCCHorizontalSwiping = false;
+            boolean onControls =
+                    com.android.systemui.qs.colorcc.ColorCCBridge.isShowingControlsPage();
+            com.android.systemui.qs.colorcc.ColorCCBridge.onHorizontalShadeSlideEnd(onControls);
+        }
+        mColorCCHorizontalDownX = event.getRawX();
+        mColorCCHorizontalDownY = event.getRawY();
+        mColorCCSwipeFromControls =
+                com.android.systemui.qs.colorcc.ColorCCBridge.isShowingControlsPage();
+        if (isFullyCollapsed) {
+            int topPullZoneHeight = Math.max(mStatusBarMinHeight * 2,
+                    (int) (72 * mResources.getDisplayMetrics().density));
+            boolean isInTopPullZone = event.getY() < topPullZoneHeight
+                    || event.getRawY() < topPullZoneHeight;
+            MotionEvent downEv = event;
+            if (event.getActionMasked() != MotionEvent.ACTION_DOWN) {
+                downEv = MotionEvent.obtain(event);
+                downEv.setAction(MotionEvent.ACTION_DOWN);
+            }
+            boolean openQs = isInTopPullZone && isOpenQsEvent(downEv);
+            if (downEv != event) {
+                downEv.recycle();
+            }
+            com.android.systemui.qs.colorcc.ColorCCBridge.onDualShadePullStart(openQs);
+            setExpandImmediate(openQs);
+            mNotificationStackScrollLayoutController.setShouldShowShelfOnly(
+                    openQs && !mSplitShadeEnabled);
+            if (openQs) {
+                setListening(true);
+            } else {
+                setExpansionHeight(getMinExpansionHeight());
+            }
+        }
+        syncColorCCNotificationStackVisibility();
     }
 
     @VisibleForTesting
@@ -1146,6 +1278,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
 
         // Update full screen state
         setQsFullScreen(/* qsFullScreen = */ mFullyExpanded && !mSplitShadeEnabled);
+        syncColorCCNotificationStackVisibility();
     }
 
     float getLockscreenShadeDragProgress() {
@@ -1204,6 +1337,14 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
     }
 
     void updateQsFrameTranslation() {
+        if (mPanelView != null
+                && com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                        mPanelView.getContext())) {
+            if (mQsFrame != null && mQsFrame.getTranslationY() != 0f) {
+                mQsFrame.setTranslationY(0f);
+            }
+            return;
+        }
         // TODO (b/265193930): remove dependency on NPVC
         mQsFrameTranslateController.translateQsFrame(mQsFrame, mQs,
                 mPanelViewControllerLazy.get().getNavigationBarBottomHeight()
@@ -1711,7 +1852,11 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         boolean isRightHalfTouch = mPanelView != null
                 && event.getX() >= mPanelView.getWidth() * 0.5f
                 && event.getY() <= Math.max(mStatusBarMinHeight * 2, getHeaderHeight());
-        boolean expandedShadeCollapsedQs = mShadeExpandedFraction == 1f
+        boolean colorCCActive = mPanelView != null
+                && com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                        mPanelView.getContext());
+        boolean expandedShadeCollapsedQs = !colorCCActive
+                && mShadeExpandedFraction == 1f
                 && mBarState != KEYGUARD && collapsedQs && expansionEnabled && isRightHalfTouch;
         if (action == MotionEvent.ACTION_DOWN && expandedShadeCollapsedQs) {
             // Down in the top-right header area while shade is expanded - go to QS.
@@ -1746,11 +1891,79 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         if (action == MotionEvent.ACTION_DOWN && isFullyCollapsed && isExpansionEnabled()) {
             mTwoFingerExpandPossible = true;
         }
+        if (mPanelView != null
+                && com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                        mPanelView.getContext())) {
+            if ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
+                    && (mColorCCHorizontalSwiping
+                            || com.android.systemui.qs.colorcc.ColorCCBridge.isSlidingPages())) {
+                mColorCCHorizontalSwiping = false;
+                setTracking(false);
+                float dx = event.getRawX() - mColorCCHorizontalDownX;
+                float w = Math.max(1f, mPanelView.getWidth() * 0.65f);
+                boolean switchPage = action != MotionEvent.ACTION_CANCEL
+                        && Math.abs(dx) > w * 0.25f;
+                boolean landOnControls = switchPage
+                        ? !mColorCCSwipeFromControls
+                        : mColorCCSwipeFromControls;
+                com.android.systemui.qs.colorcc.ColorCCBridge.onHorizontalShadeSlideEnd(
+                        landOnControls);
+                setExpandImmediate(landOnControls);
+                mNotificationStackScrollLayoutController.setShouldShowShelfOnly(
+                        landOnControls && !mSplitShadeEnabled);
+                flingQs(0, landOnControls ? FLING_EXPAND : FLING_COLLAPSE, null, true);
+                syncColorCCNotificationStackVisibility();
+                return true;
+            }
+            if (action == MotionEvent.ACTION_DOWN
+                    || (isFullyCollapsed && event.getDownTime() != mLastColorCCDownTime)) {
+                onTouchDownFromPanel(event, isFullyCollapsed);
+            }
+            if (action == MotionEvent.ACTION_MOVE
+                    && (mColorCCHorizontalSwiping
+                            || (mShadeExpandedFraction >= 0.85f && !isFullyCollapsed))) {
+                float dx = event.getRawX() - mColorCCHorizontalDownX;
+                float dy = event.getRawY() - mColorCCHorizontalDownY;
+                boolean onNotifCard = !mColorCCSwipeFromControls
+                        && mNotificationStackScrollLayoutController != null
+                        && mColorCCHorizontalDownY
+                                >= mNotificationStackScrollLayoutController.getTopPadding()
+                        && mColorCCHorizontalDownY
+                                <= mNotificationStackScrollLayoutController
+                                        .getBottomMostNotificationBottom();
+                boolean blocked = mColorCCSwipeFromControls
+                        ? com.android.systemui.qs.colorcc.ColorCCBridge.blocksShadeSlide(event)
+                        : onNotifCard;
+                if (!mColorCCHorizontalSwiping && !blocked
+                        && Math.abs(dx) > mTouchSlop * 1.5f
+                        && Math.abs(dx) > Math.abs(dy) * 1.25f) {
+                    if ((mColorCCSwipeFromControls && dx > 0)
+                            || (!mColorCCSwipeFromControls && dx < 0)) {
+                        mColorCCHorizontalSwiping = true;
+                        cancelExpansionAnimation();
+                        setTracking(true);
+                        onExpansionStarted();
+                    }
+                }
+                if (mColorCCHorizontalSwiping) {
+                    float w = Math.max(1f, mPanelView.getWidth() * 0.65f);
+                    float progress = MathUtils.constrain(Math.abs(dx) / w, 0f, 1f);
+                    boolean toControls = !mColorCCSwipeFromControls;
+                    com.android.systemui.qs.colorcc.ColorCCBridge.onHorizontalShadeSlide(
+                            progress, toControls);
+                    float targetQsFraction = toControls ? progress : (1f - progress);
+                    setExpansionHeight(mMinExpansionHeight
+                            + targetQsFraction * (mMaxExpansionHeight - mMinExpansionHeight));
+                    syncColorCCNotificationStackVisibility();
+                    return true;
+                }
+            }
+        }
         int topPullZoneHeight = Math.max(mStatusBarMinHeight * 2,
                 (int) (72 * mResources.getDisplayMetrics().density));
         boolean isInTopPullZone = isInStatusBar
                 || event.getY(event.getActionIndex()) < topPullZoneHeight;
-        if (mTwoFingerExpandPossible && isOpenQsEvent(event) && isInTopPullZone) {
+        if (isFullyCollapsed && mTwoFingerExpandPossible && isInTopPullZone && isOpenQsEvent(event)) {
             mMetricsLogger.count(COUNTER_PANEL_OPEN_QS, 1);
             setExpandImmediate(true);
             mNotificationStackScrollLayoutController.setShouldShowShelfOnly(!mSplitShadeEnabled);
@@ -1866,6 +2079,45 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
 
     /** intercepts touches on Qs panel area. */
     boolean onIntercept(MotionEvent event) {
+        if (mPanelView != null
+                && com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                        mPanelView.getContext())) {
+            int act = event.getActionMasked();
+            if (act == MotionEvent.ACTION_DOWN) {
+                onTouchDownFromPanel(event, false);
+                return false;
+            }
+            if (act == MotionEvent.ACTION_MOVE && mShadeExpandedFraction >= 0.85f) {
+                float dx = event.getRawX() - mColorCCHorizontalDownX;
+                float dy = event.getRawY() - mColorCCHorizontalDownY;
+                boolean onNotifCard = !mColorCCSwipeFromControls
+                        && mNotificationStackScrollLayoutController != null
+                        && mColorCCHorizontalDownY
+                                >= mNotificationStackScrollLayoutController.getTopPadding()
+                        && mColorCCHorizontalDownY
+                                <= mNotificationStackScrollLayoutController
+                                        .getBottomMostNotificationBottom();
+                boolean blocked = mColorCCSwipeFromControls
+                        ? com.android.systemui.qs.colorcc.ColorCCBridge.blocksShadeSlide(event)
+                        : onNotifCard;
+                if (!mColorCCHorizontalSwiping && !blocked
+                        && Math.abs(dx) > mTouchSlop * 1.5f
+                        && Math.abs(dx) > Math.abs(dy) * 1.25f) {
+                    if ((mColorCCSwipeFromControls && dx > 0)
+                            || (!mColorCCSwipeFromControls && dx < 0)) {
+                        mColorCCHorizontalSwiping = true;
+                        cancelExpansionAnimation();
+                        setTracking(true);
+                        onExpansionStarted();
+                        return true;
+                    }
+                }
+                if (mColorCCHorizontalSwiping) {
+                    return true;
+                }
+            }
+            return false;
+        }
         int pointerIndex = event.findPointerIndex(mTrackingPointer);
         if (pointerIndex < 0) {
             pointerIndex = 0;
@@ -2419,6 +2671,11 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             NotificationStackScrollLayout.OnOverscrollTopChangedListener {
         @Override
         public void onOverscrollTopChanged(float amount, boolean isRubberbanded) {
+            if (mPanelView != null
+                    && com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                            mPanelView.getContext())) {
+                return;
+            }
             // When in split shade, overscroll shouldn't carry through to QS
             if (mSplitShadeEnabled) {
                 return;
@@ -2437,6 +2694,11 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
 
         @Override
         public void flingTopOverscroll(float velocity, boolean open) {
+            if (mPanelView != null
+                    && com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                            mPanelView.getContext())) {
+                return;
+            }
             // in split shade mode we want to expand/collapse QS only when touch happens within QS
             if (isSplitShadeAndTouchXOutsideQs(mInitialTouchX)) {
                 return;

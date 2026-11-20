@@ -116,6 +116,9 @@ constructor(
             statusBarKeyguardViewManager.onBackPressed()
             return true
         }
+        if (com.android.systemui.qs.colorcc.ColorCCBridge.handleBack()) {
+            return true
+        }
         if (qsController.isCustomizing) {
             qsController.closeQsCustomizer()
             return true

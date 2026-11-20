@@ -73,6 +73,11 @@ public class PhoneStatusBarView extends FrameLayout {
     private float mFontScale;
     private StatusBarLongPressGestureDetector mStatusBarLongPressGestureDetector;
     private final Region mTouchableRegion = Region.obtain();
+    private final Region mBaseTouchableRegion = Region.obtain();
+    private final Rect mDynamicIslandBounds = new Rect();
+    @Nullable
+    private View mDynamicIslandView;
+    private boolean mDynamicIslandHandlingTouch;
 
     /**
      * Draw this many pixels into the left/right side of the cutout to optimally use the space
@@ -81,6 +86,8 @@ public class PhoneStatusBarView extends FrameLayout {
 
     public PhoneStatusBarView(Context context, AttributeSet attrs) {
         super(context, attrs);
+        setClipChildren(false);
+        setClipToPadding(false);
     }
 
     void setLongPressGestureDetector(
@@ -113,8 +120,56 @@ public class PhoneStatusBarView extends FrameLayout {
 
     /** Updates the status bar's touchable region. */
     public void updateTouchableRegion(Region touchableRegion) {
-        mTouchableRegion.set(touchableRegion);
-        getViewRootImpl().setTouchableRegion(touchableRegion);
+        mBaseTouchableRegion.set(touchableRegion);
+        applyTouchableRegion();
+    }
+
+    public void setDynamicIslandBounds(Rect bounds, @Nullable View islandView) {
+        mDynamicIslandView = islandView;
+        if (!Objects.equals(mDynamicIslandBounds, bounds)) {
+            mDynamicIslandBounds.set(bounds);
+            applyTouchableRegion();
+        }
+    }
+
+    private void applyTouchableRegion() {
+        mTouchableRegion.set(mBaseTouchableRegion);
+        if (!mDynamicIslandBounds.isEmpty()) {
+            mTouchableRegion.op(mDynamicIslandBounds, Region.Op.UNION);
+        }
+        if (getViewRootImpl() != null) {
+            getViewRootImpl().setTouchableRegion(mTouchableRegion);
+        }
+    }
+
+    public boolean dispatchDynamicIslandTouch(MotionEvent event) {
+        View view = mDynamicIslandView;
+        if (view == null || !view.isShown() || mDynamicIslandBounds.isEmpty()) {
+            mDynamicIslandHandlingTouch = false;
+            return false;
+        }
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            mDynamicIslandHandlingTouch = mDynamicIslandBounds.contains(
+                    Math.round(event.getRawX()), Math.round(event.getRawY()));
+        }
+        if (!mDynamicIslandHandlingTouch) {
+            return false;
+        }
+        int[] loc = new int[2];
+        view.getLocationOnScreen(loc);
+        MotionEvent local = MotionEvent.obtain(event);
+        float sx = view.getScaleX() != 0f ? view.getScaleX() : 1f;
+        float sy = view.getScaleY() != 0f ? view.getScaleY() : 1f;
+        local.setLocation(
+                (event.getRawX() - loc[0]) / sx,
+                (event.getRawY() - loc[1]) / sy);
+        boolean handled = view.dispatchTouchEvent(local);
+        local.recycle();
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            mDynamicIslandHandlingTouch = false;
+        }
+        return handled;
     }
 
     @Override

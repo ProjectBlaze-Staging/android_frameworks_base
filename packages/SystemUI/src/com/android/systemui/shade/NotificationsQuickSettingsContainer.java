@@ -155,6 +155,9 @@ public class NotificationsQuickSettingsContainer extends ConstraintLayout
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (com.android.systemui.qs.colorcc.ColorCCBridge.dispatchHeaderTouch(ev)) {
+            return true;
+        }
         return TouchLogger.logDispatchTouch("NotificationsQuickSettingsContainer", ev,
                 super.dispatchTouchEvent(ev));
     }

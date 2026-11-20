@@ -176,8 +176,16 @@ private const val ONEUI_SPRING_DAMPING = 0.85f
 @Immutable
 data class QsCascadeState(
     val openCount: Int = 0,
-    val expansionProgress: Float = 1f,
-)
+    val progressProvider: () -> Float = { 1f },
+) {
+    val expansionProgress: Float
+        get() = progressProvider()
+
+    constructor(openCount: Int, expansionProgress: Float) : this(
+        openCount = openCount,
+        progressProvider = { expansionProgress },
+    )
+}
 
 val LocalQsCascadeState = androidx.compose.runtime.compositionLocalOf { QsCascadeState() }
 
@@ -1258,24 +1266,23 @@ private fun SectionCard(
         }
     }
     val density = LocalDensity.current
-    val cardCascadeProgress = if (isEditMode || isDragging) {
-        1f
-    } else {
-        (cardEntrance.value * (0.25f + 0.75f * cascadeState.expansionProgress)).coerceIn(0f, 1f)
-    }
-    val cardSlideYPx = with(density) { 54.dp.toPx() } * (1f - cardCascadeProgress)
-    val cardCascadeScale = 0.86f + 0.14f * cardCascadeProgress
-    val cardCascadeAlpha = (cardCascadeProgress * 1.35f).coerceIn(0f, 1f)
+    val cardSlideDistancePx = with(density) { 54.dp.toPx() }
 
     Box(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .graphicsLayer {
-                    translationY = cardSlideYPx
+                    val cardCascadeProgress = if (isEditMode || isDragging) {
+                        1f
+                    } else {
+                        (cardEntrance.value * (0.25f + 0.75f * cascadeState.progressProvider())).coerceIn(0f, 1f)
+                    }
+                    translationY = cardSlideDistancePx * (1f - cardCascadeProgress)
+                    val cardCascadeScale = 0.86f + 0.14f * cardCascadeProgress
                     scaleX = scale * cardCascadeScale
                     scaleY = scale * cardCascadeScale
-                    alpha = cardCascadeAlpha
+                    alpha = (cardCascadeProgress * 1.35f).coerceIn(0f, 1f)
                 }
                 .then(if (isEditMode) cardDragModifier else Modifier)
                 .then(
@@ -1782,36 +1789,28 @@ fun DraggableGrid(
                     val cascadeState = LocalQsCascadeState.current
                     val staggerRow = (if (isOneUi) placement.gridY + 1 else placement.gridY).coerceAtMost(6)
                     val staggerStart = (staggerRow * 0.045f + placement.gridX * 0.018f).coerceAtMost(0.32f)
-                    val targetCascade = if (isEditMode || isResizing || isBeingDragged) {
-                        1f
-                    } else {
-                        ((cascadeState.expansionProgress - staggerStart) / (1f - staggerStart))
-                            .coerceIn(0f, 1f)
-                    }
-                    val cascadeProgress by animateFloatAsState(
-                        targetValue = targetCascade,
-                        animationSpec = spring(
-                            dampingRatio = 0.80f,
-                            stiffness = 380f,
-                        ),
-                        label = "qs_cascade_${tile.spec.spec}",
-                    )
-                    val cascadeSlideYPx = with(density) { (28.dp + (staggerRow * 8).dp).toPx() } * (1f - cascadeProgress)
+                    val baseYDistance = with(density) { (28.dp + (staggerRow * 8).dp).toPx() }
                     val centerCol = (columns - 1) / 2f
-                    val cascadeSlideXPx = with(density) { ((placement.gridX - centerCol) * 10).dp.toPx() } * (1f - cascadeProgress)
-                    val cascadeScale = 0.86f + 0.14f * cascadeProgress
-                    val cascadeAlpha = (0.15f + cascadeProgress * 1.15f).coerceIn(0f, 1f)
+                    val baseXDistance = with(density) { ((placement.gridX - centerCol) * 10).dp.toPx() }
 
                     Box(
                         modifier = Modifier
                             .offset { IntOffset(animatedOffset.x.roundToInt(), animatedOffset.y.roundToInt()) }
                             .size(animatedTileWidth, animatedTileHeight)
                             .graphicsLayer {
-                                translationX = cascadeSlideXPx
-                                translationY = cascadeSlideYPx
+                                val cascadeProgress = if (isEditMode || isResizing || isBeingDragged) {
+                                    1f
+                                } else {
+                                    ((cascadeState.progressProvider() - staggerStart) / (1f - staggerStart))
+                                        .coerceIn(0f, 1f)
+                                }
+                                val factor = 1f - cascadeProgress
+                                translationX = baseXDistance * factor
+                                translationY = baseYDistance * factor
+                                val cascadeScale = 0.86f + 0.14f * cascadeProgress
                                 scaleX = cascadeScale
                                 scaleY = cascadeScale
-                                alpha = tileAlpha * cascadeAlpha
+                                alpha = tileAlpha * (0.15f + cascadeProgress * 1.15f).coerceIn(0f, 1f)
                             }
                             .pointerInput(isEditMode, tile.spanCols, tile.spanRows) {
                                 if (isEditMode) {
@@ -2181,10 +2180,16 @@ fun DraggableTile(
                 color = aospBackground,
                 shadowElevation = if (isResizing) 0.dp else elevation,
             ) {
-                val showAospLabel = !blazeQs.hideLabels && (!isOneUi || blazeQs.qsColumns <= 4)
+                val is1x1Tile = tile.spanCols == 1 && tile.spanRows == 1
+                val showAospLabel = !blazeQs.hideLabels && !is1x1Tile && (!isOneUi || blazeQs.qsColumns <= 4)
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .border(
+                            width = 0.95.dp,
+                            color = Color.White.copy(alpha = if (isActive) 0.42f else 0.18f),
+                            shape = customAospShape,
+                        )
                         .combinedClickable(
                             enabled = !isEditMode && interactionsEnabled,
                             onClick = {

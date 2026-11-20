@@ -322,13 +322,22 @@ fun StatusBarPopup(
         }
 
         DisposableEffect(popupView) {
+            val dismissRunnable = Runnable {
+                if (popupView.isAttachedToWindow && !popupView.hasWindowFocus()) {
+                    viewModel.hidePopup()
+                }
+            }
             val listener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
                 if (!hasFocus) {
-                    viewModel.hidePopup()
+                    popupView.removeCallbacks(dismissRunnable)
+                    popupView.postDelayed(dismissRunnable, 250L)
+                } else {
+                    popupView.removeCallbacks(dismissRunnable)
                 }
             }
             popupView.viewTreeObserver.addOnWindowFocusChangeListener(listener)
             onDispose {
+                popupView.removeCallbacks(dismissRunnable)
                 popupView.viewTreeObserver.removeOnWindowFocusChangeListener(listener)
             }
         }

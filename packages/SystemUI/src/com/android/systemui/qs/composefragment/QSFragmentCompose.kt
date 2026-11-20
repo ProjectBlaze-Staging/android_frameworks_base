@@ -311,6 +311,10 @@ constructor(
     @Background private val backgroundDispatcher: CoroutineDispatcher,
     @ShadeDisplayAware private val configurationController: ConfigurationController,
     private val miniPlayerViewModelFactory: MiniPlayerViewModel.Factory,
+    private val qsHost: com.android.systemui.qs.QSHost,
+    private val activityStarter: com.android.systemui.plugins.ActivityStarter,
+    private val fgsManagerController: com.android.systemui.qs.FgsManagerController,
+    private val globalActionsDialogLiteProvider: javax.inject.Provider<com.android.systemui.globalactions.GlobalActionsDialogLite>,
 ) : LifecycleFragment(), QS, Dumpable {
 
     private val scrollListener = MutableStateFlow<QS.ScrollListener?>(null)
@@ -410,6 +414,14 @@ constructor(
             composeView,
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT,
+        )
+        com.android.systemui.qs.colorcc.ColorCCBridge.attachToQsContainer(
+            frame,
+            composeView,
+            qsHost,
+            activityStarter,
+            fgsManagerController,
+            globalActionsDialogLiteProvider,
         )
         return frame
     }
@@ -898,6 +910,9 @@ constructor(
     }
 
     override fun getQsMinExpansionHeight(): Int {
+        if (com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(context)) {
+            return 0
+        }
         return if (viewModel.isInSplitShade) {
             getQsMinExpansionHeightForSplitShade()
         } else {
@@ -992,6 +1007,10 @@ constructor(
         headerTranslation: Float,
         squishinessFraction: Float,
     ) {
+        com.android.systemui.qs.colorcc.ColorCCBridge.onQsExpansionChanged(
+            qsExpansionFraction,
+            panelExpansionFraction,
+        )
         if (!(viewModel.isEditing || viewModel.sectionEditModeViewModel.isEditingSections.value)) {
             viewModel.setQsExpansionValue(qsExpansionFraction)
             viewModel.panelExpansionFraction = panelExpansionFraction
@@ -1397,15 +1416,15 @@ constructor(
                 wasQsOpen = isOpen
             }
         }
-        val effectiveQsProgress by remember {
-            derivedStateOf {
+        val effectiveQsProgressProvider = remember(viewModel) {
+            {
                 val p1 = viewModel.expansionState.progress.coerceIn(0f, 1f)
                 val p2 = (viewModel.panelExpansionFraction * 1.15f).coerceIn(0f, 1f)
                 kotlin.math.min(p1, p2)
             }
         }
-        val cascadeState = remember(qsOpenCount, effectiveQsProgress) {
-            QsCascadeState(openCount = qsOpenCount, expansionProgress = effectiveQsProgress)
+        val cascadeState = remember(qsOpenCount) {
+            QsCascadeState(openCount = qsOpenCount, progressProvider = effectiveQsProgressProvider)
         }
 
         CompositionLocalProvider(LocalQsCascadeState provides cascadeState) {
@@ -1467,6 +1486,35 @@ constructor(
 
                                         val backgroundColor = LocalAndroidColorScheme.current.surfaceEffect1
                                         val iconTint = MaterialTheme.colorScheme.onSurface
+
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier
+                                                .padding(horizontal = 4.dp)
+                                                .height(40.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    backgroundColor,
+                                                    CircleShape
+                                                )
+                                                .clickable(
+                                                    interactionSource = remember { MutableInteractionSource() },
+                                                    indication = null,
+                                                ) {
+                                                    com.android.systemui.qs.colorcc.ColorCCBridge.setColorCCEnabled(
+                                                        context,
+                                                        true,
+                                                    )
+                                                }
+                                                .padding(horizontal = 12.dp)
+                                        ) {
+                                            Text(
+                                                text = "ColorCC",
+                                                color = iconTint,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                        }
 
                                         Box(
                                             contentAlignment = Alignment.Center,
@@ -1616,8 +1664,10 @@ constructor(
 
                                         val isFullyExpanded = viewModel.isQsFullyExpanded
                                         val containerExpanded = isTilesExpanded && isFullyExpanded
+                                        val hasFloatingControlCenter =
+                                            flatLayout.any { it is QSLayoutItem.TileItem }
 
-                                        if (insideTiles.isNotEmpty() || isEditingSections) {
+                                        if ((!hasFloatingControlCenter && insideTiles.isNotEmpty()) || isEditingSections) {
                                             OneUITileContainer(
                                                 isExpanded = containerExpanded,
                                                 animateSize = isFullyExpanded,
@@ -2245,6 +2295,10 @@ private class FrameLayoutTouchPassthrough(
     }
 
     override fun dispatchDraw(canvas: Canvas) {
+        if (com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(context)) {
+            super.dispatchDraw(canvas)
+            return
+        }
         if (dirtyClipData) {
             dirtyClipData = false
             updateClippingPath()
@@ -2269,6 +2323,9 @@ private class FrameLayoutTouchPassthrough(
         child: View?,
         outLocalPoint: PointF?,
     ): Boolean {
+        if (com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(context)) {
+            return super.isTransformedTouchPointInView(x, y, child, outLocalPoint)
+        }
         return if (clipEnabled && y + translationY > clipParams.top) {
             false
         } else if (isInBottomReservedArea(x, y)) { // no translation as it's relative to root
@@ -2284,6 +2341,9 @@ private class FrameLayoutTouchPassthrough(
     var preventingIntercept = false
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(context)) {
+            return false
+        }
         val action = event.actionMasked
         when (action) {
             MotionEvent.ACTION_DOWN -> {
@@ -2316,6 +2376,9 @@ private class FrameLayoutTouchPassthrough(
     }
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+        if (com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(context)) {
+            return false
+        }
         // If there's a touch on this view and we can scroll down, we don't want to be intercepted
         val action = ev.actionMasked
 

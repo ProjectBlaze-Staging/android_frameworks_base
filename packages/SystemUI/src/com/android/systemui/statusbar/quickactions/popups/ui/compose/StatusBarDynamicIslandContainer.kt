@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -62,10 +63,15 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.android.systemui.common.shared.model.Icon
 import com.android.systemui.penguin.CosFeature
 import com.android.systemui.penguin.rememberCosFeature
+import com.android.systemui.statusbar.quickactions.popups.shared.DynamicIslandFeatureSettings
+import com.android.systemui.statusbar.quickactions.popups.ui.model.ChipIcon
+import com.android.systemui.statusbar.quickactions.popups.ui.model.ColorsModel
 import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupChipId
 import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupChipModel
 import com.android.systemui.statusbar.quickactions.popups.ui.model.PopupContentModel
@@ -92,6 +98,43 @@ fun StatusBarDynamicIslandContainer(
     modifier: Modifier = Modifier,
 ) {
     val cutoutSpec = rememberDynamicIslandCutoutSpec()
+    val context = LocalContext.current
+    val manualOffsetX by
+        remember { DynamicIslandFeatureSettings.observeDynamicIslandOffsetX(context) }
+            .collectAsState(initial = 0)
+    val manualOffsetY by
+        remember { DynamicIslandFeatureSettings.observeDynamicIslandOffsetY(context) }
+            .collectAsState(initial = 0)
+    val manualScale by
+        remember { DynamicIslandFeatureSettings.observeDynamicIslandManualScale(context) }
+            .collectAsState(initial = 1f)
+    val previewEnabled by
+        remember { DynamicIslandFeatureSettings.observeDynamicIslandPreview(context) }
+            .collectAsState(initial = false)
+
+    val effectiveChips = remember(chips, previewEnabled) {
+        if (chips.isEmpty() && previewEnabled) {
+            listOf(
+                PopupChipModel.Shown(
+                    chipId = PopupChipId.MediaControl,
+                    icons = listOf(
+                        ChipIcon(
+                            icon = Icon.Resource(com.android.systemui.res.R.drawable.ic_music_note, null),
+                            tint = true,
+                        )
+                    ),
+                    chipText = "Dynamic Island",
+                    colors = ColorsModel.SystemTheme,
+                    isPopupShown = false,
+                    contentDescription = "Dynamic Island Preview",
+                    popupContent = PopupContentModel.None,
+                )
+            )
+        } else {
+            chips
+        }
+    }
+    val chips = effectiveChips
     // Tablets show the desktop-windowing app handle at the top centre, where the island sits.
     // Step the island aside so the handle stays visible and tappable. Phones keep their layout.
     val avoidAppHandles = dynamicIslandAvoidsAppHandles()
@@ -177,7 +220,6 @@ fun StatusBarDynamicIslandContainer(
         )
     }
 
-    val context = LocalContext.current
     var swallowSeq by remember {
         mutableIntStateOf(
             runCatching {
@@ -248,6 +290,24 @@ fun StatusBarDynamicIslandContainer(
     val companionDiameter = DynamicIslandCompanionDiameter * heightScale
     val companionBalance = companionDiameter + DynamicIslandCompanionGap
     val effectivePageCount = if (showCompanion) 1 else chips.size
+    val hostView = LocalView.current
+
+    SideEffect {
+        val targetView = (hostView.parent as? android.view.View) ?: hostView
+        targetView.translationX = manualOffsetX.toFloat()
+        targetView.translationY = manualOffsetY.toFloat()
+        targetView.scaleX = manualScale
+        targetView.scaleY = manualScale
+        var p: android.view.View? = hostView
+        while (p != null) {
+            if (p is android.view.ViewGroup) {
+                p.clipChildren = false
+                p.clipToPadding = false
+            }
+            p.clipToOutline = false
+            p = p.parent as? android.view.View
+        }
+    }
 
     Box(
         modifier =
@@ -280,8 +340,15 @@ fun StatusBarDynamicIslandContainer(
                         if (chips.isEmpty()) {
                             android.graphics.Rect()
                         } else {
+                            val cx = (b.left + b.right) * 0.5f
+                            val cy = (b.top + b.bottom) * 0.5f
+                            val halfW = b.width * 0.5f * manualScale
+                            val halfH = b.height * 0.5f * manualScale
                             android.graphics.Rect(
-                                b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt(),
+                                (cx - halfW + manualOffsetX).toInt(),
+                                (cy - halfH + manualOffsetY).toInt(),
+                                (cx + halfW + manualOffsetX).toInt(),
+                                (cy + halfH + manualOffsetY).toInt(),
                             )
                         }
                     )
@@ -302,7 +369,7 @@ fun StatusBarDynamicIslandContainer(
                 val collapseState = rememberDynamicIslandCollapseState(chip.isPopupShown)
                 CosIslandShell(
                     key = chip.chipId,
-                    visible = selectedChip != null && !chip.isPopupShown,
+                    visible = selectedChip != null,
                     hole = cutoutSpec.holeSize,
                     moons = false,
                     onGone = {

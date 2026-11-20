@@ -732,7 +732,12 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
 
     @Override
     public void applyRoundnessAndInvalidate() {
-        applyBackgroundRoundness(getTopCornerRadius(), getBottomCornerRadius());
+        if (com.android.systemui.qs.colorcc.ColorCCBridge.shouldDrawNotificationGlass(this)) {
+            float maxR = getMaxRadius();
+            applyBackgroundRoundness(maxR, maxR);
+        } else {
+            applyBackgroundRoundness(getTopCornerRadius(), getBottomCornerRadius());
+        }
         super.applyRoundnessAndInvalidate();
     }
 
@@ -821,6 +826,10 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
     @Override
     public void setFakeShadowIntensity(float shadowIntensity, float outlineAlpha, int shadowYEnd,
             int outlineTranslation) {
+        if (com.android.systemui.qs.colorcc.ColorCCBridge.shouldDrawNotificationGlass(this)) {
+            shadowIntensity = 0.0f;
+            outlineAlpha = 0.0f;
+        }
         boolean hiddenBefore = mShadowHidden;
         mShadowHidden = shadowIntensity == 0.0f;
         if (!mShadowHidden || !hiddenBefore) {

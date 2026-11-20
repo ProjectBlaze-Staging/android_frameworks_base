@@ -356,6 +356,9 @@ public class FooterView extends StackScrollerDecorView {
         mSeenNotifsFooterTextView.setTextColor(onSurface);
         mSeenNotifsFooterTextView.setCompoundDrawableTintList(ColorStateList.valueOf(onSurface));
 
+        com.android.systemui.qs.colorcc.ColorCCBridge.glazeFooterView(
+                this, mSettingsButton, mHistoryButton, mClearAllButton);
+
         ColorUpdateLogger colorUpdateLogger = ColorUpdateLogger.getInstance();
         if (colorUpdateLogger != null) {
             colorUpdateLogger.logEvent("Footer.updateColors()",

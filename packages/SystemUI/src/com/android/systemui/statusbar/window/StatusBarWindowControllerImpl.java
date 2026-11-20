@@ -260,9 +260,11 @@ public class StatusBarWindowControllerImpl implements StatusBarWindowController 
 
     private WindowManager.LayoutParams getBarLayoutParamsForRotation(int rotation) {
         int height = SystemBarUtils.getStatusBarHeightForRotation(mContext, rotation);
+        int extraIslandBuffer = Math.round(
+                140f * mContext.getResources().getDisplayMetrics().density);
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
-                height,
+                height + extraIslandBuffer,
                 WindowManager.LayoutParams.TYPE_STATUS_BAR,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS,
@@ -368,12 +370,18 @@ public class StatusBarWindowControllerImpl implements StatusBarWindowController 
     }
 
     private void applyHeight(State state) {
+        int extraIslandBuffer = Math.round(
+                140f * mContext.getResources().getDisplayMetrics().density);
         mLpChanged.height =
-                state.mIsLaunchAnimationRunning ? ViewGroup.LayoutParams.MATCH_PARENT : mBarHeight;
+                state.mIsLaunchAnimationRunning
+                        ? ViewGroup.LayoutParams.MATCH_PARENT
+                        : mBarHeight + extraIslandBuffer;
         for (int rot = Surface.ROTATION_0; rot <= Surface.ROTATION_270; rot++) {
             int height = SystemBarUtils.getStatusBarHeightForRotation(mContext, rot);
             mLpChanged.paramsForRotation[rot].height =
-                    state.mIsLaunchAnimationRunning ? ViewGroup.LayoutParams.MATCH_PARENT : height;
+                    state.mIsLaunchAnimationRunning
+                            ? ViewGroup.LayoutParams.MATCH_PARENT
+                            : height + extraIslandBuffer;
             // The status bar height could change at runtime if one display has a cutout while
             // another doesn't (like some foldables). It could also change when using debug cutouts.
             // So, we need to re-fetch the height and re-apply it to the insets each time to avoid

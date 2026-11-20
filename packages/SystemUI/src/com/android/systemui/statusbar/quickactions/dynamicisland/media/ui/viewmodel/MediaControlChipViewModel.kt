@@ -69,9 +69,20 @@ constructor(
     }
 
     private fun toPopupChipModel(model: MediaControlChipModel?, useWaveform: Boolean): PopupChipModel {
-        if (model == null || model.songName.isNullOrEmpty()) {
+        if (model == null) {
             return PopupChipModel.Hidden(PopupChipId.MediaControl)
         }
+
+        val effectiveSongName =
+            model.songName?.takeIf { it.isNotBlank() }
+                ?: model.appName?.takeIf { it.isNotBlank() }
+                ?: "Media Playing"
+        val effectiveModel =
+            if (model.songName.isNullOrBlank()) {
+                model.copy(songName = effectiveSongName)
+            } else {
+                model
+            }
 
         val contentDescription = model.appName?.let { ContentDescription.Loaded(description = it) }
         val defaultIcon =
@@ -84,10 +95,10 @@ constructor(
         return PopupChipModel.Shown(
             chipId = PopupChipId.MediaControl,
             icons = listOf(ChipIcon(icon = defaultIcon)),
-            chipText = normalizeSongTitle(model.songName.toString(), model.artistName?.toString()),
+            chipText = normalizeSongTitle(effectiveSongName.toString(), model.artistName?.toString()),
             colors = ColorsModel.DynamicIsland,
-            hoverBehavior = createHoverBehavior(model),
-            popupContent = PopupContentModel.Media(model, useWaveform),
+            hoverBehavior = createHoverBehavior(effectiveModel),
+            popupContent = PopupContentModel.Media(effectiveModel, useWaveform),
             ownerPackage = model.packageName,
         )
     }

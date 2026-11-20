@@ -64,7 +64,7 @@ import kotlinx.coroutines.launch
 
 internal object CosIsland {
     val MinHeight = 30.dp
-    val MaxWidth = 202.dp
+    val MaxWidth = 280.dp
     val MinWidth = 100.dp
     val Padding = 5.dp
     val IconSize = 20.dp
@@ -189,9 +189,17 @@ internal fun CosIslandShell(
     }
 
     suspend fun swallowSwell() = coroutineScope {
-        val target = (if (natural.width > 0) natural.width.toFloat() else width.value).coerceAtLeast(holePx)
+        val measured = if (natural.width > 0) natural else nextNatural()
+        val target = measured.width.toFloat().coerceAtLeast(holePx)
         busy = true
         try {
+            if (alpha.value < 1f) {
+                launch { alpha.animateTo(1f, tween(120, easing = CosIsland.Move)) }
+                launch { blur.animateTo(0f, tween(120, easing = CosIsland.Move)) }
+            }
+            if (height.value < heightPx) {
+                launch { height.animateTo(heightPx, tween(65, easing = CosIsland.Move)) }
+            }
             launch {
                 width.animateTo(
                     (target - extraPx * 0.35f).coerceAtLeast(holePx),
@@ -247,21 +255,19 @@ internal fun CosIslandShell(
         onDispose { resolver.unregisterContentObserver(observer) }
     }
 
-    LaunchedEffect(swallowSeq) {
-        if (swallowSeq != initialSwallowSeq && currentVisible) {
-            initialSwallowSeq = swallowSeq
-            swallowSwell()
-        }
-    }
-
     LaunchedEffect(Unit) {
-        snapshotFlow { currentVisible to currentKey }
-            .collectLatest { (shown, newKey) ->
+        snapshotFlow { Triple(currentVisible, currentKey, swallowSeq) }
+            .collectLatest { (shown, newKey, seq) ->
                 busy = true
                 when {
                     !shown -> {
                         disappear()
                         currentOnGone()
+                    }
+                    seq != initialSwallowSeq -> {
+                        initialSwallowSeq = seq
+                        shownKey = newKey
+                        swallowSwell()
                     }
                     newKey != shownKey && alpha.value > 0.5f -> switchTo(newKey)
                     else -> {
@@ -274,10 +280,14 @@ internal fun CosIslandShell(
     }
 
     LaunchedEffect(Unit) {
-        snapshotFlow { natural.width to busy }
-            .collectLatest { (w, isBusy) ->
+        snapshotFlow { Triple(natural.width, natural.height, busy) }
+            .collectLatest { (w, h, isBusy) ->
                 if (!isBusy && w > 0 && currentVisible) {
-                    width.animateTo(w.toFloat(), tween(300, easing = CosIsland.Move))
+                    coroutineScope {
+                        launch { width.animateTo(w.toFloat(), tween(250, easing = CosIsland.Move)) }
+                        val targetH = maxOf(heightPx, h.toFloat())
+                        launch { height.animateTo(targetH, tween(250, easing = CosIsland.Move)) }
+                    }
                 }
             }
     }

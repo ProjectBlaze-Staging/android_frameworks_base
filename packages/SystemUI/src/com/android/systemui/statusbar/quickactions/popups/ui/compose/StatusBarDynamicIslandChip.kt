@@ -360,12 +360,14 @@ fun StatusBarDynamicIslandChip(
                         playing = popupContent.model.isPlaying,
                         size = CosIsland.IconSize,
                         artworkDrawable = artworkDrawable,
+                        isCollapsed = viewModel.isPopupShown,
                     )
                 } else if (popupContent.model.isPlaying) {
                     AudioReactiveBars(
                         isPlaying = true,
                         color = IslandAccents.Music,
                         artworkDrawable = artworkDrawable,
+                        isCollapsed = viewModel.isPopupShown,
                     )
                 } else if (pageCount > 1) {
                     SwipeHint(color = chipContentColor.copy(alpha = 0.72f))
@@ -385,12 +387,14 @@ fun StatusBarDynamicIslandChip(
                             size = CosIsland.IconSize,
                             isCall = popupContent.kind == SystemEventKind.Call,
                             color = waveColor,
+                            isCollapsed = viewModel.isPopupShown,
                         )
                     } else {
                         AudioReactiveBars(
                             isPlaying = true,
                             isCall = popupContent.kind == SystemEventKind.Call,
                             color = waveColor,
+                            isCollapsed = viewModel.isPopupShown,
                         )
                     }
                 } else if (pageCount > 1) {

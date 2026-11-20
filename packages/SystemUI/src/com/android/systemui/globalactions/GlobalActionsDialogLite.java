@@ -1901,6 +1901,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             if (action instanceof LongPressAction) {
                 view.setOnLongClickListener(v -> onLongClickItem(position));
             }
+            applyAmeOsPowerButtonStyle(view, action);
             return view;
         }
 
@@ -1945,6 +1946,42 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         public boolean shouldBeSeparated(int position) {
             return getItem(position).shouldBeSeparated();
         }
+    }
+
+    /**
+     * Styles GlobalActions power menu buttons after AmeOS 16 Power Options (Figma 9:22090)
+     * with frosted circular glass plates and elastic vertical stretch press feedback.
+     */
+    private void applyAmeOsPowerButtonStyle(View view, Action action) {
+        if (view == null) return;
+        float d = mContext.getResources().getDisplayMetrics().density;
+        View iconView = view.findViewById(R.id.icon);
+        if (iconView != null) {
+            android.graphics.drawable.GradientDrawable glassCircle =
+                    new android.graphics.drawable.GradientDrawable();
+            glassCircle.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            boolean isEmergency = action instanceof EmergencyAction;
+            glassCircle.setColor(isEmergency ? 0x55EF4444 : 0x38FFFFFF);
+            glassCircle.setStroke(Math.round(1.25f * d), isEmergency ? 0xAAFCA5A5 : 0x80FFFFFF);
+            iconView.setBackground(glassCircle);
+        }
+        view.setOnTouchListener((v, event) -> {
+            int act = event.getActionMasked();
+            if (act == MotionEvent.ACTION_DOWN) {
+                v.animate()
+                        .scaleX(0.95f)
+                        .scaleY(1.11f)
+                        .setDuration(140)
+                        .start();
+            } else if (act == MotionEvent.ACTION_UP || act == MotionEvent.ACTION_CANCEL) {
+                v.animate()
+                        .scaleX(1.0f)
+                        .scaleY(1.0f)
+                        .setDuration(220)
+                        .start();
+            }
+            return false;
+        });
     }
 
     /**
@@ -1994,6 +2031,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             } else {
                 messageView.setText(action.getMessageResId());
             }
+            applyAmeOsPowerButtonStyle(view, action);
             return view;
         }
 
@@ -2073,6 +2111,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             } else {
                 messageView.setText(action.getMessageResId());
             }
+            applyAmeOsPowerButtonStyle(view, action);
             return view;
         }
 

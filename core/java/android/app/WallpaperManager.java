@@ -3469,6 +3469,22 @@ public class WallpaperManager {
             return cmfWallpaperInputStream;
         }
         try {
+            java.util.zip.ZipFile sysFw = new java.util.zip.ZipFile(
+                    "/system/framework/framework-res.apk");
+            java.util.zip.ZipEntry entry = sysFw.getEntry(
+                    "res/drawable-nodpi-v4/default_wallpaper.png");
+            if (entry == null) {
+                entry = sysFw.getEntry("res/drawable-nodpi/default_wallpaper.png");
+            }
+            if (entry != null) {
+                byte[] bytes = sysFw.getInputStream(entry).readAllBytes();
+                sysFw.close();
+                return new java.io.ByteArrayInputStream(bytes);
+            }
+            sysFw.close();
+        } catch (Exception ignored) {
+        }
+        try {
             return context.getResources().openRawResource(defaultResId);
         } catch (NotFoundException e) {
             // no default defined for this device; this is not a failure

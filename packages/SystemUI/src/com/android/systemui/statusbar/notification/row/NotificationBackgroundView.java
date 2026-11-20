@@ -23,6 +23,7 @@ import static com.android.systemui.util.ColorUtilKt.hexColorString;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.Rect;
@@ -116,8 +117,30 @@ public class NotificationBackgroundView extends View implements Dumpable,
         }
     }
 
+    private final Paint mGlassTintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mGlassRimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path mGlassPath = new Path();
+    private final android.graphics.RectF mGlassRectF = new android.graphics.RectF();
+
     @Override
     protected void onDraw(Canvas canvas) {
+        if (mBackground == null && mBackgroundBlurDrawable == null) {
+            return;
+        }
+        if (com.android.systemui.qs.colorcc.ColorCCBridge.drawNotificationGlass(
+                this,
+                canvas,
+                Math.max(mClipTopAmount, mTopOverlap),
+                Math.max(mClipBottomAmount, mBottomOverlap),
+                getActualHeight(),
+                getActualWidth(),
+                mExpandAnimationRunning)) {
+            if (mBackgroundBlurDrawable != null) {
+                mBackgroundBlurDrawable.setAlpha(0);
+                mBackgroundBlurDrawable.setBlurRadius(0);
+            }
+            return;
+        }
         float clipTop = Math.max(mClipTopAmount, mTopOverlap);
         int clipBottomAmount = Math.max(mClipBottomAmount, mBottomOverlap);
         if (clipTop + clipBottomAmount < getActualHeight() || mExpandAnimationRunning) {
@@ -133,6 +156,7 @@ public class NotificationBackgroundView extends View implements Dumpable,
                 } else {
                     draw(canvas, mBackground);
                 }
+                drawAmeOsNotificationRim(canvas, calculateLegacyBounds());
                 canvas.restore();
                 return;
             }
@@ -153,9 +177,65 @@ public class NotificationBackgroundView extends View implements Dumpable,
                 mBackground.setBounds(backgroundBounds);
                 mBackground.draw(canvas);
             }
+            if (backgroundBounds != null) {
+                drawAmeOsNotificationRim(canvas, backgroundBounds);
+            }
 
             canvas.restore();
         }
+    }
+
+    private Rect calculateLegacyBounds() {
+        int top = 0;
+        int bottom = getActualHeight();
+        if (mBottomIsRounded && mBottomAmountClips && !mExpandAnimationRunning) {
+            bottom -= Math.max(mClipBottomAmount, mBottomOverlap);
+        }
+        final boolean alignedToRight = isAlignedToRight();
+        final int width = getWidth();
+        final int actualWidth = getActualWidth();
+        int left = alignedToRight ? width - actualWidth : 0;
+        int right = alignedToRight ? width : actualWidth;
+        if (mExpandAnimationRunning) {
+            left = (int) ((width - actualWidth) / 2.0f);
+            right = left + actualWidth;
+        }
+        return new Rect(left, top, right, bottom);
+    }
+
+    private void drawAmeOsNotificationRim(Canvas canvas, Rect bounds) {
+        if (bounds == null || bounds.width() <= 0 || bounds.height() <= 0) return;
+        boolean isNight = (getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        float d = getResources().getDisplayMetrics().density;
+        float stroke = 0.9f * d;
+        float half = stroke * 0.5f;
+        mGlassRectF.set(bounds.left + half, bounds.top + half,
+                bounds.right - half, bounds.bottom - half);
+        mGlassPath.reset();
+        boolean hasRadii = false;
+        for (float r : mCornerRadii) {
+            if (r > 0f) {
+                hasRadii = true;
+                break;
+            }
+        }
+        if (hasRadii) {
+            mGlassPath.addRoundRect(mGlassRectF, mCornerRadii, Path.Direction.CW);
+        } else {
+            float defaultR = 24f * d;
+            mGlassPath.addRoundRect(mGlassRectF, defaultR, defaultR, Path.Direction.CW);
+        }
+        if (isNight) {
+            mGlassTintPaint.setStyle(Paint.Style.FILL);
+            mGlassTintPaint.setColor(0x160A101D);
+            canvas.drawPath(mGlassPath, mGlassTintPaint);
+        }
+        mGlassRimPaint.setStyle(Paint.Style.STROKE);
+        mGlassRimPaint.setStrokeWidth(stroke);
+        mGlassRimPaint.setColor(isNight ? 0x26FFFFFF : 0x33FFFFFF);
+        canvas.drawPath(mGlassPath, mGlassRimPaint);
     }
 
     private Path calculateDismissButtonCutoutPath(Rect backgroundBounds) {

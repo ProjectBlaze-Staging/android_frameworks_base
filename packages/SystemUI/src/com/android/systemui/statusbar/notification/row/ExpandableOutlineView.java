@@ -59,7 +59,10 @@ public abstract class ExpandableOutlineView extends ExpandableView {
     private final ViewOutlineProvider mProvider = new ViewOutlineProvider() {
         @Override
         public void getOutline(View view, Outline outline) {
-            if (!mHasCustomOutline && !hasRoundedCorner() && !mAlwaysRoundBothCorners) {
+            boolean isColorCCGlass =
+                    com.android.systemui.qs.colorcc.ColorCCBridge.shouldDrawNotificationGlass(view);
+            boolean roundAll = mAlwaysRoundBothCorners || isColorCCGlass;
+            if (!mHasCustomOutline && !hasRoundedCorner() && !roundAll) {
                 // Only when translating just the contents, does the outline need to be shifted.
                 int translation = !mDismissUsingRowTranslationX ? (int) getTranslation() : 0;
                 int left = Math.max(translation, 0);
@@ -74,7 +77,7 @@ public abstract class ExpandableOutlineView extends ExpandableView {
                     outline.setPath(clipPath);
                 }
             }
-            outline.setAlpha(mOutlineAlpha);
+            outline.setAlpha(isColorCCGlass ? 0f : mOutlineAlpha);
         }
     };
 
@@ -113,7 +116,9 @@ public abstract class ExpandableOutlineView extends ExpandableView {
         int right;
         int bottom;
         int height;
-        float topRadius = mAlwaysRoundBothCorners ? getMaxRadius() : getTopCornerRadius();
+        boolean roundAll = mAlwaysRoundBothCorners
+                || com.android.systemui.qs.colorcc.ColorCCBridge.shouldDrawNotificationGlass(this);
+        float topRadius = roundAll ? getMaxRadius() : getTopCornerRadius();
         if (!mHasCustomOutline) {
             // The outline just needs to be shifted if we're translating the contents. Otherwise
             // it's already in the right place.
@@ -138,7 +143,7 @@ public abstract class ExpandableOutlineView extends ExpandableView {
         if (height == 0) {
             return EMPTY_PATH;
         }
-        float bottomRadius = mAlwaysRoundBothCorners ? getMaxRadius() : getBottomCornerRadius();
+        float bottomRadius = roundAll ? getMaxRadius() : getBottomCornerRadius();
         getRoundedRectPath(left, top, right, bottom, topRadius, bottomRadius, mTmpPath);
         return mTmpPath;
     }

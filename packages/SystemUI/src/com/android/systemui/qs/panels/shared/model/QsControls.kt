@@ -550,20 +550,26 @@ private fun MediaControl(size: DpSize, interactive: Boolean, modifier: Modifier 
     }
 
     val compact = size.height < 100.dp
-    val pad = if (compact) 12.dp else 16.dp
-    val titleSize = (13f + (base.value - 80f) / 14f).coerceIn(13f, 20f).sp
+    val isSquare2x2 = !compact && size.width < 200.dp
+    val pad = if (compact || isSquare2x2) 12.dp else 16.dp
+    val titleSize = (13f + (base.value - 80f) / 16f).coerceIn(12.5f, 18f).sp
     val subtitleSize = (titleSize.value - 2f).sp
-    val buttonSize = (base * 0.22f).coerceIn(32.dp, 48.dp)
+    val buttonSize = (base * 0.22f).coerceIn(30.dp, 46.dp)
     val artSize =
         if (compact) {
             size.height - pad * 2
+        } else if (isSquare2x2) {
+            minOf(size.width * 0.30f, size.height * 0.34f).coerceIn(40.dp, 54.dp)
         } else {
             minOf(size.width * 0.34f, size.height * 0.42f).coerceIn(48.dp, 120.dp)
         }
     val singleLine = compact || size.width < 260.dp
 
     val text: @Composable (Modifier) -> Unit = { textModifier ->
-        Column(textModifier, verticalArrangement = Arrangement.Center) {
+        Column(
+            modifier = textModifier.padding(end = 6.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
             Text(
                 text = media.title,
                 style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize),
@@ -571,7 +577,7 @@ private fun MediaControl(size: DpSize, interactive: Boolean, modifier: Modifier 
                 maxLines = if (singleLine) 1 else 2,
                 softWrap = !singleLine,
                 overflow = TextOverflow.Ellipsis,
-                modifier = if (singleLine) Modifier.basicMarquee() else Modifier,
+                modifier = Modifier.fillMaxWidth().then(if (singleLine) Modifier.basicMarquee() else Modifier),
             )
             if (!media.artist.isNullOrBlank()) {
                 Text(
@@ -581,7 +587,7 @@ private fun MediaControl(size: DpSize, interactive: Boolean, modifier: Modifier 
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = if (singleLine) Modifier.basicMarquee() else Modifier,
+                    modifier = Modifier.fillMaxWidth().then(if (singleLine) Modifier.basicMarquee() else Modifier),
                 )
             }
         }
@@ -626,7 +632,10 @@ private fun MediaControl(size: DpSize, interactive: Boolean, modifier: Modifier 
             modifier.fillMaxSize().padding(pad),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 MediaArt(media.art, artSize)
                 text(Modifier.weight(1f).height(artSize))
             }

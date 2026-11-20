@@ -492,6 +492,10 @@ private constructor(
                 }
             }
 
+            if (!centralSurfaces.commandQueuePanelsEnabled) {
+                return false
+            }
+
             // Let ShadeViewController intercept touch events when flexiglass is disabled.
             if (!SceneContainerFlag.isEnabled) {
                 return shadeViewController.handleExternalInterceptTouch(event)

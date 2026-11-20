@@ -52,6 +52,13 @@ constructor(
                             flashlightInteractor.get().setEnabled(true)
                             // the ui code runs on the main thread
                             flashlightDialogDelegate.get().showDialog(input.action.expandable)
+                        } else if (
+                            !ActivityManager.isUserAMonkey() &&
+                                input.data is FlashlightModel.Available.Binary
+                        ) {
+                            // Blaze: tiles without a secondary toggle target (custom QS
+                            // layouts) only send Click; toggle binary flashlights directly.
+                            flashlightInteractor.get().setEnabled(!input.data.enabled)
                         }
                     } else { // preserve old behavior at the cost of some redundancy
                         if (

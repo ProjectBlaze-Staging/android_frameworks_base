@@ -151,6 +151,7 @@ internal fun CosVoicePrint(
     artworkDrawable: Drawable? = null,
     isCall: Boolean = false,
     color: Color = Color(0xFF4ADE80),
+    isCollapsed: Boolean = false,
 ) {
     val activePlaying = playing && rememberScreenInteractive()
     Box(
@@ -165,6 +166,7 @@ internal fun CosVoicePrint(
             barWidth = (size.value * 0.105f).dp.coerceAtLeast(1.8.dp),
             barSpacing = (size.value * 0.075f).dp.coerceAtLeast(1.2.dp),
             barHeight = (size.value * 0.78f).dp.coerceAtLeast(12.dp),
+            isCollapsed = isCollapsed,
         )
     }
 }

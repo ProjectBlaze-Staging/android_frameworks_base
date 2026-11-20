@@ -15,13 +15,17 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.WeakHashMap;
 
 /**
@@ -39,13 +43,24 @@ public final class LiquidTabBars {
 
     private static final String[] BAR_CLASSES = {
             "BottomNavigationView", "NavigationBarView", "PivotBar", "BottomNavigation",
-            "BottomTabLayout",
+            "BottomTabLayout", "BottomNavBar", "BottomNav", "BottomBar", "TabBar",
+            "FloatingTabBar", "FloatingToolbarLayout",
+    };
+    private static final String[] BAR_IDS = {
+            "bottom_nav", "bottom_nav_bar", "bottom_navigation", "navigation_bar",
+            "googleapp_navigation_bar", "hub_tabs_nav", "tab_bar", "photos_tabbar_layout",
+            "bottom_tab_bar",
+    };
+    private static final String[] NON_BAR_CLASSES = {
+            "RecyclerView", "ListView", "ScrollView", "GridView", "ViewPager",
+            "Toolbar", "ActionBar", "AppBarLayout", "CollapsingToolbar",
     };
     private static final String[] SCROLLER_CLASSES = {
             "RecyclerView", "ListView", "ScrollView", "GridView",
+            "AndroidComposeView", "ComposeView", "NestedScrollView", "ViewPager2",
     };
-    private static final long SCAN_INTERVAL_MS = 500;
-    private static final long EAGER_MS = 3000;
+    private static final long SCAN_INTERVAL_MS = 450;
+    private static final long EAGER_MS = 3500;
 
     private final Context mContext;
     private final boolean mFloat;
@@ -54,7 +69,7 @@ public final class LiquidTabBars {
     private ComposeTabBar mComposeBar;
     private long mNextComposeScan;
     private int mComposeMisses;
-    private final WeakHashMap<View, Boolean> mPadded = new WeakHashMap<>();
+    private final Set<View> mPadded = Collections.newSetFromMap(new WeakHashMap<>());
     private long mLastScan;
     private boolean mScanPending;
     private final long mCreated;
@@ -67,7 +82,9 @@ public final class LiquidTabBars {
     }
 
     public static LiquidTabBars create(Context context) {
+        if (context == null) return null;
         if (Process.myUid() < Process.FIRST_APPLICATION_UID) return null;
+        String pkg = context.getPackageName();
         try {
             int blazeEnabled = Settings.Secure.getInt(
                     context.getContentResolver(), SETTING_BLAZE_ENABLED, 1);
@@ -76,10 +93,6 @@ public final class LiquidTabBars {
             if (blazeEnabled == 0 || penguinEnabled == 0) {
                 return null;
             }
-            if (LiquidGlass.getEffectiveStyle(context) == LiquidGlass.STYLE_MATERIAL3_LITE) {
-                return null;
-            }
-            String pkg = context.getPackageName();
             if (pkg != null && (pkg.startsWith("com.android.systemui")
                     || pkg.startsWith("com.android.launcher")
                     || pkg.contains("aperture")
@@ -117,7 +130,7 @@ public final class LiquidTabBars {
         boolean attached = false;
         for (int i = mBars.size() - 1; i >= 0; i--) {
             LiquidTabBar bar = mBars.get(i);
-            if (bar.mBar.isAttachedToWindow()) {
+            if (bar.mBar.isAttachedToWindow() && bar.mBar.getVisibility() == View.VISIBLE) {
                 attached = true;
             } else {
                 bar.remove();
@@ -125,7 +138,9 @@ public final class LiquidTabBars {
             }
         }
         if (mComposeBar != null) {
-            if (mComposeBar.mView.isAttachedToWindow() && mComposeBar.update()) {
+            if (mComposeBar.mView.isAttachedToWindow()
+                    && mComposeBar.mView.getVisibility() == View.VISIBLE
+                    && mComposeBar.update()) {
                 attached = true;
             } else {
                 mComposeBar.remove();
@@ -152,10 +167,14 @@ public final class LiquidTabBars {
             if (eager || now >= mNextComposeScan) {
                 findCompose((ViewGroup) root, root.getHeight());
                 if (mComposeBar == null) {
-                    mComposeMisses = Math.min(mComposeMisses + 1, 4);
+                    if (!eager) {
+                        mComposeMisses = Math.min(mComposeMisses + 1, 1);
+                    }
                     mNextComposeScan = now + (SCAN_INTERVAL_MS << mComposeMisses);
                 } else {
                     mComposeMisses = 0;
+                    padScrollers(root, mComposeBar.getBarHeight());
+                    liftBottomFabs(root, mComposeBar.getBarHeight());
                 }
             }
             if (mComposeBar == null && !mScanPending) {
@@ -198,7 +217,7 @@ public final class LiquidTabBars {
     private final int[] mLocation = new int[2];
 
     private void findCompose(ViewGroup group, int rootHeight) {
-        int maxGap = Math.round(88 * mDensity);
+        int maxGap = Math.round(96 * mDensity);
         for (int i = 0; i < group.getChildCount(); i++) {
             View child = group.getChildAt(i);
             if (child.getVisibility() != View.VISIBLE || child.getWidth() == 0) continue;
@@ -206,7 +225,7 @@ public final class LiquidTabBars {
             if (mLocation[1] + child.getHeight() < rootHeight - maxGap) continue;
             if (child.getAccessibilityNodeProvider() != null) {
                 try {
-                    mComposeBar = ComposeTabBar.find(child, mFloat);
+                    mComposeBar = ComposeTabBar.find(child, mFloat, mPadded);
                 } catch (RuntimeException e) {
                     Log.w(TAG, "Could not look for a Compose tab bar", e);
                 }
@@ -233,8 +252,13 @@ public final class LiquidTabBars {
     }
 
     private boolean isBar(ViewGroup v, int rootWidth, int rootHeight) {
+        if (matches(v.getClass(), NON_BAR_CLASSES)) return false;
         int h = v.getHeight();
-        if (v.getWidth() < rootWidth * 0.85f || h < 40 * mDensity || h > 160 * mDensity) {
+        boolean knownBar = matches(v.getClass(), BAR_CLASSES) || hasBarResourceId(v);
+        float minWidthRatio = knownBar ? 0.65f : 0.88f;
+        if (v.getWidth() < rootWidth * minWidthRatio
+                || h < 42 * mDensity
+                || h > 160 * mDensity) {
             return false;
         }
         int[] loc = new int[2];
@@ -246,39 +270,156 @@ public final class LiquidTabBars {
                     android.view.WindowInsets.Type.systemBars()
                             | android.view.WindowInsets.Type.displayCutout()).bottom;
         }
-        int maxGap = Math.max(bottomInset + Math.round(24 * mDensity), Math.round(80 * mDensity));
+        int maxGap = Math.max(bottomInset + Math.round(32 * mDensity), Math.round(92 * mDensity));
         if (loc[1] + h < rootHeight - maxGap) return false;
-        return matches(v.getClass(), BAR_CLASSES) && hasHorizontalTabRow(v, rootWidth);
+        if (knownBar) {
+            return hasHorizontalTabRow(v, v.getWidth(), 2) || hasComposeTabChild(v);
+        }
+        return isStructuralTabBar(v, rootWidth);
     }
 
-    private boolean hasHorizontalTabRow(ViewGroup v, int rootWidth) {
-        if (hasHorizontalTabRowDirect(v, rootWidth)) return true;
-        if (v.getChildCount() == 1 && v.getChildAt(0) instanceof ViewGroup inner
-                && inner.getVisibility() == View.VISIBLE
-                && inner.getWidth() >= rootWidth * 0.85f) {
-            return hasHorizontalTabRowDirect(inner, rootWidth);
+    private boolean hasComposeTabChild(ViewGroup v) {
+        for (int i = 0; i < v.getChildCount(); i++) {
+            View child = v.getChildAt(i);
+            if (child.getVisibility() != View.VISIBLE || child.getWidth() < v.getWidth() * 0.8f) {
+                continue;
+            }
+            if (child.getAccessibilityNodeProvider() != null) return true;
+            if (child instanceof ViewGroup inner && hasComposeTabChild(inner)) return true;
         }
         return false;
     }
 
-    private boolean hasHorizontalTabRowDirect(ViewGroup v, int rootWidth) {
+    private boolean isStructuralTabBar(ViewGroup v, int rootWidth) {
+        if (v.getHeight() > 96 * mDensity) return false;
+        int visible = 0;
+        int clickable = 0;
+        int selected = 0;
+        int withIconAndLabel = 0;
+        int withIcon = 0;
+        int totalWidth = 0;
+        int lastRight = Integer.MIN_VALUE / 2;
+        for (int i = 0; i < v.getChildCount(); i++) {
+            View child = v.getChildAt(i);
+            if (child.getVisibility() != View.VISIBLE || child.getWidth() == 0) continue;
+            if (child.getWidth() < rootWidth * 0.14f || child.getWidth() > rootWidth * 0.38f) {
+                return false;
+            }
+            if (child.getLeft() < lastRight - 4) return false;
+            lastRight = child.getRight();
+            totalWidth += child.getWidth();
+            visible++;
+            if (child.isClickable()) clickable++;
+            if (hasSelectedState(child, 2)) selected++;
+            boolean icon = hasVisibleClass(child, ImageView.class, 3);
+            boolean label = hasVisibleClass(child, TextView.class, 3);
+            if (icon) withIcon++;
+            if (icon && label) withIconAndLabel++;
+        }
+        if (visible < 3 || visible > 6 || clickable < visible - 1 || selected < 1) {
+            return false;
+        }
+        if (totalWidth < v.getWidth() * 0.85f) return false;
+        return withIcon >= visible - 1 && withIconAndLabel >= visible - 2;
+    }
+
+    private static boolean hasSelectedState(View v, int depth) {
+        if (v.isSelected() || v.isActivated()) return true;
+        for (int s : v.getDrawableState()) {
+            if (s == android.R.attr.state_selected || s == android.R.attr.state_checked) return true;
+        }
+        if (depth > 0 && v instanceof ViewGroup g) {
+            for (int i = 0; i < g.getChildCount(); i++) {
+                if (hasSelectedState(g.getChildAt(i), depth - 1)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasVisibleClass(View v, Class<?> target, int depth) {
+        if (v.getVisibility() != View.VISIBLE) return false;
+        if (target.isInstance(v)) return true;
+        if (depth > 0 && v instanceof ViewGroup g) {
+            for (int i = 0; i < g.getChildCount(); i++) {
+                if (hasVisibleClass(g.getChildAt(i), target, depth - 1)) return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasHorizontalTabRow(ViewGroup v, int barWidth, int minTabs) {
+        if (hasHorizontalTabRowDirect(v, barWidth, minTabs)) return true;
+        ViewGroup inner = singleWideChild(v, barWidth);
+        if (inner != null) {
+            if (hasHorizontalTabRowDirect(inner, inner.getWidth(), minTabs)) return true;
+            ViewGroup inner2 = singleWideChild(inner, inner.getWidth());
+            if (inner2 != null) {
+                return hasHorizontalTabRowDirect(inner2, inner2.getWidth(), minTabs);
+            }
+        }
+        return false;
+    }
+
+    private ViewGroup singleWideChild(ViewGroup v, int barWidth) {
+        ViewGroup candidate = null;
+        for (int i = 0; i < v.getChildCount(); i++) {
+            View child = v.getChildAt(i);
+            if (child.getVisibility() != View.VISIBLE
+                    || child.getWidth() == 0
+                    || child.getHeight() <= Math.round(4 * mDensity)) {
+                continue;
+            }
+            if (child instanceof ViewGroup g && g.getWidth() >= barWidth * 0.8f) {
+                if (candidate != null) return null;
+                candidate = g;
+            } else {
+                return null;
+            }
+        }
+        return candidate;
+    }
+
+    private boolean hasHorizontalTabRowDirect(ViewGroup v, int barWidth, int minTabs) {
         int visible = 0;
         int clickableOrSelected = 0;
         int lastRight = Integer.MIN_VALUE / 2;
         for (int i = 0; i < v.getChildCount(); i++) {
             View child = v.getChildAt(i);
-            if (child.getVisibility() != View.VISIBLE || child.getWidth() == 0) continue;
-            if (child.getWidth() < rootWidth * 0.12f || child.getWidth() > rootWidth * 0.52f) {
+            if (child.getVisibility() != View.VISIBLE
+                    || child.getWidth() == 0
+                    || child.getHeight() <= Math.round(4 * mDensity)) {
+                continue;
+            }
+            if (child.getWidth() < barWidth * 0.11f || child.getWidth() > barWidth * 0.56f) {
                 return false;
             }
             if (child.getLeft() < lastRight - 4) return false;
             lastRight = child.getRight();
             visible++;
-            if (child.isClickable() || child.isSelected() || child.isActivated()) {
+            if (child.isClickable() || hasSelectedState(child, 2)) {
                 clickableOrSelected++;
             }
         }
-        return visible >= 3 && visible <= 6 && clickableOrSelected >= 2;
+        return visible >= minTabs && visible <= 6 && clickableOrSelected >= Math.min(2, minTabs);
+    }
+
+    private static boolean hasBarResourceId(View v) {
+        String name = entryName(v);
+        if (name == null) return false;
+        for (String id : BAR_IDS) {
+            if (name.equals(id)) return true;
+        }
+        return false;
+    }
+
+    private static String entryName(View v) {
+        int id = v.getId();
+        if (id == View.NO_ID || (id >>> 24) == 0) return null;
+        try {
+            return v.getResources().getResourceEntryName(id);
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     private static boolean matches(Class<?> cls, String[] names) {
@@ -293,20 +434,43 @@ public final class LiquidTabBars {
 
     private void floatOverContent(ViewGroup bar) {
         int barHeight = bar.getHeight();
+        alignAndLiftSiblingFabs(bar, barHeight);
+        hideSiblingShadowsAndGradients(bar, barHeight);
         View target = bar;
         for (int depth = 0; depth < 3 && target.getParent() instanceof ViewGroup parent;
                 depth++, target = parent) {
-            if (depth > 0 && target.getHeight() > barHeight + Math.round(24 * mDensity)) {
+            if (depth > 0 && target.getHeight() > barHeight + Math.round(28 * mDensity)) {
                 break;
             }
+            hideSiblingShadowsAndGradients(target, barHeight);
             View content = null;
             if (parent instanceof LinearLayout ll && ll.getOrientation() == LinearLayout.VERTICAL) {
                 int index = parent.indexOfChild(target);
                 if (index > 0
                         && target.getLayoutParams() instanceof ViewGroup.MarginLayoutParams lp) {
-                    lp.topMargin -= barHeight;
-                    target.setLayoutParams(lp);
-                    content = parent.getChildAt(index - 1);
+                    View candidate = null;
+                    for (int k = index - 1; k >= 0; k--) {
+                        View prev = parent.getChildAt(k);
+                        if (prev.getVisibility() != View.VISIBLE) continue;
+                        if (prev.getHeight() > barHeight * 2) {
+                            content = prev;
+                            break;
+                        } else if (candidate == null && prev.getHeight() >= Math.round(48 * mDensity)) {
+                            // Miniplayer (~56-72dp) or intermediate sibling
+                            candidate = prev;
+                        }
+                    }
+                    if (content == null) {
+                        content = candidate;
+                    }
+                    if (content != null) {
+                        lp.topMargin -= barHeight;
+                        target.setLayoutParams(lp);
+                        if (candidate != null && candidate != content) {
+                            padScrollers(candidate, barHeight);
+                            liftBottomFabs(candidate, barHeight);
+                        }
+                    }
                 }
             } else {
                 for (int i = 0; i < parent.getChildCount(); i++) {
@@ -322,7 +486,91 @@ public final class LiquidTabBars {
             }
             if (content != null) {
                 padScrollers(content, barHeight);
+                liftBottomFabs(content, barHeight);
+                alignAndLiftSiblingFabs(bar, barHeight);
                 return;
+            }
+        }
+    }
+
+    private void hideSiblingShadowsAndGradients(View barOrWrapper, int barHeight) {
+        if (!(barOrWrapper.getParent() instanceof ViewGroup parent)) return;
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            View sibling = parent.getChildAt(i);
+            if (sibling == barOrWrapper || sibling.getVisibility() != View.VISIBLE) continue;
+            String name = entryName(sibling);
+            int sh = sibling.getHeight();
+            if (sh > 0 && sh <= Math.round(4 * mDensity)
+                    && Math.abs(sibling.getBottom() - barOrWrapper.getTop()) <= Math.round(8 * mDensity)) {
+                sibling.setAlpha(0f);
+                continue;
+            }
+            if (name != null && (name.contains("tab_bar_shadow")
+                    || name.contains("bottom_gradient")
+                    || name.contains("footer_container_above_shadow"))) {
+                sibling.setAlpha(0f);
+            }
+        }
+    }
+
+    private void liftBottomFabs(View view, int barHeight) {
+        if (!(view instanceof ViewGroup group)) return;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            if (child.getVisibility() != View.VISIBLE) continue;
+            String name = entryName(child);
+            String cls = child.getClass().getSimpleName();
+            boolean isFab = (name != null && (name.equals("fab_container") || name.equals("fab")
+                    || name.contains("search_fab")
+                    || name.endsWith("_fab") || name.startsWith("fab_")))
+                    || cls.contains("FloatingActionButton")
+                    || cls.contains("FloatingToolbarLayout");
+            if (isFab && child.getBottom() > group.getHeight() - barHeight
+                    && !mPadded.contains(child)) {
+                mPadded.add(child);
+                if (child.getLayoutParams() instanceof ViewGroup.MarginLayoutParams lp) {
+                    lp.bottomMargin += barHeight;
+                    child.setLayoutParams(lp);
+                } else {
+                    child.setTranslationY(child.getTranslationY() - barHeight);
+                }
+                continue;
+            }
+            if (child instanceof ViewGroup && !matches(child.getClass(), SCROLLER_CLASSES)) {
+                liftBottomFabs(child, barHeight);
+            }
+        }
+    }
+
+    private void alignAndLiftSiblingFabs(ViewGroup bar, int barHeight) {
+        if (!(bar.getParent() instanceof ViewGroup parent)) return;
+        alignFabsInGroup(parent, bar, barHeight);
+        if (parent.getParent() instanceof ViewGroup grandParent) {
+            alignFabsInGroup(grandParent, bar, barHeight);
+        }
+    }
+
+    private void alignFabsInGroup(ViewGroup group, ViewGroup bar, int barHeight) {
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View sibling = group.getChildAt(i);
+            if (sibling == bar || sibling.getVisibility() != View.VISIBLE) continue;
+            String name = entryName(sibling);
+            String cls = sibling.getClass().getSimpleName();
+            boolean isFabOrToolbar = (name != null && (name.contains("search_fab")
+                    || name.contains("fab_container") || name.endsWith("_fab") || name.startsWith("fab_")))
+                    || cls.contains("FloatingToolbarLayout")
+                    || cls.contains("FloatingActionButton");
+            if (isFabOrToolbar) {
+                if (bar.getTranslationY() != 0f && sibling.getTranslationY() == 0f) {
+                    sibling.setTranslationY(bar.getTranslationY());
+                }
+                if (bar.getLayoutParams() instanceof ViewGroup.MarginLayoutParams barLp
+                        && sibling.getLayoutParams() instanceof ViewGroup.MarginLayoutParams sibLp) {
+                    if (barLp.topMargin < 0 && sibLp.topMargin >= 0) {
+                        sibLp.topMargin += barLp.topMargin;
+                        sibling.setLayoutParams(sibLp);
+                    }
+                }
             }
         }
     }
@@ -363,8 +611,8 @@ public final class LiquidTabBars {
 
     private void padScrollers(View view, int barHeight) {
         if (view instanceof ViewGroup group) {
-            if (matches(view.getClass(), SCROLLER_CLASSES) && !mPadded.containsKey(view)) {
-                mPadded.put(view, true);
+            if (matches(view.getClass(), SCROLLER_CLASSES) && !mPadded.contains(view)) {
+                mPadded.add(view);
                 group.setClipToPadding(false);
                 view.setPadding(view.getPaddingLeft(), view.getPaddingTop(),
                         view.getPaddingRight(), view.getPaddingBottom() + barHeight);

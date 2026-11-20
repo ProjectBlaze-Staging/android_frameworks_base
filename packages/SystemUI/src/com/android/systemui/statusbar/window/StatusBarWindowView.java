@@ -23,6 +23,7 @@ import android.content.res.Configuration;
 import android.graphics.Insets;
 import android.util.AttributeSet;
 import android.view.DisplayCutout;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
@@ -31,7 +32,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.android.systemui.compose.ComposeInitializer;
+import com.android.systemui.res.R;
 import com.android.systemui.statusbar.data.repository.StatusBarConfigurationController;
+import com.android.systemui.statusbar.phone.PhoneStatusBarView;
 
 /**
  * Status bar view
@@ -51,6 +54,18 @@ public class StatusBarWindowView extends FrameLayout {
     public StatusBarWindowView(Context context, AttributeSet attrs) {
         super(context, attrs);
         setClipChildren(false);
+        setClipToPadding(false);
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        PhoneStatusBarView sb = findViewById(R.id.status_bar);
+        if (sb != null && ev.getY() >= sb.getHeight()) {
+            if (sb.dispatchDynamicIslandTouch(ev)) {
+                return true;
+            }
+        }
+        return super.dispatchTouchEvent(ev);
     }
 
     @Override

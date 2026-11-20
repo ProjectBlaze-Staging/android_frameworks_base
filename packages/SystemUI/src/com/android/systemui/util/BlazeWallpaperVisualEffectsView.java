@@ -155,24 +155,12 @@ public class BlazeWallpaperVisualEffectsView extends View {
         boolean smartPixelsEnabled = Settings.Secure.getIntForUser(
                 mContext.getContentResolver(), "smart_pixel_filter_enabled", 0, UserHandle.USER_CURRENT) != 0;
         if (smartPixelsEnabled) {
+            int pct = Settings.Secure.getIntForUser(
+                    mContext.getContentResolver(), "smart_pixel_filter_percent", 25, UserHandle.USER_CURRENT);
             if (mSmartPixelsView == null) {
-                mSmartPixelsView = new View(mContext) {
-                    private final Paint mGridPaint = new Paint();
-                    @Override
-                    protected void onDraw(Canvas c) {
-                        super.onDraw(c);
-                        int pct = Settings.Secure.getIntForUser(
-                                mContext.getContentResolver(), "smart_pixel_filter_percent", 25, UserHandle.USER_CURRENT);
-                        Bitmap pat = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888);
-                        int offCount = Math.max(1, Math.min(14, Math.round((pct / 100f) * 16f)));
-                        int[] coords = {0,0, 2,2, 0,2, 2,0, 1,1, 3,3, 1,3, 3,1, 0,1, 2,3, 1,0, 3,2, 0,3, 2,1, 1,2, 3,0};
-                        for (int i = 0; i < offCount && i * 2 + 1 < coords.length; i++) {
-                            pat.setPixel(coords[i * 2], coords[i * 2 + 1], Color.BLACK);
-                        }
-                        mGridPaint.setShader(new BitmapShader(pat, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT));
-                        c.drawRect(0, 0, getWidth(), getHeight(), mGridPaint);
-                    }
-                };
+                SmartPixelsOverlayView view = new SmartPixelsOverlayView(mContext);
+                view.updatePattern(pct);
+                mSmartPixelsView = view;
                 WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                         WindowManager.LayoutParams.MATCH_PARENT,
                         WindowManager.LayoutParams.MATCH_PARENT,
@@ -186,8 +174,8 @@ public class BlazeWallpaperVisualEffectsView extends View {
                 try {
                     wm.addView(mSmartPixelsView, lp);
                 } catch (Throwable ignored) {}
-            } else {
-                mSmartPixelsView.invalidate();
+            } else if (mSmartPixelsView instanceof SmartPixelsOverlayView) {
+                ((SmartPixelsOverlayView) mSmartPixelsView).updatePattern(pct);
             }
         } else if (mSmartPixelsView != null) {
             try {
@@ -500,6 +488,53 @@ public class BlazeWallpaperVisualEffectsView extends View {
             int dimAlpha = Math.min(230, Math.round(mDimLevel * 2.3f));
             mDimPaint.setColor(Color.argb(dimAlpha, 0, 0, 0));
             canvas.drawRect(0, 0, vw, vh, mDimPaint);
+        }
+    }
+
+    private static class SmartPixelsOverlayView extends View {
+        private final Paint mGridPaint = new Paint();
+        private Bitmap mPatternBitmap = null;
+        private BitmapShader mPatternShader = null;
+        private int mLastPct = -1;
+
+        public SmartPixelsOverlayView(Context context) {
+            super(context);
+        }
+
+        public void updatePattern(int pct) {
+            if (pct == mLastPct && mPatternShader != null) return;
+            mLastPct = pct;
+            if (mPatternBitmap != null) {
+                mPatternBitmap.recycle();
+            }
+            mPatternBitmap = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888);
+            int offCount = Math.max(1, Math.min(14, Math.round((pct / 100f) * 16f)));
+            int[] coords = {0,0, 2,2, 0,2, 2,0, 1,1, 3,3, 1,3, 3,1, 0,1, 2,3, 1,0, 3,2, 0,3, 2,1, 1,2, 3,0};
+            for (int i = 0; i < offCount && i * 2 + 1 < coords.length; i++) {
+                mPatternBitmap.setPixel(coords[i * 2], coords[i * 2 + 1], Color.BLACK);
+            }
+            mPatternShader = new BitmapShader(mPatternBitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT);
+            mGridPaint.setShader(mPatternShader);
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas c) {
+            super.onDraw(c);
+            if (mPatternShader != null) {
+                c.drawRect(0, 0, getWidth(), getHeight(), mGridPaint);
+            }
+        }
+
+        @Override
+        protected void onDetachedFromWindow() {
+            super.onDetachedFromWindow();
+            if (mPatternBitmap != null) {
+                mPatternBitmap.recycle();
+                mPatternBitmap = null;
+            }
+            mPatternShader = null;
+            mLastPct = -1;
         }
     }
 }

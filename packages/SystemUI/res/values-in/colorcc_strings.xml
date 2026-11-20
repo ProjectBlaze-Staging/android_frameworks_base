@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2026 Guest (ColorCC) & The BlazeAOSP Project -->
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="colorcc_add" formatted="false">Tambah</string>
+    <string name="colorcc_all_in" formatted="false">Semua sudah ada di pusat kontrol.</string>
+    <string name="colorcc_appearance" formatted="false">Tampilan</string>
+    <string name="colorcc_auto_brightness" formatted="false">Kecerahan\notomatis</string>
+    <string name="colorcc_background_blur" formatted="false">Buram latar</string>
+    <string name="colorcc_balanced" formatted="false">Seimbang</string>
+    <string name="colorcc_bluetooth" formatted="false">Bluetooth</string>
+    <string name="colorcc_bluetooth_off" formatted="false">Aktifkan Bluetooth untuk melihat perangkat Anda</string>
+    <string name="colorcc_blur_strength" formatted="false">Kekuatan buram</string>
+    <string name="colorcc_bright" formatted="false">Terang</string>
+    <string name="colorcc_brightness" formatted="false">Kecerahan</string>
+    <string name="colorcc_cancel" formatted="false">Batal</string>
+    <string name="colorcc_cards_sliders" formatted="false">Kartu dan penggeser</string>
+    <string name="colorcc_clear" formatted="false">Bening</string>
+    <string name="colorcc_colour_strength" formatted="false">Kekuatan warna</string>
+    <string name="colorcc_colour_tone" formatted="false">Nada warna adaptif</string>
+    <string name="colorcc_connected" formatted="false">Terhubung</string>
+    <string name="colorcc_custom" formatted="false">Kustom</string>
+    <string name="colorcc_dark_mode" formatted="false">Mode gelap</string>
+    <string name="colorcc_data_used" formatted="false">%1$s terpakai hari ini; %2$s bulan ini</string>
+    <string name="colorcc_device_connected" formatted="false">1 perangkat terhubung</string>
+    <string name="colorcc_devices_connected" formatted="false">%d perangkat terhubung</string>
+    <string name="colorcc_dnd" formatted="false">Jangan Ganggu</string>
+    <string name="colorcc_dnd_off" formatted="false">Jangan Ganggu nonaktif</string>
+    <string name="colorcc_dnd_until_off" formatted="false">Tetap aktif sampai dinonaktifkan secara manual.</string>
+    <string name="colorcc_done" formatted="false">Selesai</string>
+    <string name="colorcc_edge_shine" formatted="false">Kilau tepi</string>
+    <string name="colorcc_edit" formatted="false">Edit</string>
+    <string name="colorcc_edit_how" formatted="false">Ketuk − untuk menghapus, + untuk menambah. Tahan untuk memindah. Seret sudut untuk mengubah ukuran.</string>
+    <string name="colorcc_edit_tiles" formatted="false">Edit ubin</string>
+    <string name="colorcc_extra_brightness" formatted="false">Kecerahan ekstra</string>
+    <string name="colorcc_frost" formatted="false">Buram</string>
+    <string name="colorcc_frosted" formatted="false">Buram</string>
+    <string name="colorcc_glass" formatted="false">Kaca</string>
+    <string name="colorcc_glass_tint" formatted="false">Warna kaca</string>
+    <string name="colorcc_hide" formatted="false">Sembunyikan</string>
+    <string name="colorcc_hotspot" formatted="false">Hotspot pribadi</string>
+    <string name="colorcc_hours" formatted="false">%d jam</string>
+    <string name="colorcc_hue" formatted="false">Rona</string>
+    <string name="colorcc_icon_colours" formatted="false">Warna ikon</string>
+    <string name="colorcc_in_panel" formatted="false">Di pusat kontrol</string>
+    <string name="colorcc_layout" formatted="false">Tata letak</string>
+    <string name="colorcc_light" formatted="false">Ringan</string>
+    <string name="colorcc_lightness" formatted="false">Kecerahan</string>
+    <string name="colorcc_liquid" formatted="false">Cair</string>
+    <string name="colorcc_look" formatted="false">Gaya</string>
+    <string name="colorcc_media" formatted="false">Media</string>
+    <string name="colorcc_media_output" formatted="false">Output media</string>
+    <string name="colorcc_media_volume" formatted="false">Volume media</string>
+    <string name="colorcc_mobile_data" formatted="false">Data seluler</string>
+    <string name="colorcc_more_settings" formatted="false">Pengaturan lainnya</string>
+    <string name="colorcc_name" formatted="false">Nama</string>
+    <string name="colorcc_next" formatted="false">Berikutnya</string>
+    <string name="colorcc_no_outputs" formatted="false">Tidak ada perangkat lain</string>
+    <string name="colorcc_no_paired" formatted="false">Tidak ada perangkat tersandingkan</string>
+    <string name="colorcc_no_sim" formatted="false">Tidak ada kartu SIM</string>
+    <string name="colorcc_none" formatted="false">Tidak ada</string>
+    <string name="colorcc_normal" formatted="false">Normal</string>
+    <string name="colorcc_not_playing" formatted="false">Tidak diputar</string>
+    <string name="colorcc_notif_buttons" formatted="false">Tombol notifikasi</string>
+    <string name="colorcc_notif_match" formatted="false">Sama seperti panel</string>
+    <string name="colorcc_notif_stock" formatted="false">Samsung</string>
+    <string name="colorcc_notif_swipe" formatted="false">Geser notifikasi</string>
+    <string name="colorcc_notifications" formatted="false">Notifikasi</string>
+    <string name="colorcc_off" formatted="false">Nonaktif</string>
+    <string name="colorcc_off_at" formatted="false">Nonaktif pukul %s</string>
+    <string name="colorcc_on" formatted="false">Aktif</string>
+    <string name="colorcc_opaque" formatted="false">Pekat</string>
+    <string name="colorcc_open_app" formatted="false">Buka aplikasi yang diputar</string>
+    <string name="colorcc_other_networks" formatted="false">Jaringan lain</string>
+    <string name="colorcc_paired_devices" formatted="false">Perangkat tersandingkan</string>
+    <string name="colorcc_password" formatted="false">Kata sandi</string>
+    <string name="colorcc_pause" formatted="false">Jeda</string>
+    <string name="colorcc_plain_auto" formatted="false">Otomatis</string>
+    <string name="colorcc_plain_black" formatted="false">Hitam</string>
+    <string name="colorcc_plain_colour" formatted="false">Warna Tidak ada</string>
+    <string name="colorcc_plain_white" formatted="false">Putih</string>
+    <string name="colorcc_play" formatted="false">Putar</string>
+    <string name="colorcc_playback_position" formatted="false">Posisi pemutaran</string>
+    <string name="colorcc_power_menu" formatted="false">Menu daya</string>
+    <string name="colorcc_previous" formatted="false">Sebelumnya</string>
+    <string name="colorcc_refresh" formatted="false">Segarkan</string>
+    <string name="colorcc_remove" formatted="false">Hapus</string>
+    <string name="colorcc_reset" formatted="false">Atur ulang ke default</string>
+    <string name="colorcc_reset_how" formatted="false">Mengembalikan tata letak, ubin, dan gaya seperti semula.</string>
+    <string name="colorcc_reset_look_how" formatted="false">Hanya mengembalikan tampilan seperti semula. Tata letak dan ubin tetap.</string>
+    <string name="colorcc_resize" formatted="false">Ubah ukuran</string>
+    <string name="colorcc_rim_glow" formatted="false">Kilau tepi</string>
+    <string name="colorcc_rim_width" formatted="false">Lebar tepi</string>
+    <string name="colorcc_ringtone" formatted="false">Nada dering</string>
+    <string name="colorcc_ringtone_volume" formatted="false">Volume nada dering</string>
+    <string name="colorcc_saturation" formatted="false">Saturasi</string>
+    <string name="colorcc_saved_networks" formatted="false">Jaringan tersimpan</string>
+    <string name="colorcc_searching" formatted="false">Mencari jaringan…</string>
+    <string name="colorcc_settings" formatted="false">Pengaturan</string>
+    <string name="colorcc_show" formatted="false">Tampilkan</string>
+    <string name="colorcc_silent" formatted="false">Senyap</string>
+    <string name="colorcc_silent_mode" formatted="false">Mode senyap</string>
+    <string name="colorcc_slider_jelly" formatted="false">Efek jeli slider</string>
+    <string name="colorcc_soft" formatted="false">Lembut</string>
+    <string name="colorcc_sound" formatted="false">Suara</string>
+    <string name="colorcc_sound_modes" formatted="false">Mode suara</string>
+    <string name="colorcc_sound_output" formatted="false">Output suara</string>
+    <string name="colorcc_strong" formatted="false">Kuat</string>
+    <string name="colorcc_system" formatted="false">Sistem</string>
+    <string name="colorcc_tap_to_add" formatted="false">Ketuk + untuk menambah</string>
+    <string name="colorcc_thickness" formatted="false">Ketebalan</string>
+    <string name="colorcc_tile_names" formatted="false">Nama ubin</string>
+    <string name="colorcc_tile_rows" formatted="false">Baris ubin per halaman</string>
+    <string name="colorcc_tiles" formatted="false">Ubin</string>
+    <string name="colorcc_torch" formatted="false">Senter</string>
+    <string name="colorcc_torch_brightness" formatted="false">Kecerahan senter</string>
+    <string name="colorcc_torch_off" formatted="false">Senter: nonaktif</string>
+    <string name="colorcc_torch_on" formatted="false">Senter: aktif</string>
+    <string name="colorcc_unlock_to_see" formatted="false">Buka kunci untuk melihat</string>
+    <string name="colorcc_vibrate" formatted="false">Getar</string>
+    <string name="colorcc_volume" formatted="false">Volume</string>
+    <string name="colorcc_vpn_connected" formatted="false">Terhubung ke VPN. Buka pengaturan VPN</string>
+    <string name="colorcc_vpn_connected_to" formatted="false">Terhubung ke VPN: %s. Buka pengaturan VPN</string>
+    <string name="colorcc_wifi" formatted="false">Wi-Fi</string>
+    <string name="colorcc_wifi_off" formatted="false">Aktifkan Wi-Fi untuk melihat jaringan</string>
+    <string name="colorcc_classic_qs" formatted="false">Panel QS Blaze klasik</string>
+    <string name="colorcc_switch_classic_qs" formatted="false">Beralih ke Panel QS Blaze Klasik</string>
+    <string name="colorcc_switch_classic_qs_how" formatted="false">Kembali ke panel pengaturan cepat BlazeAOSP.</string>
+</resources>

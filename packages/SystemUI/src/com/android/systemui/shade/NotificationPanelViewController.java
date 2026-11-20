@@ -1443,6 +1443,12 @@ public final class NotificationPanelViewController implements
             if (mFixedDuration != NO_FIXED_DURATION) {
                 animator.setDuration(mFixedDuration);
             }
+            if (com.android.systemui.qs.colorcc.ColorCCBridge.isShowingControlsPage()) {
+                long minCloseMs = Math.round(Math.min(1.0f, mExpandedFraction) * 200.0f);
+                if (animator.getDuration() > 1 && animator.getDuration() < minCloseMs) {
+                    animator.setDuration(minCloseMs);
+                }
+            }
 
             // Reset Predictive Back animation's transform after Shade is completely hidden.
             animator.addListener(new AnimatorListenerAdapter() {
@@ -1522,6 +1528,7 @@ public final class NotificationPanelViewController implements
             mDownY = event.getY();
             mCollapsedOnDown = isFullyCollapsed();
             mQsController.setCollapsedOnDown(mCollapsedOnDown);
+            mQsController.onTouchDownFromPanel(event, mCollapsedOnDown);
             mIsPanelCollapseOnQQS = mQsController.canPanelCollapseOnQQS(mDownX, mDownY);
             mListenForHeadsUp = mCollapsedOnDown && mHeadsUpManager.hasPinnedHeadsUp();
             mAllowExpandForSmallExpansion = mExpectingSynthesizedDown;
@@ -1794,6 +1801,12 @@ public final class NotificationPanelViewController implements
 
     @VisibleForTesting
     boolean canCollapsePanelOnTouch() {
+        if (mView != null
+                && com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                        mView.getContext())
+                && com.android.systemui.qs.colorcc.ColorCCBridge.isShowingControlsPage()) {
+            return com.android.systemui.qs.colorcc.ColorCCBridge.canCollapseAt(mDownX, mDownY);
+        }
         if (!mQsController.getExpanded() && mBarState == KEYGUARD) {
             return true;
         }
@@ -1872,9 +1885,14 @@ public final class NotificationPanelViewController implements
             float qsExpansionFraction;
             if (mSplitShadeEnabled) {
                 qsExpansionFraction = 1;
-            } else if (isKeyguardShowing()) {
-                // On Keyguard, interpolate the QS expansion linearly to the panel expansion
-                qsExpansionFraction = expandedHeight / (getMaxPanelHeight());
+            } else if (isKeyguardShowing()
+                    || (mView != null
+                            && com.android.systemui.qs.colorcc.ColorCCBridge.isColorCCEnabled(
+                                    mView.getContext()))) {
+                // On Keyguard or ColorCC Dual-Shade, interpolate the QS expansion linearly to the
+                // panel expansion
+                qsExpansionFraction = MathUtils.constrain(
+                        expandedHeight / Math.max(1f, getMaxPanelHeight()), 0f, 1f);
             } else {
                 // In Shade, interpolate linearly such that QS is closed whenever panel height is
                 // minimum QS expansion + minStackHeight
@@ -2085,6 +2103,9 @@ public final class NotificationPanelViewController implements
         mShadeRepository.setLegacyShadeTracking(true);
         if (mTrackingStartedListener != null) {
             mTrackingStartedListener.onTrackingStarted();
+        }
+        if (mOpenCloseListener != null && !isKeyguardShowing()) {
+            mOpenCloseListener.onOpenStarted();
         }
         notifyExpandingStarted();
         updateExpansionAndVisibility();
@@ -3115,6 +3136,8 @@ public final class NotificationPanelViewController implements
     private void setOverExpansionInternal(float overExpansion) {
         mLastGesturedOverExpansion = -1;
         setOverExpansion(overExpansion);
+        com.android.systemui.qs.colorcc.ColorCCBridge.onOverExpansionChanged(
+                overExpansion, overExpansion > 0f);
     }
 
     /** Sets the expanded height relative to a number from 0 to 1. */
@@ -3291,6 +3314,9 @@ public final class NotificationPanelViewController implements
     /** Sends an external (e.g. Status Bar) intercept touch event to the Shade touch handler. */
     @Override
     public boolean handleExternalInterceptTouch(MotionEvent event) {
+        if (!mCommandQueue.panelsEnabled()) {
+            return false;
+        }
         try {
             mUseExternalTouch = true;
             return mTouchHandler.onInterceptTouchEvent(event);
@@ -3301,6 +3327,9 @@ public final class NotificationPanelViewController implements
 
     @Override
     public boolean handleExternalTouch(MotionEvent event) {
+        if (!mCommandQueue.panelsEnabled()) {
+            return false;
+        }
         try {
             mUseExternalTouch = true;
             return mTouchHandler.onTouchEvent(event);
@@ -3723,6 +3752,9 @@ public final class NotificationPanelViewController implements
         mQsController.updateExpansionEnabledAmbient();
 
         if (state == STATE_OPEN && mCurrentPanelState != state) {
+            if (mOpenCloseListener != null && !isKeyguardShowing()) {
+                mOpenCloseListener.onOpenStarted();
+            }
             mQsController.setExpandImmediate(false);
             mView.sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED);
         }
